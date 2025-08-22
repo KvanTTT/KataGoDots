@@ -66,9 +66,12 @@ SearchThread::~SearchThread() {
 static const double VALUE_WEIGHT_DEGREES_OF_FREEDOM = 3.0;
 
 Search::Search(SearchParams params, NNEvaluator* nnEval, Logger* lg, const string& rSeed)
-  :Search(params,nnEval,NULL,lg,rSeed)
+  :Search(params,nnEval,NULL,lg,rSeed,false)
 {}
-Search::Search(SearchParams params, NNEvaluator* nnEval, NNEvaluator* humanEval, Logger* lg, const string& rSeed)
+Search::Search(SearchParams params, NNEvaluator* nnEval, Logger* lg, const string& rSeed, const bool isDots)
+  :Search(params,nnEval,NULL,lg,rSeed,isDots)
+{}
+Search::Search(SearchParams params, NNEvaluator* nnEval, NNEvaluator* humanEval, Logger* lg, const string& rSeed, const bool isDots)
   :rootPla(P_BLACK),
    rootBoard(),
    rootHistory(),
@@ -122,7 +125,12 @@ Search::Search(SearchParams params, NNEvaluator* nnEval, NNEvaluator* humanEval,
       throw StringError("Search::init - humanEval has different nnXLen or nnYLen");
   }
 
-  rootKoHashTable = new KoHashTable();
+  assert(rootHistory.rules.isDots == rootBoard.isDots());
+  rootHistory.clear(rootBoard,rootPla,Rules::getDefault(isDots),0);
+  if (!isDots) {
+    rootKoHashTable = new KoHashTable();
+    rootKoHashTable->recompute(rootHistory);
+  }
 
   rootSafeArea = new Color[Board::MAX_ARR_SIZE];
 
@@ -137,9 +145,6 @@ Search::Search(SearchParams params, NNEvaluator* nnEval, NNEvaluator* humanEval,
   rootNode = NULL;
   nodeTable = new SearchNodeTable(params.nodeTableShardsPowerOfTwo);
   mutexPool = new MutexPool(nodeTable->mutexPool->getNumMutexes());
-
-  rootHistory.clear(rootBoard,rootPla,Rules(),0);
-  rootKoHashTable->recompute(rootHistory);
 }
 
 Search::~Search() {
@@ -180,7 +185,10 @@ void Search::setPosition(Player pla, const Board& board, const BoardHistory& his
   plaThatSearchIsFor = C_EMPTY;
   rootBoard = board;
   rootHistory = history;
-  rootKoHashTable->recompute(rootHistory);
+  assert(rootHistory.rules.isDots == rootBoard.isDots());
+  if (!rootHistory.rules.isDots) {
+    rootKoHashTable->recompute(rootHistory);
+  }
   avoidMoveUntilByLocBlack.clear();
   avoidMoveUntilByLocWhite.clear();
 }
@@ -196,7 +204,9 @@ void Search::setPlayerAndClearHistory(Player pla) {
   rootHistory.clear(rootBoard,rootPla,rules,rootHistory.encorePhase);
   rootHistory.setAssumeMultipleStartingBlackMovesAreHandicap(assumeMultipleStartingBlackMovesAreHandicap);
 
-  rootKoHashTable->recompute(rootHistory);
+  if (!rootHistory.rules.isDots) {
+    rootKoHashTable->recompute(rootHistory);
+  }
 
   //If changing the player alone, don't clear these, leave the user's setting - the user may have tried
   //to adjust the player or will be calling runWholeSearchAndGetMove with a different player and will
@@ -328,7 +338,9 @@ bool Search::makeMove(Loc moveLoc, Player movePla, bool preventEncore) {
   //Compute these first so we can know if we need to set forceNonTerminal below.
   rootHistory.makeBoardMoveAssumeLegal(rootBoard,moveLoc,rootPla,rootKoHashTable,preventEncore);
   rootPla = getOpp(rootPla);
-  rootKoHashTable->recompute(rootHistory);
+  if (!rootHistory.rules.isDots) {
+    rootKoHashTable->recompute(rootHistory);
+  }
 
   if(rootNode != NULL) {
     SearchNode* child = NULL;

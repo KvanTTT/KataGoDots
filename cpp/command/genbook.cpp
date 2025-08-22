@@ -124,7 +124,7 @@ static void maybeParseBonusFile(
   Board& bonusInitialBoard,
   Player& bonusInitialPla
 ) {
-  bonusInitialBoard = Board(boardSizeX,boardSizeY);
+  bonusInitialBoard = Board(boardSizeX, boardSizeY, rules);
   bonusInitialPla = P_BLACK;
   if(bonusFile != "") {
     Sgf* sgf = Sgf::loadFile(bonusFile);

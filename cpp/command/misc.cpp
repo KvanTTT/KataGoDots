@@ -68,9 +68,9 @@ static void writeLine(
   for(int y = 0; y<board.y_size; y++) {
     for(int x = 0; x<board.x_size; x++) {
       Loc loc = Location::getLoc(x,y,board.x_size);
-      if(board.colors[loc] == C_BLACK)
+      if(board.getColor(loc) == C_BLACK)
         cout << "x";
-      else if(board.colors[loc] == C_WHITE)
+      else if(board.getColor(loc) == C_WHITE)
         cout << "o";
       else
         cout << ".";
@@ -121,9 +121,9 @@ static void initializeDemoGame(Board& board, BoardHistory& hist, Player& pla, Ra
 
   const int size = sizes[rand.nextUInt(sizeFreqs,numSizes)];
 
-  board = Board(size,size);
+  board = Board(size,size,board.rules);
   pla = P_BLACK;
-  hist.clear(board,pla,Rules::getTrompTaylorish(),0);
+  hist.clear(board,pla,board.rules,0);
   bot->setPosition(pla,board,hist);
 
   if(size == 19) {
@@ -442,6 +442,7 @@ int MainCmds::demoplay(const vector<string>& args) {
 
     Player pla = P_BLACK;
     Board baseBoard;
+    // TODO: consider Dots
     BoardHistory baseHist(baseBoard,pla,Rules::getTrompTaylorish(),0);
     TimeControls tc;
 
@@ -1046,7 +1047,7 @@ int MainCmds::samplesgfs(const vector<string>& args) {
           //Only log on errors that aren't simply due to ko rules, but quit out regardless
           suc = hist.makeBoardMoveTolerant(board,sgfMoves[m].loc,sgfMoves[m].pla,preventEncore);
           if(!suc)
-            logger.write("Illegal move in " + fileName + " turn " + Global::intToString(m) + " move " + Location::toString(sgfMoves[m].loc, board.x_size, board.y_size));
+            logger.write("Illegal move in " + fileName + " turn " + Global::intToString(m) + " move " + Location::toString(sgfMoves[m].loc, board));
           break;
         }
         hist.makeBoardMoveAssumeLegal(board,sgfMoves[m].loc,sgfMoves[m].pla,NULL,preventEncore);
@@ -1679,9 +1680,11 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
       int numStonesOnBoard = 0;
       for(int y = 0; y<board.y_size; y++) {
         for(int x = 0; x<board.x_size; x++) {
-          Loc loc = Location::getLoc(x,y,board.x_size);
-          if(board.colors[loc] != C_EMPTY)
+          const Loc loc = Location::getLoc(x,y,board.x_size);
+          const Color color = board.isDots() ? getPlacedDotColor(board.getState(loc)) : board.colors[loc];
+          if(color != C_EMPTY) {
             numStonesOnBoard += 1;
+          }
         }
       }
       if(numStonesOnBoard < 6)
@@ -2019,7 +2022,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
         //Only log on errors that aren't simply due to ko rules, but quit out regardless
         suc = hist.makeBoardMoveTolerant(board,sgfMoves[m].loc,sgfMoves[m].pla,preventEncore);
         if(!suc)
-          logger.write("Illegal move in " + fileName + " turn " + Global::intToString(m) + " move " + Location::toString(sgfMoves[m].loc, board.x_size, board.y_size));
+          logger.write("Illegal move in " + fileName + " turn " + Global::intToString(m) + " move " + Location::toString(sgfMoves[m].loc, board));
         break;
       }
       hist.makeBoardMoveAssumeLegal(board,sgfMoves[m].loc,sgfMoves[m].pla,NULL,preventEncore);
@@ -2214,7 +2217,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
     for(int i = 0; i<startTurn; i++) {
       bool multiStoneSuicideLegal = true;
       //Just in case
-      if(!board.isLegal(treeHist.moveHistory[i].loc,treeHist.moveHistory[i].pla,multiStoneSuicideLegal))
+      if(!board.isLegal(treeHist.moveHistory[i].loc, treeHist.moveHistory[i].pla, multiStoneSuicideLegal, false))
         return;
       board.playMoveAssumeLegal(treeHist.moveHistory[i].loc,treeHist.moveHistory[i].pla);
     }

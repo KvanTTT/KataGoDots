@@ -228,6 +228,7 @@ add_executable(katago
   core/threadtest.cpp
   core/timer.cpp
   game/board.cpp
+  game/dotsfield.cpp
   game/rules.cpp
   game/boardhistory.cpp
   game/graphhash.cpp
@@ -239,6 +240,7 @@ add_executable(katago
   dataio/homedata.cpp
   dataio/files.cpp
   neuralnet/nninputs.cpp
+  neuralnet/nninputsdots.cpp
   neuralnet/sgfmetadata.cpp
   neuralnet/modelversion.cpp
   neuralnet/nneval.cpp
@@ -276,6 +278,10 @@ add_executable(katago
   ${GIT_HEADER_FILE_ALWAYS_UPDATED}
   tests/testboardarea.cpp
   tests/testboardbasic.cpp
+  tests/testdotsutils.cpp
+  tests/testdotsbasic.cpp
+  tests/testdotsstartposes.cpp
+  tests/testdotsextra.cpp
   tests/testbook.cpp
   tests/testcommon.cpp
   tests/testconfig.cpp

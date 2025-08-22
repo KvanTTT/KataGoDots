@@ -123,7 +123,7 @@ static Hash128 getExtraPosHash(const Board& board) {
   for(int y = 0; y<board.y_size; y++) {
     for(int x = 0; x<board.x_size; x++) {
       Loc loc = Location::getLoc(x,y,board.x_size);
-      hash ^= Board::ZOBRIST_BOARD_HASH2[loc][board.colors[loc]];
+      hash ^= Board::ZOBRIST_BOARD_HASH2[loc][board.getColor(loc)];
     }
   }
   return hash;
@@ -2341,7 +2341,7 @@ int64_t Book::exportToHtmlDir(
     for(int y = 0; y<board.y_size; y++) {
       for(int x = 0; x<board.x_size; x++) {
         Loc loc = Location::getLoc(x,y,board.x_size);
-        dataVarsStr += Global::intToString(board.colors[loc]) + ",";
+        dataVarsStr += Global::intToString(board.getColor(loc)) + ",";
       }
     }
     dataVarsStr += "];\n";
@@ -2707,7 +2707,7 @@ Book* Book::loadFromFile(const std::string& fileName) {
       assertContains(params,"initialBoard");
       Board initialBoard = Board::ofJson(params["initialBoard"]);
       assertContains(params,"initialRules");
-      Rules initialRules = Rules::parseRules(params["initialRules"].dump());
+      Rules initialRules = Rules::parseRules(params["initialRules"].dump(), params.value("dots", false));
       Player initialPla = PlayerIO::parsePlayer(params["initialPla"].get<string>());
       int repBound = params["repBound"].get<int>();
 
