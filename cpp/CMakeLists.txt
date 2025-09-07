@@ -283,6 +283,7 @@ add_executable(katago
   tests/testdotsutils.cpp
   tests/testdotsbasic.cpp
   tests/testdotsstartposes.cpp
+  tests/testdotsstress.cpp
   tests/testdotsextra.cpp
   tests/testbook.cpp
   tests/testcommon.cpp
