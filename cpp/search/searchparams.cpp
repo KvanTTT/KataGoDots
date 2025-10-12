@@ -443,7 +443,7 @@ json SearchParams::changeableParametersToJson() const {
 
   // Special handling in GTP
   ret["playoutDoublingAdvantage"] = playoutDoublingAdvantage;
-  ret["playoutDoublingAdvantagePla"] = PlayerIO::playerToStringShort(playoutDoublingAdvantagePla);
+  ret["playoutDoublingAdvantagePla"] = PlayerIO::playerToStringShort(playoutDoublingAdvantagePla, false); // TODO: Fix for Dots
 
   // Special handling in GTP
   // ret["avoidRepeatedPatternUtility"] = avoidRepeatedPatternUtility;
