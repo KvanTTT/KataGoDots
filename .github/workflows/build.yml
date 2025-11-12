@@ -1,0 +1,85 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential zlib1g-dev libzip-dev opencl-headers ocl-icd-opencl-dev
+
+    - name: Configure CMake
+      working-directory: cpp
+      run: |
+        cmake . -DUSE_BACKEND=OPENCL -DNO_GIT_REVISION=1
+
+    - name: Build
+      working-directory: cpp
+      run: |
+        make -j$(nproc)
+
+    - name: Run tests
+      working-directory: cpp
+      run: |
+        ./katago runtests
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: katago-linux-opencl
+        path: cpp/katago
+
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Install vcpkg dependencies
+      run: |
+        vcpkg install zlib:x64-windows libzip:x64-windows opencl:x64-windows
+
+    - name: Configure CMake
+      working-directory: cpp
+      run: |
+        cmake . -G "Visual Studio 17 2022" -A x64 `
+          -DUSE_BACKEND=OPENCL `
+          -DNO_GIT_REVISION=1 `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+    - name: Build
+      working-directory: cpp
+      run: |
+        cmake --build . --config Release -j 4
+
+    - name: Copy required DLLs
+      working-directory: cpp
+      run: |
+        $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
+        Copy-Item "$vcpkgRoot/installed/x64-windows/bin/*.dll" -Destination "Release/" -ErrorAction SilentlyContinue
+
+    - name: Run tests
+      working-directory: cpp/Release
+      run: |
+        ./katago.exe runtests
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: katago-windows-opencl
+        path: cpp/Release/katago.exe
