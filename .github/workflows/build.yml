@@ -19,6 +19,16 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y cmake build-essential zlib1g-dev libzip-dev opencl-headers ocl-icd-opencl-dev
 
+    - name: Cache CMake build
+      uses: actions/cache@v4
+      with:
+        path: |
+          cpp/CMakeCache.txt
+          cpp/CMakeFiles
+        key: ${{ runner.os }}-cmake-${{ hashFiles('**/CMakeLists.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-cmake-
+
     - name: Configure CMake
       working-directory: cpp
       run: |
@@ -48,6 +58,16 @@ jobs:
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
+
+    - name: Cache vcpkg packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
+          ${{ env.VCPKG_INSTALLATION_ROOT }}/packages
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}-opencl
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-
 
     - name: Install vcpkg dependencies
       run: |
