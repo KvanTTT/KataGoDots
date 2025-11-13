@@ -62,7 +62,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install cmake libzip eigen
+        brew install cmake libzip ninja
 
     - name: Cache CMake build
       uses: actions/cache@v4
@@ -70,6 +70,9 @@ jobs:
         path: |
           cpp/CMakeCache.txt
           cpp/CMakeFiles
+          cpp/build.ninja
+          cpp/.ninja_deps
+          cpp/.ninja_log
         key: ${{ runner.os }}-cmake-${{ hashFiles('**/CMakeLists.txt') }}
         restore-keys: |
           ${{ runner.os }}-cmake-
@@ -77,12 +80,12 @@ jobs:
     - name: Configure CMake
       working-directory: cpp
       run: |
-        cmake . -DUSE_BACKEND=EIGEN -DNO_GIT_REVISION=1
+        cmake . -G Ninja -DUSE_BACKEND=METAL -DNO_GIT_REVISION=1
 
     - name: Build
       working-directory: cpp
       run: |
-        make -j$(sysctl -n hw.ncpu)
+        ninja
 
     - name: Run tests
       run: |
@@ -91,7 +94,7 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: katago-macos-eigen
+        name: katago-macos-metal
         path: cpp/katago
 
   build-windows:
