@@ -115,22 +115,22 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
     int nnYLen = std::max(defaultNNYLen,2);
     if(setupFor != SETUP_FOR_DISTRIBUTED) {
       if(cfg.contains("maxBoardXSizeForNNBuffer" + idxStr))
-        nnXLen = cfg.getInt("maxBoardXSizeForNNBuffer" + idxStr, 2, NNPos::MAX_BOARD_LEN);
+        nnXLen = cfg.getInt("maxBoardXSizeForNNBuffer" + idxStr, 2, NNPos::MAX_BOARD_LEN_X);
       else if(cfg.contains("maxBoardXSizeForNNBuffer"))
-        nnXLen = cfg.getInt("maxBoardXSizeForNNBuffer", 2, NNPos::MAX_BOARD_LEN);
+        nnXLen = cfg.getInt("maxBoardXSizeForNNBuffer", 2, NNPos::MAX_BOARD_LEN_X);
       else if(cfg.contains("maxBoardSizeForNNBuffer" + idxStr))
-        nnXLen = cfg.getInt("maxBoardSizeForNNBuffer" + idxStr, 2, NNPos::MAX_BOARD_LEN);
+        nnXLen = cfg.getInt("maxBoardSizeForNNBuffer" + idxStr, 2, NNPos::MAX_BOARD_LEN_X);
       else if(cfg.contains("maxBoardSizeForNNBuffer"))
-        nnXLen = cfg.getInt("maxBoardSizeForNNBuffer", 2, NNPos::MAX_BOARD_LEN);
+        nnXLen = cfg.getInt("maxBoardSizeForNNBuffer", 2, NNPos::MAX_BOARD_LEN_X);
 
       if(cfg.contains("maxBoardYSizeForNNBuffer" + idxStr))
-        nnYLen = cfg.getInt("maxBoardYSizeForNNBuffer" + idxStr, 2, NNPos::MAX_BOARD_LEN);
+        nnYLen = cfg.getInt("maxBoardYSizeForNNBuffer" + idxStr, 2, NNPos::MAX_BOARD_LEN_Y);
       else if(cfg.contains("maxBoardYSizeForNNBuffer"))
-        nnYLen = cfg.getInt("maxBoardYSizeForNNBuffer", 2, NNPos::MAX_BOARD_LEN);
+        nnYLen = cfg.getInt("maxBoardYSizeForNNBuffer", 2, NNPos::MAX_BOARD_LEN_Y);
       else if(cfg.contains("maxBoardSizeForNNBuffer" + idxStr))
-        nnYLen = cfg.getInt("maxBoardSizeForNNBuffer" + idxStr, 2, NNPos::MAX_BOARD_LEN);
+        nnYLen = cfg.getInt("maxBoardSizeForNNBuffer" + idxStr, 2, NNPos::MAX_BOARD_LEN_Y);
       else if(cfg.contains("maxBoardSizeForNNBuffer"))
-        nnYLen = cfg.getInt("maxBoardSizeForNNBuffer", 2, NNPos::MAX_BOARD_LEN);
+        nnYLen = cfg.getInt("maxBoardSizeForNNBuffer", 2, NNPos::MAX_BOARD_LEN_Y);
     }
 
     bool requireExactNNLen = defaultRequireExactNNLen;
@@ -302,6 +302,7 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
     if(disableFP16)
       useFP16Mode = enabled_t::False;
 
+    bool dotsGame = cfg.getBoolOrDefault(DOTS_KEY, false);
     NNEvaluator* nnEval = new NNEvaluator(
       nnModelName,
       nnModelFile,
@@ -324,7 +325,8 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
       gpuIdxByServerThread,
       nnRandSeed,
       (forcedSymmetry >= 0 ? false : nnRandomize),
-      defaultSymmetry
+      defaultSymmetry,
+      dotsGame
     );
 
     nnEval->spawnServerThreads();
@@ -883,72 +885,82 @@ Player Setup::parseReportAnalysisWinrates(
   throw StringError("Could not parse config value for reportAnalysisWinratesAs: " + sOrig);
 }
 
-Rules Setup::loadSingleRules(
-  ConfigParser& cfg,
-  bool loadKomi
-) {
-  Rules rules;
+Rules Setup::loadSingleRules(ConfigParser& cfg, const bool loadKomi) {
+  const bool dotsGame = cfg.getBoolOrDefault(DOTS_KEY, false);
+  Rules rules = Rules::getDefault(dotsGame);
 
   if(cfg.contains("rules")) {
-    if(cfg.contains("koRule")) throw StringError("Cannot both specify 'rules' and individual rules like koRule");
-    if(cfg.contains("scoringRule")) throw StringError("Cannot both specify 'rules' and individual rules like scoringRule");
+    if(cfg.contains(START_POS_KEY)) throw StringError("Cannot both specify 'rules' and individual rules like " + START_POS_KEY);
+    if(cfg.contains(START_POS_RANDOM_KEY)) throw StringError("Cannot both specify 'rules' and individual rules like " + START_POS_RANDOM_KEY);
     if(cfg.contains("multiStoneSuicideLegal")) throw StringError("Cannot both specify 'rules' and individual rules like multiStoneSuicideLegal");
-    if(cfg.contains("hasButton")) throw StringError("Cannot both specify 'rules' and individual rules like hasButton");
-    if(cfg.contains("taxRule")) throw StringError("Cannot both specify 'rules' and individual rules like taxRule");
-    if(cfg.contains("whiteHandicapBonus")) throw StringError("Cannot both specify 'rules' and individual rules like whiteHandicapBonus");
-    if(cfg.contains("friendlyPassOk")) throw StringError("Cannot both specify 'rules' and individual rules like friendlyPassOk");
-    if(cfg.contains("whiteBonusPerHandicapStone")) throw StringError("Cannot both specify 'rules' and individual rules like whiteBonusPerHandicapStone");
 
-    rules = Rules::parseRules(cfg.getString("rules"));
+    if (dotsGame) {
+      if (cfg.contains(DOTS_CAPTURE_EMPTY_BASE_KEY)) throw StringError("Cannot both specify 'rules' and individual rules like " + DOTS_CAPTURE_EMPTY_BASE_KEY);
+    } else {
+      if(cfg.contains("koRule")) throw StringError("Cannot both specify 'rules' and individual rules like koRule");
+      if(cfg.contains("scoringRule")) throw StringError("Cannot both specify 'rules' and individual rules like scoringRule");
+      if(cfg.contains("hasButton")) throw StringError("Cannot both specify 'rules' and individual rules like hasButton");
+      if(cfg.contains("taxRule")) throw StringError("Cannot both specify 'rules' and individual rules like taxRule");
+      if(cfg.contains("whiteHandicapBonus")) throw StringError("Cannot both specify 'rules' and individual rules like whiteHandicapBonus");
+      if(cfg.contains("friendlyPassOk")) throw StringError("Cannot both specify 'rules' and individual rules like friendlyPassOk");
+      if(cfg.contains("whiteBonusPerHandicapStone")) throw StringError("Cannot both specify 'rules' and individual rules like whiteBonusPerHandicapStone");
+    }
+
+    rules = Rules::parseRules(cfg.getString("rules"), cfg.getBoolOrDefault(DOTS_KEY, false));
   }
   else {
-    string koRule = cfg.getString("koRule", Rules::koRuleStrings());
-    string scoringRule = cfg.getString("scoringRule", Rules::scoringRuleStrings());
-    bool multiStoneSuicideLegal = cfg.getBool("multiStoneSuicideLegal");
-    bool hasButton = cfg.contains("hasButton") ? cfg.getBool("hasButton") : false;
-    float komi = 7.5f;
-
-    rules.koRule = Rules::parseKoRule(koRule);
-    rules.scoringRule = Rules::parseScoringRule(scoringRule);
-    rules.multiStoneSuicideLegal = multiStoneSuicideLegal;
-    rules.hasButton = hasButton;
-    rules.komi = komi;
-
-    if(cfg.contains("taxRule")) {
-      string taxRule = cfg.getString("taxRule", Rules::taxRuleStrings());
-      rules.taxRule = Rules::parseTaxRule(taxRule);
+    if (cfg.contains(START_POS_KEY)) {
+      rules.startPos = Rules::parseStartPos(cfg.getString(START_POS_KEY));
     }
-    else {
-      rules.taxRule = (rules.scoringRule == Rules::SCORING_TERRITORY ? Rules::TAX_SEKI : Rules::TAX_NONE);
+    if (cfg.contains(START_POS_RANDOM_KEY)) {
+      rules.startPosIsRandom = cfg.getBool(START_POS_RANDOM_KEY);
     }
+    rules.multiStoneSuicideLegal = cfg.getBoolOrDefault("multiStoneSuicideLegal", rules.multiStoneSuicideLegal);
 
-    if(rules.hasButton && rules.scoringRule != Rules::SCORING_AREA)
-      throw StringError("Config specifies hasButton=true on a scoring system other than AREA");
+    if (dotsGame) {
+      rules.dotsCaptureEmptyBases = cfg.getBoolOrDefault(DOTS_CAPTURE_EMPTY_BASE_KEY, rules.dotsCaptureEmptyBases);
+    } else {
+      rules.koRule = Rules::parseKoRule(cfg.getString("koRule", Rules::koRuleStrings()));
+      rules.scoringRule = Rules::parseScoringRule(cfg.getString("scoringRule", Rules::scoringRuleStrings()));
+      rules.hasButton = cfg.getBoolOrDefault("hasButton", false);
+      rules.komi = 7.5f;
 
-    //Also handles parsing of legacy option whiteBonusPerHandicapStone
-    if(cfg.contains("whiteBonusPerHandicapStone") && cfg.contains("whiteHandicapBonus"))
-      throw StringError("May specify only one of whiteBonusPerHandicapStone and whiteHandicapBonus in config");
-    else if(cfg.contains("whiteHandicapBonus"))
-      rules.whiteHandicapBonusRule = Rules::parseWhiteHandicapBonusRule(cfg.getString("whiteHandicapBonus", Rules::whiteHandicapBonusRuleStrings()));
-    else if(cfg.contains("whiteBonusPerHandicapStone")) {
-      int whiteBonusPerHandicapStone = cfg.getInt("whiteBonusPerHandicapStone",0,1);
-      if(whiteBonusPerHandicapStone == 0)
-        rules.whiteHandicapBonusRule = Rules::WHB_ZERO;
+      if(cfg.contains("taxRule")) {
+        string taxRule = cfg.getString("taxRule", Rules::taxRuleStrings());
+        rules.taxRule = Rules::parseTaxRule(taxRule);
+      }
+      else {
+        rules.taxRule = (rules.scoringRule == Rules::SCORING_TERRITORY ? Rules::TAX_SEKI : Rules::TAX_NONE);
+      }
+
+      if(rules.hasButton && rules.scoringRule != Rules::SCORING_AREA)
+        throw StringError("Config specifies hasButton=true on a scoring system other than AREA");
+
+      //Also handles parsing of legacy option whiteBonusPerHandicapStone
+      if(cfg.contains("whiteBonusPerHandicapStone") && cfg.contains("whiteHandicapBonus"))
+        throw StringError("May specify only one of whiteBonusPerHandicapStone and whiteHandicapBonus in config");
+      else if(cfg.contains("whiteHandicapBonus"))
+        rules.whiteHandicapBonusRule = Rules::parseWhiteHandicapBonusRule(cfg.getString("whiteHandicapBonus", Rules::whiteHandicapBonusRuleStrings()));
+      else if(cfg.contains("whiteBonusPerHandicapStone")) {
+        int whiteBonusPerHandicapStone = cfg.getInt("whiteBonusPerHandicapStone",0,1);
+        if(whiteBonusPerHandicapStone == 0)
+          rules.whiteHandicapBonusRule = Rules::WHB_ZERO;
+        else
+          rules.whiteHandicapBonusRule = Rules::WHB_N;
+      }
       else
-        rules.whiteHandicapBonusRule = Rules::WHB_N;
-    }
-    else
-      rules.whiteHandicapBonusRule = Rules::WHB_ZERO;
+        rules.whiteHandicapBonusRule = Rules::WHB_ZERO;
 
-    if(cfg.contains("friendlyPassOk")) {
-      rules.friendlyPassOk = cfg.getBool("friendlyPassOk");
-    }
+      if(cfg.contains("friendlyPassOk")) {
+        rules.friendlyPassOk = cfg.getBool("friendlyPassOk");
+      }
 
-    //Drop default komi to 6.5 for territory rules, and to 7.0 for button
-    if(rules.scoringRule == Rules::SCORING_TERRITORY)
-      rules.komi = 6.5f;
-    else if(rules.hasButton)
-      rules.komi = 7.0f;
+      //Drop default komi to 6.5 for territory rules, and to 7.0 for button
+      if(rules.scoringRule == Rules::SCORING_TERRITORY)
+        rules.komi = 6.5f;
+      else if(rules.hasButton)
+        rules.komi = 7.0f;
+    }
   }
 
   if(loadKomi) {
@@ -965,12 +977,12 @@ bool Setup::loadDefaultBoardXYSize(
   int& defaultBoardYSizeRet
 ) {
   const int defaultBoardXSize =
-    cfg.contains("defaultBoardXSize") ? cfg.getInt("defaultBoardXSize",2,Board::MAX_LEN) :
-    cfg.contains("defaultBoardSize") ? cfg.getInt("defaultBoardSize",2,Board::MAX_LEN) :
+    cfg.contains("defaultBoardXSize") ? cfg.getInt("defaultBoardXSize",2,Board::MAX_LEN_X) :
+    cfg.contains("defaultBoardSize") ? cfg.getInt("defaultBoardSize",2,Board::MAX_LEN_X) :
     -1;
   const int defaultBoardYSize =
-    cfg.contains("defaultBoardYSize") ? cfg.getInt("defaultBoardYSize",2,Board::MAX_LEN) :
-    cfg.contains("defaultBoardSize") ? cfg.getInt("defaultBoardSize",2,Board::MAX_LEN) :
+    cfg.contains("defaultBoardYSize") ? cfg.getInt("defaultBoardYSize",2,Board::MAX_LEN_Y) :
+    cfg.contains("defaultBoardSize") ? cfg.getInt("defaultBoardSize",2,Board::MAX_LEN_Y) :
     -1;
   if((defaultBoardXSize == -1) != (defaultBoardYSize == -1))
     logger.write("Warning: Config specified only one of defaultBoardXSize or defaultBoardYSize and no other board size parameter, ignoring it");
@@ -1022,7 +1034,7 @@ std::vector<std::unique_ptr<PatternBonusTable>> Setup::loadAvoidSgfPatternBonusT
         double lambda = contains("PatternLambda") ? cfg.getDouble(find("PatternLambda"),0.0,1.0) : 1.0;
         int minTurnNumber = contains("PatternMinTurnNumber") ? cfg.getInt(find("PatternMinTurnNumber"),0,1000000) : 0;
         size_t maxFiles = contains("PatternMaxFiles") ? (size_t)cfg.getInt(find("PatternMaxFiles"),1,1000000) : 1000000;
-        vector<string> allowedPlayerNames = contains("PatternAllowedNames") ? cfg.getStringsNonEmptyTrim(find("PatternAllowedNames")) : vector<string>();
+        vector<string> allowedPlayerNames = contains("PatternAllowedNames") ? cfg.getStrings(find("PatternAllowedNames"), {}, true) : vector<string>();
         vector<string> sgfDirs = cfg.getStrings(find("PatternDirs"));
         if(patternBonusTable == nullptr)
           patternBonusTable = std::make_unique<PatternBonusTable>();
@@ -1119,7 +1131,7 @@ std::unique_ptr<PatternBonusTable> Setup::loadAndPruneAutoPatternBonusTables(Con
       bool suc = Global::tryStringToInt(pieces[0],boardXSize) && Global::tryStringToInt(pieces[1],boardYSize);
       if(!suc)
         continue;
-      if(boardXSize < 2 || boardXSize > Board::MAX_LEN || boardYSize < 2 || boardYSize > Board::MAX_LEN)
+      if(boardXSize < 2 || boardXSize > Board::MAX_LEN_X || boardYSize < 2 || boardYSize > Board::MAX_LEN_Y)
         continue;
 
       string dirPath = baseDir + "/" + dirName;

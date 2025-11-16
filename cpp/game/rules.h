@@ -1,12 +1,43 @@
 #ifndef GAME_RULES_H_
 #define GAME_RULES_H_
 
+#include "common.h"
 #include "../core/global.h"
 #include "../core/hash.h"
+#include "../core/rand.h"
 
 #include "../external/nlohmann_json/json.hpp"
 
 struct Rules {
+  const static Rules DEFAULT_DOTS;
+  const static Rules DEFAULT_GO;
+
+  bool isDots;
+
+  static constexpr int START_POS_EMPTY = 0;
+  static constexpr int START_POS_CROSS = 1;
+  static constexpr int START_POS_CROSS_2 = 2;
+  static constexpr int START_POS_CROSS_4 = 3;
+  int startPos;
+
+  // Enables random shuffling of start pos. Currently, it works only for CROSS_4
+  bool startPosIsRandom;
+
+  float komi;
+  //Min and max acceptable komi in various places involving user input validation
+  static constexpr float MIN_USER_KOMI = -150.0f;
+  static constexpr float MAX_USER_KOMI = 150.0f;
+  bool multiStoneSuicideLegal; // Works as just suicide in Dots Game
+
+  static const int TAX_NONE = 0;
+  static const int TAX_SEKI = 1;
+  static const int TAX_ALL = 2;
+  int taxRule;
+
+  static const int WHB_ZERO = 0;
+  static const int WHB_N = 1;
+  static const int WHB_N_MINUS_ONE = 2;
+  int whiteHandicapBonusRule;
 
   static const int KO_SIMPLE = 0;
   static const int KO_POSITIONAL = 1;
@@ -18,30 +49,20 @@ struct Rules {
   static const int SCORING_TERRITORY = 1;
   int scoringRule;
 
-  static const int TAX_NONE = 0;
-  static const int TAX_SEKI = 1;
-  static const int TAX_ALL = 2;
-  int taxRule;
-
-  bool multiStoneSuicideLegal;
   bool hasButton;
-
-  static const int WHB_ZERO = 0;
-  static const int WHB_N = 1;
-  static const int WHB_N_MINUS_ONE = 2;
-  int whiteHandicapBonusRule;
 
   //Mostly an informational value - doesn't affect the actual implemented rules, but GTP or Analysis may, at a
   //high level, use this info to adjust passing behavior - whether it's okay to pass without capturing dead stones.
   //Only relevant for area scoring.
   bool friendlyPassOk;
 
-  float komi;
-  //Min and max acceptable komi in various places involving user input validation
-  static constexpr float MIN_USER_KOMI = -150.0f;
-  static constexpr float MAX_USER_KOMI = 150.0f;
+  bool dotsCaptureEmptyBases;
+  bool dotsFreeCapturedDots; // TODO: Implement later
 
   Rules();
+  // Constructor for Dots
+  Rules(int newStartPos, bool newStartPosIsRandom, bool newSuicide, bool newDotsCaptureEmptyBases, bool newDotsFreeCapturedDots);
+  // Constructor for Go
   Rules(
     int koRule,
     int scoringRule,
@@ -52,14 +73,18 @@ struct Rules {
     bool friendlyPassOk,
     float komi
   );
+  explicit Rules(bool initIsDots);
   ~Rules();
 
   bool operator==(const Rules& other) const;
   bool operator!=(const Rules& other) const;
 
-  bool equalsIgnoringKomi(const Rules& other) const;
-  bool gameResultWillBeInteger() const;
+  [[nodiscard]] bool equalsIgnoringSgfDefinedProps(const Rules& other) const;
+  [[nodiscard]] bool equals(const Rules& other, bool ignoreSgfDefinedProps) const;
+  [[nodiscard]] bool gameResultWillBeInteger() const;
 
+  static Rules getDefault(bool isDots);
+  static Rules getDefaultOrTrompTaylorish(bool isDots);
   static Rules getTrompTaylorish();
   static Rules getSimpleTerritory();
 
@@ -67,28 +92,51 @@ struct Rules {
   static std::set<std::string> scoringRuleStrings();
   static std::set<std::string> taxRuleStrings();
   static std::set<std::string> whiteHandicapBonusRuleStrings();
+  static int parseStartPos(const std::string& s);
   static int parseKoRule(const std::string& s);
   static int parseScoringRule(const std::string& s);
   static int parseTaxRule(const std::string& s);
   static int parseWhiteHandicapBonusRule(const std::string& s);
+  static std::string writeStartPosRule(int startPosRule);
   static std::string writeKoRule(int koRule);
   static std::string writeScoringRule(int scoringRule);
   static std::string writeTaxRule(int taxRule);
   static std::string writeWhiteHandicapBonusRule(int whiteHandicapBonusRule);
 
   static bool komiIsIntOrHalfInt(float komi);
+  static std::set<std::string> startPosStrings();
+  int getNumOfStartPosStones() const;
 
-  static Rules parseRules(const std::string& str);
-  static Rules parseRulesWithoutKomi(const std::string& str, float komi);
-  static bool tryParseRules(const std::string& str, Rules& buf);
-  static bool tryParseRulesWithoutKomi(const std::string& str, Rules& buf, float komi);
+  static Rules parseRules(const std::string& sOrig, bool isDots = false);
+  static Rules parseRulesWithoutKomi(const std::string& sOrig, float komi, bool isDots = false);
+  static bool tryParseRules(const std::string& sOrig, Rules& buf, bool isDots);
+  static bool tryParseRulesWithoutKomi(const std::string& sOrig, Rules& buf, float komi, bool isDots);
 
-  static Rules updateRules(const std::string& key, const std::string& value, Rules priorRules);
+  static Rules updateRules(const std::string& key, const std::string& value, const Rules& oldRules);
+
+  static std::vector<Move> generateStartPos(int startPos, Rand* rand, int x_size, int y_size);
+  /**
+   * @param placementMoves placement moves that we are trying to recognize.
+   * @param x_size size of field
+   * @param y_size size of field
+   * @param startPosMoves moves for a recognized pattern. It's empty if recognition is failed.
+   * @param randomized if we recognize a start pos, but it doesn't match the strict position, set it up to `true`
+   * @param remainingMoves represents moves that remain after start pos recognition (@param placementMoves - @param startPosMoves),
+   *  If it's null (default), then it's assumed that all placement moves are used in the recognized start pos.
+   * @return recognized type of start pos. If the @param placementMoves don't match any known patter, then
+   * it returns empty pos with @param remainingMoves == @param placementMoves
+   */
+  static int recognizeStartPos(
+    const std::vector<Move>& placementMoves,
+    int x_size,
+    int y_size,
+    std::vector<Move>& startPosMoves,
+    bool& randomized,
+    std::vector<Move>* remainingMoves = nullptr);
 
   friend std::ostream& operator<<(std::ostream& out, const Rules& rules);
-  std::string toString() const;
-  std::string toStringNoKomi() const;
-  std::string toStringNoKomiMaybeNice() const;
+  std::string toString(bool includeSgfDefinedProperties = true) const;
+  std::string toStringNoSgfDefinedPropertiesMaybeNice() const;
   std::string toJsonString() const;
   std::string toJsonStringNoKomi() const;
   std::string toJsonStringNoKomiMaybeOmitStuff() const;
@@ -102,8 +150,45 @@ struct Rules {
   static const Hash128 ZOBRIST_MULTI_STONE_SUICIDE_HASH;
   static const Hash128 ZOBRIST_BUTTON_HASH;
   static const Hash128 ZOBRIST_FRIENDLY_PASS_OK_HASH;
+  static const Hash128 ZOBRIST_DOTS_GAME_HASH;
+  static const Hash128 ZOBRIST_DOTS_CAPTURE_EMPTY_BASES_HASH;
 
 private:
+  // General constructor
+  Rules(
+    bool newIsDots,
+    int startPosRule,
+    bool newStartPosIsRandom,
+    int kRule,
+    int sRule,
+    int tRule,
+    bool suic,
+    bool button,
+    int whbRule,
+    bool pOk,
+    float km,
+    bool newDotsCaptureEmptyBases,
+    bool newDotsFreeCapturedDots
+  );
+
+  static inline std::map<int, std::string> startPosIdToName;
+  static inline std::map<std::string, int> startPosNameToId;
+
+  static void initializeIfNeeded() {
+    if (startPosIdToName.empty()) {
+      startPosIdToName[START_POS_EMPTY] = "EMPTY";
+      startPosIdToName[START_POS_CROSS] = "CROSS";
+      startPosIdToName[START_POS_CROSS_2] = "CROSS_2";
+      startPosIdToName[START_POS_CROSS_4] = "CROSS_4";
+      startPosNameToId["EMPTY"] = START_POS_EMPTY;
+      startPosNameToId["CROSS"] = START_POS_CROSS;
+      startPosNameToId["CROSS_2"] = START_POS_CROSS_2;
+      startPosNameToId["CROSS_4"] = START_POS_CROSS_4;
+    }
+  }
+
+  static void addCross(int x, int y, int x_size, bool rotate90, std::vector<Move>& moves);
+
   nlohmann::json toJsonHelper(bool omitKomi, bool omitDefaults) const;
 };
 

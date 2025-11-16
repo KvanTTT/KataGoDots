@@ -17,6 +17,18 @@ namespace Tests {
   //testboardbasic.cpp
   void runBoardIOTests();
   void runBoardBasicTests();
+
+  void runDotsFieldTests();
+  void runDotsGroundingTests();
+  void runDotsBoardHistoryGroundingTests();
+  void runDotsPosHashTests();
+  void runDotsStartPosTests();
+  void runDotsStressTests();
+
+  void runDotsOwnershipTests();
+  void runDotsSymmetryTests();
+  void runDotsCapturingTests();
+
   void runBoardUndoTest();
   void runBoardHandicapTest();
   void runBoardStressTest();
@@ -118,7 +130,7 @@ namespace TestCommon {
 
   constexpr int MIN_BENCHMARK_SGF_DATA_SIZE = 7;
   constexpr int MAX_BENCHMARK_SGF_DATA_SIZE = 19;
-  constexpr int DEFAULT_BENCHMARK_SGF_DATA_SIZE = std::min(Board::DEFAULT_LEN,MAX_BENCHMARK_SGF_DATA_SIZE);
+  constexpr int DEFAULT_BENCHMARK_SGF_DATA_SIZE = std::min(std::max(Board::DEFAULT_LEN_X, Board::DEFAULT_LEN_Y),MAX_BENCHMARK_SGF_DATA_SIZE);
   std::string getBenchmarkSGFData(int boardSize);
 
   std::vector<std::string> getMultiGameSize9Data();

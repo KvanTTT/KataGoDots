@@ -18,9 +18,9 @@ ValueTargets::~ValueTargets()
 
 //-------------------------------------------------------------------------------------
 
-SidePosition::SidePosition()
+SidePosition::SidePosition(const Rules& rules)
   :board(),
-   hist(),
+   hist(rules),
    pla(P_BLACK),
    unreducedNumVisits(),
    policyTarget(),
@@ -36,7 +36,7 @@ SidePosition::SidePosition()
    playoutDoublingAdvantage(0.0)
 {}
 
-SidePosition::SidePosition(const Board& b, const BoardHistory& h, Player p, int numNNChangesSoFar)
+SidePosition::SidePosition(const Board& b, const BoardHistory& h, const Player p, const int numNNChangesSoFar)
   :board(b),
    hist(h),
    pla(p),
@@ -59,15 +59,15 @@ SidePosition::~SidePosition()
 
 //-------------------------------------------------------------------------------------
 
-FinishedGameData::FinishedGameData()
+FinishedGameData::FinishedGameData(const Rules& rules)
   :bName(),
    wName(),
    bIdx(0),
    wIdx(0),
 
-   startBoard(),
-   startHist(),
-   endHist(),
+   startBoard(rules),
+   startHist(rules),
+   endHist(rules),
    startPla(P_BLACK),
    gameHash(),
 
@@ -265,7 +265,9 @@ static const int GLOBAL_TARGET_NUM_CHANNELS = 64;
 static const int VALUE_SPATIAL_TARGET_NUM_CHANNELS = 5;
 static const int QVALUE_SPATIAL_TARGET_NUM_CHANNELS = 3;
 
-TrainingWriteBuffers::TrainingWriteBuffers(int iVersion, int maxRws, int numBChannels, int numFChannels, int xLen, int yLen, bool includeMetadata)
+TrainingWriteBuffers::TrainingWriteBuffers(
+  const int iVersion, int maxRws, int numBChannels, int numFChannels, int xLen, int yLen,
+  const bool includeMetadata)
   :inputsVersion(iVersion),
    maxRows(maxRws),
    numBinaryChannels(numBChannels),
@@ -298,7 +300,7 @@ void TrainingWriteBuffers::clear() {
 }
 
 //Copy floats that are all 0-1 into bits, packing 8 to a byte, big-endian-style within each byte.
-static void packBits(const float* binaryFloats, int len, uint8_t* bits) {
+static void packBits(const float* binaryFloats, const int len, uint8_t* bits) {
   for(int i = 0; i < len; i += 8) {
     if(i + 8 <= len) {
       bits[i >> 3] =
@@ -320,18 +322,22 @@ static void packBits(const float* binaryFloats, int len, uint8_t* bits) {
   }
 }
 
-static void zeroPolicyTarget(int policySize, int16_t* target) {
+static void zeroPolicyTarget(const int policySize, int16_t* target) {
   for(int pos = 0; pos<policySize; pos++)
     target[pos] = 0;
 }
 
-static void uniformPolicyTarget(int policySize, int16_t* target) {
+static void uniformPolicyTarget(const int policySize, int16_t* target) {
   for(int pos = 0; pos<policySize; pos++)
     target[pos] = 1;
 }
 
 //Copy playouts into target, expanding out the sparse representation into a full plane.
-static void fillPolicyTarget(const vector<PolicyTargetMove>& policyTargetMoves, int policySize, int dataXLen, int dataYLen, int boardXSize, int16_t* target) {
+static void fillPolicyTarget(const vector<PolicyTargetMove>& policyTargetMoves,
+  const int policySize,
+  const int dataXLen,
+  const int dataYLen,
+  const int boardXSize, int16_t* target) {
   zeroPolicyTarget(policySize,target);
   size_t size = policyTargetMoves.size();
   for(size_t i = 0; i<size; i++) {
@@ -344,7 +350,7 @@ static void fillPolicyTarget(const vector<PolicyTargetMove>& policyTargetMoves, 
 
 //Clamps a value to integer in [-120,120] to pack down to 8 bits.
 //Randomizes to make sure the expectation is exactly correct.
-static int8_t clampToRadius120(float x, Rand& rand) {
+static int8_t clampToRadius120(const float x, Rand& rand) {
   //We need to pack this down to 8 bits, so map into [-120,120].
   //Randomize to ensure the expectation is exactly correct.
   int low = (int)floor(x);
@@ -356,7 +362,7 @@ static int8_t clampToRadius120(float x, Rand& rand) {
   if(lambda == 0.0f) return (int8_t)low;
   else return (int8_t)(rand.nextBool(lambda) ? high : low);
 }
-static int16_t clampToRadius32000(float x, Rand& rand) {
+static int16_t clampToRadius32000(const float x, Rand& rand) {
   //We need to pack this down to 16 bits, so clamp into an integer [-32000,32000].
   //Randomize to ensure the expectation is exactly correct.
   int low = (int)floor(x);
@@ -369,7 +375,12 @@ static int16_t clampToRadius32000(float x, Rand& rand) {
   else return (int16_t)(rand.nextBool(lambda) ? high : low);
 }
 
-static void fillQValueTarget(const vector<QValueTargetMove>& whiteQValueTargets, Player nextPlayer, int policySize, int dataXLen, int dataYLen, int boardXSize, int16_t* cPosTarget, Rand& rand) {
+static void fillQValueTarget(const vector<QValueTargetMove>& whiteQValueTargets,
+  const Player nextPlayer,
+  const int policySize,
+  const int dataXLen,
+  const int dataYLen,
+  const int boardXSize, int16_t* cPosTarget, Rand& rand) {
   for(int i = 0; i < QVALUE_SPATIAL_TARGET_NUM_CHANNELS * policySize; i++) {
     cPosTarget[i] = 0;
   }
@@ -395,7 +406,10 @@ static void fillQValueTarget(const vector<QValueTargetMove>& whiteQValueTargets,
   }
 }
 
-static void fillValueTDTargets(const vector<ValueTargets>& whiteValueTargetsByTurn, int idx, Player nextPlayer, double nowFactor, float* buf) {
+static void fillValueTDTargets(const vector<ValueTargets>& whiteValueTargetsByTurn,
+  const int idx,
+  const Player nextPlayer,
+  const double nowFactor, float* buf) {
   double winValue = 0.0;
   double lossValue = 0.0;
   double noResultValue = 0.0;
@@ -490,36 +504,13 @@ void TrainingWriteBuffers::addRow(
     bool inputsUseNHWC = false;
     float* rowBin = binaryInputNCHWUnpacked;
     float* rowGlobal = globalInputNC.data + curRows * numGlobalChannels;
-    static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
-    if(inputsVersion == 3) {
-      assert(NNInputs::NUM_FEATURES_SPATIAL_V3 == numBinaryChannels);
-      assert(NNInputs::NUM_FEATURES_GLOBAL_V3 == numGlobalChannels);
-      NNInputs::fillRowV3(board, hist, nextPlayer, nnInputParams, dataXLen, dataYLen, inputsUseNHWC, rowBin, rowGlobal);
-    }
-    else if(inputsVersion == 4) {
-      assert(NNInputs::NUM_FEATURES_SPATIAL_V4 == numBinaryChannels);
-      assert(NNInputs::NUM_FEATURES_GLOBAL_V4 == numGlobalChannels);
-      NNInputs::fillRowV4(board, hist, nextPlayer, nnInputParams, dataXLen, dataYLen, inputsUseNHWC, rowBin, rowGlobal);
-    }
-    else if(inputsVersion == 5) {
-      assert(NNInputs::NUM_FEATURES_SPATIAL_V5 == numBinaryChannels);
-      assert(NNInputs::NUM_FEATURES_GLOBAL_V5 == numGlobalChannels);
-      NNInputs::fillRowV5(board, hist, nextPlayer, nnInputParams, dataXLen, dataYLen, inputsUseNHWC, rowBin, rowGlobal);
-    }
-    else if(inputsVersion == 6) {
-      assert(NNInputs::NUM_FEATURES_SPATIAL_V6 == numBinaryChannels);
-      assert(NNInputs::NUM_FEATURES_GLOBAL_V6 == numGlobalChannels);
-      NNInputs::fillRowV6(board, hist, nextPlayer, nnInputParams, dataXLen, dataYLen, inputsUseNHWC, rowBin, rowGlobal);
-    }
-    else if(inputsVersion == 7) {
-      assert(NNInputs::NUM_FEATURES_SPATIAL_V7 == numBinaryChannels);
-      assert(NNInputs::NUM_FEATURES_GLOBAL_V7 == numGlobalChannels);
-      NNInputs::fillRowV7(board, hist, nextPlayer, nnInputParams, dataXLen, dataYLen, inputsUseNHWC, rowBin, rowGlobal);
-    }
-    else
-      ASSERT_UNREACHABLE;
 
-    //Pack bools bitwise into uint8_t
+    assert(NNInputs::getNumberOfSpatialFeatures(inputsVersion, hist.rules.isDots) == numBinaryChannels);
+    assert(NNInputs::getNumberOfGlobalFeatures(inputsVersion, hist.rules.isDots) == numGlobalChannels);
+
+    NNInputs::fillRowVN(inputsVersion, board, hist, nextPlayer, nnInputParams, dataXLen, dataYLen, inputsUseNHWC, rowBin, rowGlobal);
+
+    // Pack bools bitwise into uint8_t
     uint8_t* rowBinPacked = binaryInputNCHWPacked.data + curRows * numBinaryChannels * packedBoardArea;
     for(int c = 0; c<numBinaryChannels; c++)
       packBits(rowBin + c * posArea, posArea, rowBinPacked + c * packedBoardArea);
@@ -527,6 +518,8 @@ void TrainingWriteBuffers::addRow(
 
   //Vector for global targets and metadata
   float* rowGlobal = globalTargetsNC.data + curRows * GLOBAL_TARGET_NUM_CHANNELS;
+
+  rowGlobal[23] = hist.rules.isDots ? 1.0f : 0.0f; // Previously unused -> engage for Dots game
 
   //Target weight for the whole row
   rowGlobal[25] = targetWeight;
@@ -601,8 +594,6 @@ void TrainingWriteBuffers::addRow(
     rowGlobal[22] = (float)sum;
   }
 
-  //Unused
-  rowGlobal[23] = 0.0f;
   rowGlobal[24] = (float)(1.0f - tdValueTargetWeight);
   rowGlobal[30] = (float)policySurprise;
   rowGlobal[31] = (float)policyEntropy;
@@ -694,7 +685,11 @@ void TrainingWriteBuffers::addRow(
     rowScoreDistr[scoreDistrMid] = 50;
   }
   else {
-    assert(finalFullArea != NULL);
+    if (!hist.rules.isDots) {
+      assert(finalFullArea != NULL);
+    } else {
+      assert(finalFullArea == NULL);
+    }
     assert(finalBoard != NULL);
 
     //Ownership weight scales by value weight
@@ -716,9 +711,11 @@ void TrainingWriteBuffers::addRow(
         Loc loc = Location::getLoc(x,y,board.x_size);
         if(finalOwnership[loc] == nextPlayer) rowOwnership[pos] = 1;
         else if(finalOwnership[loc] == opp) rowOwnership[pos] = -1;
-        //Mark full area points that ended up not being owned
-        if(finalFullArea[loc] != C_EMPTY && finalOwnership[loc] == C_EMPTY)
-          rowOwnership[pos+posArea] = (finalFullArea[loc] == nextPlayer ? 1 : -1);
+        if (!hist.rules.isDots) {
+          //Mark full area points that ended up not being owned
+          if(finalFullArea[loc] != C_EMPTY && finalOwnership[loc] == C_EMPTY)
+            rowOwnership[pos+posArea] = (finalFullArea[loc] == nextPlayer ? 1 : -1);
+        }
       }
     }
 
@@ -770,10 +767,12 @@ void TrainingWriteBuffers::addRow(
       for(int x = 0; x<board.x_size; x++) {
         int pos = NNPos::xyToPos(x,y,dataXLen);
         Loc loc = Location::getLoc(x,y,board.x_size);
-        if(board2.colors[loc] == pla) rowOwnership[pos+posArea*2] = 1;
-        else if(board2.colors[loc] == opp) rowOwnership[pos+posArea*2] = -1;
-        if(board3.colors[loc] == pla) rowOwnership[pos+posArea*3] = 1;
-        else if(board3.colors[loc] == opp) rowOwnership[pos+posArea*3] = -1;
+        Color board2Color = board2.getColor(loc);
+        Color board3Color = board3.getColor(loc);
+        if(board2Color == pla) rowOwnership[pos+posArea*2] = 1;
+        else if(board2Color == opp) rowOwnership[pos+posArea*2] = -1;
+        if(board3Color == pla) rowOwnership[pos+posArea*3] = 1;
+        else if(board3Color == opp) rowOwnership[pos+posArea*3] = -1;
       }
     }
   }
@@ -954,48 +953,25 @@ void TrainingWriteBuffers::writeToTextOstream(ostream& out) {
 
 //-------------------------------------------------------------------------------------
 
-TrainingDataWriter::TrainingDataWriter(const string& outDir, int iVersion, int maxRowsPerFile, double firstFileMinRandProp, int dataXLen, int dataYLen, const string& randSeed)
-  : TrainingDataWriter(outDir,NULL,iVersion,maxRowsPerFile,firstFileMinRandProp,dataXLen,dataYLen,1,randSeed)
-{}
-TrainingDataWriter::TrainingDataWriter(ostream* dbgOut, int iVersion, int maxRowsPerFile, double firstFileMinRandProp, int dataXLen, int dataYLen, int onlyEvery, const string& randSeed)
-  : TrainingDataWriter(string(),dbgOut,iVersion,maxRowsPerFile,firstFileMinRandProp,dataXLen,dataYLen,onlyEvery,randSeed)
-{}
-
-TrainingDataWriter::TrainingDataWriter(const string& outDir, ostream* dbgOut, int iVersion, int maxRowsPerFile, double firstFileMinRandProp, int dataXLen, int dataYLen, int onlyEvery, const string& randSeed)
-  :outputDir(outDir),inputsVersion(iVersion),rand(randSeed),writeBuffers(NULL),debugOut(dbgOut),debugOnlyWriteEvery(onlyEvery),rowCount(0)
+TrainingDataWriter::TrainingDataWriter(const string& newOutputDir, ostream* newDebugOut,
+  const int newInputsVersion,
+  const int maxRowsPerFile,
+  const double firstFileMinRandProp,
+  const int dataXLen,
+  const int dataYLen,
+  const string& randSeed,
+  const int onlyWriteEvery,
+  const bool dotsGame)
+  :outputDir(newOutputDir),inputsVersion(newInputsVersion),rand(randSeed),writeBuffers(nullptr),debugOut(newDebugOut),debugOnlyWriteEvery(onlyWriteEvery),rowCount(0)
 {
-  int numBinaryChannels;
-  int numGlobalChannels;
   //Note that this inputsVersion is for data writing, it might be different than the inputsVersion used
-  //to feed into a model during selfplay
-  static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
-  if(inputsVersion == 3) {
-    numBinaryChannels = NNInputs::NUM_FEATURES_SPATIAL_V3;
-    numGlobalChannels = NNInputs::NUM_FEATURES_GLOBAL_V3;
-  }
-  else if(inputsVersion == 4) {
-    numBinaryChannels = NNInputs::NUM_FEATURES_SPATIAL_V4;
-    numGlobalChannels = NNInputs::NUM_FEATURES_GLOBAL_V4;
-  }
-  else if(inputsVersion == 5) {
-    numBinaryChannels = NNInputs::NUM_FEATURES_SPATIAL_V5;
-    numGlobalChannels = NNInputs::NUM_FEATURES_GLOBAL_V5;
-  }
-  else if(inputsVersion == 6) {
-    numBinaryChannels = NNInputs::NUM_FEATURES_SPATIAL_V6;
-    numGlobalChannels = NNInputs::NUM_FEATURES_GLOBAL_V6;
-  }
-  else if(inputsVersion == 7) {
-    numBinaryChannels = NNInputs::NUM_FEATURES_SPATIAL_V7;
-    numGlobalChannels = NNInputs::NUM_FEATURES_GLOBAL_V7;
-  }
-  else {
-    throw StringError("TrainingDataWriter: Unsupported inputs version: " + Global::intToString(inputsVersion));
-  }
+  // to feed into a model during selfplay
+  const int numBinaryChannels = NNInputs::getNumberOfSpatialFeatures(newInputsVersion, dotsGame);
+  const int numGlobalChannels = NNInputs::getNumberOfGlobalFeatures(newInputsVersion, dotsGame);
 
-  const bool hasMetadataInput = false;
+  constexpr bool hasMetadataInput = false;
   writeBuffers = new TrainingWriteBuffers(
-    inputsVersion,
+    newInputsVersion,
     maxRowsPerFile,
     numBinaryChannels,
     numGlobalChannels,
@@ -1091,9 +1067,14 @@ void TrainingDataWriter::writeGame(const FinishedGameData& data) {
     else
       assert(lastTargets.noResult == 0.0f);
 
-    assert(data.finalFullArea != NULL);
     assert(data.finalOwnership != NULL);
-    assert(data.finalSekiAreas != NULL);
+    if (data.endHist.rules.isDots) {
+      assert(data.finalSekiAreas == NULL);
+      assert(data.finalFullArea == NULL);
+    } else {
+      assert(data.finalSekiAreas != NULL);
+      assert(data.finalFullArea != NULL);
+    }
     assert(data.finalWhiteScoring != NULL);
     assert(!data.endHist.isResignation);
   }

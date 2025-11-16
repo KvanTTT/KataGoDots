@@ -10,50 +10,63 @@
 #include "../core/global.h"
 #include "../core/hash.h"
 #include "../external/nlohmann_json/json.hpp"
+#include "rules.h"
+#include "../core/rand.h"
 
 #ifndef COMPILE_MAX_BOARD_LEN
-#define COMPILE_MAX_BOARD_LEN 19
+#define COMPILE_MAX_BOARD_LEN 39
 #endif
+
+#define FOREACHADJ(BLOCK) {int ADJOFFSET = -(x_size+1); {BLOCK}; ADJOFFSET = -1; {BLOCK}; ADJOFFSET = 1; {BLOCK}; ADJOFFSET = x_size+1; {BLOCK}};
 
 //TYPES AND CONSTANTS-----------------------------------------------------------------
 
+static constexpr int LEFT_TOP_INDEX = 0;
+static constexpr int TOP_INDEX = 1;
+static constexpr int RIGHT_TOP_INDEX = 2;
+static constexpr int RIGHT_INDEX = 3;
+static constexpr int RIGHT_BOTTOM_INDEX = 4;
+static constexpr int BOTTOM_INDEX = 5;
+static constexpr int LEFT_BOTTOM_INDEX = 6;
+static constexpr int LEFT_INDEX = 7;
+
 struct Board;
 
-//Player
-typedef int8_t Player;
-static constexpr Player P_BLACK = 1;
-static constexpr Player P_WHITE = 2;
+typedef int8_t State;
 
-//Color of a point on the board
-typedef int8_t Color;
-static constexpr Color C_EMPTY = 0;
-static constexpr Color C_BLACK = 1;
-static constexpr Color C_WHITE = 2;
-static constexpr Color C_WALL = 3;
-static constexpr int NUM_BOARD_COLORS = 4;
+static constexpr int PLAYER_BITS_COUNT = 2;
+static constexpr State ACTIVE_MASK = (1 << PLAYER_BITS_COUNT) - 1;
 
 static inline Color getOpp(Color c)
 {return c ^ 3;}
 
+Color getActiveColor(State state);
+
+Color getPlacedDotColor(State s);
+
+Color getEmptyTerritoryColor(State s);
+
+bool isGrounded(State state);
+
+bool isTerritory(State s);
+
 //Conversions for players and colors
 namespace PlayerIO {
   char colorToChar(Color c);
-  std::string playerToStringShort(Player p);
-  std::string playerToString(Player p);
+  char stateToChar(State s, bool isDots);
+  std::string playerToStringShort(Color p, bool isDots = false);
+  std::string playerToString(Player p, bool isDots);
   bool tryParsePlayer(const std::string& s, Player& pla);
   Player parsePlayer(const std::string& s);
 }
 
-//Location of a point on the board
-//(x,y) is represented as (x+1) + (y+1)*(x_size+1)
-typedef short Loc;
 namespace Location
 {
   Loc getLoc(int x, int y, int x_size);
   int getX(Loc loc, int x_size);
   int getY(Loc loc, int x_size);
 
-  void getAdjacentOffsets(short adj_offsets[8], int x_size);
+  void getAdjacentOffsets(short adj_offsets[8], int x_size, bool isDots);
   bool isAdjacent(Loc loc0, Loc loc1, int x_size);
   Loc getMirrorLoc(Loc loc, int x_size, int y_size);
   Loc getCenterLoc(int x_size, int y_size);
@@ -62,10 +75,12 @@ namespace Location
   bool isNearCentral(Loc loc, int x_size, int y_size);
   int distance(Loc loc0, Loc loc1, int x_size);
   int euclideanDistanceSquared(Loc loc0, Loc loc1, int x_size);
+  int getGetBigJumpInitialIndex(Loc loc0, Loc loc1, int x_size);
+  Loc getNextLocCW(Loc loc0, Loc loc1, int x_size);
 
-  std::string toString(Loc loc, int x_size, int y_size);
+  std::string toString(Loc loc, int x_size, int y_size, bool isDots);
   std::string toString(Loc loc, const Board& b);
-  std::string toStringMach(Loc loc, int x_size);
+  std::string toStringMach(Loc loc, int x_size, bool isDots);
   std::string toStringMach(Loc loc, const Board& b);
 
   bool tryOfString(const std::string& str, int x_size, int y_size, Loc& result);
@@ -80,14 +95,24 @@ namespace Location
   Loc ofStringAllowNull(const std::string& str, const Board& b);
 
   std::vector<Loc> parseSequence(const std::string& str, const Board& b);
-}
 
-//Simple structure for storing moves. Not used below, but this is a convenient place to define it.
-STRUCT_NAMED_PAIR(Loc,loc,Player,pla,Move);
+  Loc xm1y(Loc loc);
+  Loc xm1ym1(Loc loc, int x_size);
+  Loc xym1(Loc loc, int x_size);
+  Loc xp1ym1(Loc loc, int x_size);
+  Loc xp1y(Loc loc);
+  Loc xp1yp1(Loc loc, int x_size);
+  Loc xyp1(Loc loc, int x_size);
+  Loc xm1yp1(Loc loc, int x_size);
+}
 
 //Fast lightweight board designed for playouts and simulations, where speed is essential.
 //Simple ko rule only.
 //Does not enforce player turn order.
+
+constexpr static int getMaxArrSize(const int x_size, const int y_size) {
+  return (x_size+1)*(y_size+2)+1;
+}
 
 struct Board
 {
@@ -98,20 +123,37 @@ struct Board
 
   //Board parameters and Constants----------------------------------------
 
-  static constexpr int MAX_LEN = COMPILE_MAX_BOARD_LEN;  //Maximum edge length allowed for the board
-  static constexpr int DEFAULT_LEN = std::min(MAX_LEN,19); //Default edge length for board if unspecified
-  static constexpr int MAX_PLAY_SIZE = MAX_LEN * MAX_LEN;  //Maximum number of playable spaces
-  static constexpr int MAX_ARR_SIZE = (MAX_LEN+1)*(MAX_LEN+2)+1; //Maximum size of arrays needed
+  static constexpr int MAX_LEN_X = //Maximum x edge length allowed for the board
+#ifdef COMPILE_MAX_BOARD_LEN_X
+    COMPILE_MAX_BOARD_LEN_X;
+#else
+    COMPILE_MAX_BOARD_LEN;
+#endif
+  static constexpr int MAX_LEN_Y = //Maximum y edge length allowed for the board
+#ifdef COMPILE_MAX_BOARD_LEN_Y
+    COMPILE_MAX_BOARD_LEN_Y;
+#else
+    COMPILE_MAX_BOARD_LEN;
+#endif
+  static constexpr int MAX_LEN = std::max(MAX_LEN_X, MAX_LEN_Y);  //Maximum edge length allowed for the board
+  static constexpr int DEFAULT_LEN_X = std::min(MAX_LEN_X,19); //Default x edge length for board if unspecified
+  static constexpr int DEFAULT_LEN_Y = std::min(MAX_LEN_Y,19); //Default y edge length for board if unspecified
+  static constexpr int DEFAULT_LEN_X_DOTS = std::min(MAX_LEN_X, 39);
+  static constexpr int DEFAULT_LEN_Y_DOTS = std::min(MAX_LEN_Y, 32);
+  static constexpr int MAX_PLAY_SIZE = MAX_LEN_X * MAX_LEN_Y;  //Maximum number of playable spaces
+  static constexpr int MAX_ARR_SIZE = getMaxArrSize(MAX_LEN_X, MAX_LEN_Y); //Maximum size of arrays needed
 
-  //Location used to indicate an invalid spot on the board.
+  // Location used to indicate an invalid spot on the board.
   static constexpr Loc NULL_LOC = 0;
-  //Location used to indicate a pass move is desired.
+  // Location used to indicate a pass or grounding (Dots game) move is desired.
   static constexpr Loc PASS_LOC = 1;
+  // Location used to indicate resigning move.
+  static constexpr Loc RESIGN_LOC = 2;
 
   //Zobrist Hashing------------------------------
   static bool IS_ZOBRIST_INITALIZED;
-  static Hash128 ZOBRIST_SIZE_X_HASH[MAX_LEN+1];
-  static Hash128 ZOBRIST_SIZE_Y_HASH[MAX_LEN+1];
+  static Hash128 ZOBRIST_SIZE_X_HASH[MAX_LEN_X+1];
+  static Hash128 ZOBRIST_SIZE_Y_HASH[MAX_LEN_Y+1];
   static Hash128 ZOBRIST_BOARD_HASH[MAX_ARR_SIZE][4];
   static Hash128 ZOBRIST_BOARD_HASH2[MAX_ARR_SIZE][4];
   static Hash128 ZOBRIST_PLAYER_HASH[4];
@@ -147,22 +189,73 @@ struct Board
   /*   int size_; */
   /* }; */
 
+  struct Base {
+    std::vector<Loc> rollback_locations;
+    std::vector<State> rollback_states;
+    Player pla{};
+    bool is_real{};
+
+    Base() = default;
+    Base(Player newPla, const std::vector<Loc>& rollbackLocations, const std::vector<State>& rollbackStates, bool isReal);
+  };
+
   //Move data passed back when moves are made to allow for undos
   struct MoveRecord {
     Player pla;
     Loc loc;
     Loc ko_loc;
     uint8_t capDirs; //First 4 bits indicate directions of capture, fifth bit indicates suicide
+
+    // Move data for Dots game
+    State previousState;
+    std::vector<Base> bases;
+    std::vector<Loc> emptyBaseInvalidateLocations;
+    std::vector<Loc> groundingLocations;
+
+    MoveRecord() = default;
+
+    // Constructor for Go game
+    MoveRecord(
+      Loc initLoc,
+      Player initPla,
+      Loc init_ko_loc,
+      uint8_t initCapDirs
+    );
+
+    // Constructor for Dots game
+    MoveRecord(
+      Loc newLoc,
+      Player newPla,
+      State newPreviousState,
+      const std::vector<Base>& newBases,
+      const std::vector<Loc>& newEmptyBaseInvalidateLocations,
+      const std::vector<Loc>& newGroundingLocations
+    );
   };
 
   //Constructors---------------------------------
   Board();  //Create Board of size (DEFAULT_LEN,DEFAULT_LEN)
-  Board(int x, int y); //Create Board of size (x,y)
+  explicit Board(const Rules& newRules);
+  Board(int x, int y, const Rules& newRules); // Create Board of size (x,y) with the specified Rules
   Board(const Board& other);
 
   Board& operator=(const Board&) = default;
 
   //Functions------------------------------------
+
+  [[nodiscard]] Color getColor(Loc loc) const;
+  [[nodiscard]] Color getPlacedColor(Loc loc) const;
+  [[nodiscard]] State getState(Loc loc) const;
+  void setState(Loc loc, State state);
+  bool isDots() const;
+
+  template<typename Func> void forEachAdjacent(const Loc loc, Func&& f) const {
+    const int stride = x_size + 1;
+    f(loc - stride);
+    f(loc - 1);
+    f(loc + 1);
+    f(loc + stride);
+  }
 
   double sqrtBoardArea() const;
 
@@ -183,10 +276,8 @@ struct Board
   bool isIllegalSuicide(Loc loc, Player pla, bool isMultiStoneSuicideLegal) const;
   //Check if moving here is illegal due to simple ko
   bool isKoBanned(Loc loc) const;
-  //Check if moving here is legal, ignoring simple ko
-  bool isLegalIgnoringKo(Loc loc, Player pla, bool isMultiStoneSuicideLegal) const;
   //Check if moving here is legal. Equivalent to isLegalIgnoringKo && !isKoBanned
-  bool isLegal(Loc loc, Player pla, bool isMultiStoneSuicideLegal) const;
+  bool isLegal(Loc loc, Player pla, bool isMultiStoneSuicideLegal, bool ignoreKo) const;
   //Check if this location is on the board
   bool isOnBoard(Loc loc) const;
   //Check if this location contains a simple eye for the specified player.
@@ -203,11 +294,13 @@ struct Board
   bool isAdjacentToChain(Loc loc, Loc chain) const;
   //Does this connect two pla distinct groups that are not both pass-alive and not within opponent pass-alive area either?
   bool isNonPassAliveSelfConnection(Loc loc, Player pla, Color* passAliveArea) const;
-  //Is this board empty?
-  bool isEmpty() const;
+  // Is this board empty?
+  bool isStartPos() const;
   //Count the number of stones on the board
   int numStonesOnBoard() const;
   int numPlaStonesOnBoard(Player pla) const;
+  std::vector<Move>
+  getCurrentMoves(int& startBoardNumBlackStones, int& startBoardNumWhiteStones, bool includeStartLocs) const;
 
   //Get a hash that combines the position of the board with simple ko prohibition and a player to move.
   Hash128 getSitHashWithSimpleKo(Player pla) const;
@@ -223,15 +316,20 @@ struct Board
   //Returns false if location or color were out of range.
   bool setStone(Loc loc, Color color);
 
+  // Set the start pos and use the provided random in case of randomization is used
+  // It should be called strictly before handicap placement
+  void setStartPos(Rand& rand);
   //Sets the specified stone, including overwriting existing stones, but only if doing so will
   //not result in any captures or zero liberty groups.
   //Returns false if location or color were out of range, or if would cause a zero liberty group.
   //In case of failure, will restore the position, but may result in chain ids or ordering in the board changing.
-  bool setStoneFailIfNoLibs(Loc loc, Color color);
+  //If startPos is true, adds the move to start pos moves to distinguish between start pos and handicap stones
+  bool setStoneFailIfNoLibs(Loc loc, Color color, bool startPos = false);
   //Same, but sets multiple stones, and only requires that the final configuration contain no zero-liberty groups.
   //If it does contain a zero liberty group, fails and returns false and leaves the board in an arbitrarily changed but valid state.
   //Also returns false if any location is specified more than once.
-  bool setStonesFailIfNoLibs(std::vector<Move> placements);
+  //If startPos is true, adds the placements to start pos moves to distinguish between start pos and handicap stones
+  bool setStonesFailIfNoLibs(const std::vector<Move>& placements, bool startPos = false);
 
   //Attempts to play the specified move. Returns true if successful, returns false if the move was illegal.
   bool playMove(Loc loc, Player pla, bool isMultiStoneSuicideLegal);
@@ -239,13 +337,13 @@ struct Board
   //Plays the specified move, assuming it is legal.
   void playMoveAssumeLegal(Loc loc, Player pla);
 
-  //Plays the specified move, assuming it is legal, and returns a MoveRecord for the move
+  // Plays the specified move, assuming it is legal, and returns a MoveRecord for the move
   MoveRecord playMoveRecorded(Loc loc, Player pla);
 
   //Undo the move given by record. Moves MUST be undone in the order they were made.
   //Undos will NOT typically restore the precise representation in the board to the way it was. The heads of chains
   //might change, the order of the circular lists might change, etc.
-  void undo(MoveRecord record);
+  void undo(MoveRecord& record);
 
   //Get what the position hash would be if we were to play this move and resolve captures and suicides.
   //Assumes the move is on an empty location.
@@ -270,6 +368,7 @@ struct Board
   //If unsafeBigTerritories, also marks for each pla empty regions bordered by pla stones and no opp stones, regardless.
   //All other points are marked as C_EMPTY.
   //[result] must be a buffer of size MAX_ARR_SIZE and will get filled with the result
+  // For Dots game it just calculates grounding
   void calculateArea(
     Color* result,
     bool nonPassAliveStones,
@@ -278,8 +377,9 @@ struct Board
     bool isMultiStoneSuicideLegal
   ) const;
 
+  int calculateOwnershipAndWhiteScore(Color* result, Color groundingPlayer) const;
 
-  //Calculates the area (including non pass alive stones, safe and unsafe big territories)
+  // Calculates the area (including non pass alive stones, safe and unsafe big territories)
   //However, strips out any "seki" regions.
   //Seki regions are that are adjacent to any remaining empty regions.
   //If keepTerritories, then keeps the surrounded territories in seki regions, only strips points for stones.
@@ -293,16 +393,18 @@ struct Board
     bool isMultiStoneSuicideLegal
   ) const;
 
+  void calculateOneMoveCaptureAndBasePositionsForDots(std::vector<Color>& captures, std::vector<Color>& bases) const;
+
   //Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
   //For the moment, only used in testing since it does extra consistency checks.
   //If we need a version to be used in "prod", we could make an efficient version maybe as operator==.
-  bool isEqualForTesting(const Board& other, bool checkNumCaptures, bool checkSimpleKo) const;
+  bool isEqualForTesting(const Board& other, bool checkNumCaptures = true, bool checkSimpleKo = true, bool checkRules = true) const;
 
-  static Board parseBoard(int xSize, int ySize, const std::string& s);
-  static Board parseBoard(int xSize, int ySize, const std::string& s, char lineDelimiter);
-  static void printBoard(std::ostream& out, const Board& board, Loc markLoc, const std::vector<Move>* hist);
-  static std::string toStringSimple(const Board& board, char lineDelimiter);
+  static Board parseBoard(int xSize, int ySize, const std::string& s, const Rules& rules = Rules::DEFAULT_GO, char lineDelimiter = '\n');
+  std::string toString() const;
+  static void printBoard(std::ostream& out, const Board& board, Loc markLoc, const std::vector<Move>* hist, bool printHash = true);
+  static std::string toStringSimple(const Board& board, char lineDelimiter = '\n');
   static nlohmann::json toJson(const Board& board);
   static Board ofJson(const nlohmann::json& data);
 
@@ -310,12 +412,8 @@ struct Board
 
   int x_size;                  //Horizontal size of board
   int y_size;                  //Vertical size of board
+  Rules rules;
   Color colors[MAX_ARR_SIZE];  //Color of each location on the board.
-
-  //Every chain of stones has one of its stones arbitrarily designated as the head.
-  ChainData chain_data[MAX_ARR_SIZE]; //For each head stone, the chaindata for the chain under that head. Undefined otherwise.
-  Loc chain_head[MAX_ARR_SIZE];       //Where is the head of this chain? Undefined if EMPTY or WALL
-  Loc next_in_chain[MAX_ARR_SIZE];    //Location of next stone in chain. Circular linked list. Undefined if EMPTY or WALL
 
   Loc ko_loc;   //A simple ko capture was made here, making it illegal to replay here next move
 
@@ -326,10 +424,74 @@ struct Board
   int numBlackCaptures; //Number of b stones captured, informational and used by board history when clearing pos
   int numWhiteCaptures; //Number of w stones captured, informational and used by board history when clearing pos
 
-  short adj_offsets[8]; //Indices 0-3: Offsets to add for adjacent points. Indices 4-7: Offsets for diagonal points. 2 and 3 are +x and +y.
+  // Useful for fast calculation of the game result and finishing the game
+  int blackScoreIfWhiteGrounds;
+  int whiteScoreIfBlackGrounds;
+
+  // Offsets to add to get clockwise traverse
+  short adj_offsets[8];
+
+  int numLegalMovesIfSuiAllowed;
+
+  //Every chain of stones has one of its stones arbitrarily designated as the head.
+  std::vector<ChainData> chain_data; //For each head stone, the chaindata for the chain under that head. Undefined otherwise.
+  std::vector<Loc> chain_head;       //Where is the head of this chain? Undefined if EMPTY or WALL
+  std::vector<Loc> next_in_chain;    //Location of next stone in chain. Circular linked list. Undefined if EMPTY or WALL
+  std::vector<Move> start_pos_moves; //Moves that are played at the very beginning of the game
 
   private:
-  void init(int xS, int yS);
+
+  // Dots game data
+  mutable std::vector<Loc> closureOrInvalidateLocsBuffer = std::vector<Loc>();
+  mutable std::vector<Loc> territoryLocationsBuffer = std::vector<Loc>();
+  mutable std::vector<Loc> walkStack = std::vector<Loc>();
+  mutable std::vector<bool> visited_data = std::vector<bool>();
+
+  // Dots game functions
+  [[nodiscard]] bool wouldBeCaptureDots(Loc loc, Player pla) const;
+  [[nodiscard]] bool isSuicideDots(Loc loc, Player pla) const;
+  void playMoveAssumeLegalDots(Loc loc, Player pla);
+  MoveRecord playMoveRecordedDots(Loc loc, Player pla);
+  MoveRecord tryPlayMoveRecordedDots(Loc loc, Player pla, bool isSuicideLegal);
+  void undoDots(MoveRecord& moveRecord);
+  std::vector<short> fillGrounding(Loc loc);
+  void captureWhenEmptyTerritoryBecomesRealBase(Loc initLoc, Player opp, std::vector<Base>& bases, bool& isGrounded);
+  void tryCapture(
+    Loc loc,
+    Player pla,
+    const std::array<Loc, 4>& unconnectedLocations,
+    int unconnectedLocationsSize,
+    bool& atLeastOneRealBaseIsGrounded,
+    std::vector<Base>& bases);
+  void ground(Player pla, std::vector<Loc>& emptyBaseInvalidatePositions, std::vector<Base>& bases);
+  std::array<Loc, 4> getUnconnectedLocations(Loc loc, Player pla, int& size) const;
+  void checkAndAddUnconnectedLocation(
+    std::array<Loc, 4>& unconnectedLocationsBuffer,
+    int& size,
+    Player checkPla,
+    Player currentPla,
+    Loc addLoc1,
+    Loc addLoc2) const;
+  void tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
+  Base buildBase(const std::vector<short>& closure, Player pla);
+  void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, bool& createRealBase) const;
+  Base createBaseAndUpdateStates(Player basePla, bool isReal);
+  void updateScoreAndHashForTerritory(Loc loc, State state, Player basePla, bool rollback);
+  void invalidateAdjacentEmptyTerritoryIfNeeded(Loc loc);
+  void makeMoveAndCalculateCapturesAndBases(
+    Player pla,
+    Loc loc,
+    std::vector<Color>& captures,
+    std::vector<Color>& bases) const;
+
+  void setGrounded(Loc loc);
+  void clearGrounded(Loc loc);
+  bool isVisited(Loc loc) const;
+  void setVisited(Loc loc) const;
+  void clearVisited(Loc loc) const;
+  void clearVisited(const std::vector<short>& locations) const;
+
+  void init(int xS, int yS, const Rules& initRules);
   int countHeuristicConnectionLibertiesX2(Loc loc, Player pla) const;
   bool isLibertyOf(Loc loc, Loc head) const;
   void mergeChains(Loc loc1, Loc loc2);

@@ -329,8 +329,8 @@ int MainCmds::genbook(const vector<string>& args) {
   const bool hasHumanModel = humanModelFile != "";
   const SearchParams params = Setup::loadSingleParams(cfg,Setup::SETUP_FOR_GTP,hasHumanModel);
 
-  const int boardSizeX = cfg.getInt("boardSizeX",2,Board::MAX_LEN);
-  const int boardSizeY = cfg.getInt("boardSizeY",2,Board::MAX_LEN);
+  const int boardSizeX = cfg.getInt("boardSizeX",2,Board::MAX_LEN_X);
+  const int boardSizeY = cfg.getInt("boardSizeY",2,Board::MAX_LEN_Y);
   const int repBound = cfg.getInt("repBound",3,1000);
 
   const double bonusFileScale = cfg.contains("bonusFileScale") ? cfg.getDouble("bonusFileScale",0.0,1000000.0) : 1.0;
@@ -357,9 +357,9 @@ int MainCmds::genbook(const vector<string>& args) {
   std::map<BookHash,double> expandBonusByHash;
   std::map<BookHash,double> visitsRequiredByHash;
   std::map<BookHash,int> branchRequiredByHash;
-  Board bonusInitialBoard;
+  Board bonusInitialBoard(rules);
   Player bonusInitialPla;
-  bonusInitialBoard = Board(boardSizeX,boardSizeY);
+  bonusInitialBoard = Board(boardSizeX,boardSizeY,rules);
   bonusInitialPla = P_BLACK;
 
   for(const std::string& bonusFile: bonusFiles) {
@@ -444,14 +444,14 @@ int MainCmds::genbook(const vector<string>& args) {
       if(!bonusInitialBoard.isEqualForTesting(book->getInitialHist().getRecentBoard(0), false, false))
         throw StringError(
           "Book initial board and initial board in bonus sgf file do not match\n" +
-          Board::toStringSimple(book->getInitialHist().getRecentBoard(0),'\n') + "\n" +
-          Board::toStringSimple(bonusInitialBoard,'\n')
+          Board::toStringSimple(book->getInitialHist().getRecentBoard(0)) + "\n" +
+          Board::toStringSimple(bonusInitialBoard)
         );
       if(bonusInitialPla != book->initialPla)
         throw StringError(
           "Book initial player and initial player in bonus sgf file do not match\n" +
-          PlayerIO::playerToString(book->initialPla) + " book \n" +
-          PlayerIO::playerToString(bonusInitialPla) + " bonus"
+          PlayerIO::playerToString(book->initialPla,book->initialRules.isDots) + " book \n" +
+          PlayerIO::playerToString(bonusInitialPla,book->initialRules.isDots) + " bonus"
         );
     }
 
@@ -570,7 +570,7 @@ int MainCmds::genbook(const vector<string>& args) {
     Board board = hist.getRecentBoard(0);
     bool hasAtLeastOneLegalNewMove = false;
     for(Loc moveLoc = 0; moveLoc < Board::MAX_ARR_SIZE; moveLoc++) {
-      if(hist.isLegal(board,moveLoc,pla)) {
+      if(moveLoc != Board::RESIGN_LOC && hist.isLegal(board,moveLoc,pla)) {
         if(!isReExpansion && constNode.isMoveInBook(moveLoc))
           avoidMoveUntilByLoc[moveLoc] = 1;
         else
@@ -1526,15 +1526,15 @@ int MainCmds::writebook(const vector<string>& args) {
 
   const bool loadKomiFromCfg = true;
   Rules rules = Setup::loadSingleRules(cfg,loadKomiFromCfg);
-  const int boardSizeX = cfg.getInt("boardSizeX",2,Board::MAX_LEN);
-  const int boardSizeY = cfg.getInt("boardSizeY",2,Board::MAX_LEN);
+  const int boardSizeX = cfg.getInt("boardSizeX",2,Board::MAX_LEN_X);
+  const int boardSizeY = cfg.getInt("boardSizeY",2,Board::MAX_LEN_Y);
   const int repBound = cfg.getInt("repBound",3,1000);
 
   std::map<BookHash,double> bonusByHash;
   std::map<BookHash,double> expandBonusByHash;
   std::map<BookHash,double> visitsRequiredByHash;
   std::map<BookHash,int> branchRequiredByHash;
-  Board bonusInitialBoard;
+  Board bonusInitialBoard(rules);
   Player bonusInitialPla;
 
   maybeParseBonusFile(

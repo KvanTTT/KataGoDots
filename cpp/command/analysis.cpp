@@ -161,13 +161,13 @@ int MainCmds::analysis(const vector<string>& args) {
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       modelFile,modelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN,NNPos::MAX_BOARD_LEN,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_ANALYSIS
     );
     if(humanModelFile != "") {
       humanEval = Setup::initializeNNEvaluator(
         humanModelFile,humanModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-        NNPos::MAX_BOARD_LEN,NNPos::MAX_BOARD_LEN,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+        NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
         Setup::SETUP_FOR_ANALYSIS
       );
       if(!humanEval->requiresSGFMetadata()) {
@@ -430,7 +430,8 @@ int MainCmds::analysis(const vector<string>& args) {
   vector<AsyncBot*> bots;
   for(int threadIdx = 0; threadIdx<numAnalysisThreads; threadIdx++) {
     string searchRandSeed = Global::uint64ToHexString(seedRand.nextUInt64()) + Global::uint64ToHexString(seedRand.nextUInt64());
-    AsyncBot* bot = new AsyncBot(defaultParams, nnEval, humanEval, &logger, searchRandSeed);
+    // TODO: Fix for Dots game
+    AsyncBot* bot = new AsyncBot(defaultParams, nnEval, humanEval, &logger, searchRandSeed, Rules::DEFAULT_GO);
     bot->setCopyOfExternalPatternBonusTable(patternBonusTable);
     bot->setExternalEvalCache(evalCache);
     threads.push_back(std::thread(analysisLoopProtected,bot,threadIdx));
@@ -702,19 +703,20 @@ int MainCmds::analysis(const vector<string>& args) {
       {
         int64_t xBuf;
         int64_t yBuf;
-        static const string boardSizeError = string("Must provide an integer from 2 to ") + Global::intToString(Board::MAX_LEN);
+        static const string boardSizeXError = string("Must provide an integer from 2 to ") + Global::intToString(Board::MAX_LEN_X);
+        static const string boardSizeYError = string("Must provide an integer from 2 to ") + Global::intToString(Board::MAX_LEN_Y);
         if(input.find("boardXSize") == input.end()) {
-          reportErrorForId(rbase.id, "boardXSize", boardSizeError.c_str());
+          reportErrorForId(rbase.id, "boardXSize", boardSizeXError);
           continue;
         }
         if(input.find("boardYSize") == input.end()) {
-          reportErrorForId(rbase.id, "boardYSize", boardSizeError.c_str());
+          reportErrorForId(rbase.id, "boardYSize", boardSizeYError);
           continue;
         }
-        if(!parseInteger(input, "boardXSize", xBuf, 2, Board::MAX_LEN, boardSizeError.c_str())) {
+        if(!parseInteger(input, "boardXSize", xBuf, 2, Board::MAX_LEN_X, boardSizeXError.c_str())) {
           continue;
         }
-        if(!parseInteger(input, "boardYSize", yBuf, 2, Board::MAX_LEN, boardSizeError.c_str())) {
+        if(!parseInteger(input, "boardYSize", yBuf, 2, Board::MAX_LEN_Y, boardSizeYError.c_str())) {
           continue;
         }
         boardXSize = (int)xBuf;
@@ -882,14 +884,14 @@ int MainCmds::analysis(const vector<string>& args) {
       if(input.find("rules") != input.end()) {
         if(input["rules"].is_string()) {
           string s = input["rules"].get<string>();
-          if(!Rules::tryParseRules(s,rules)) {
+          if(!Rules::tryParseRules(s, rules, input.value("dots", false))) {
             reportErrorForId(rbase.id, "rules", "Could not parse rules: " + s);
             continue;
           }
         }
         else if(input["rules"].is_object()) {
           string s = input["rules"].dump();
-          if(!Rules::tryParseRules(s,rules)) {
+          if(!Rules::tryParseRules(s, rules, input.value("dots", false))) {
             reportErrorForId(rbase.id, "rules", "Could not parse rules: " + s);
             continue;
           }
@@ -1110,8 +1112,7 @@ int MainCmds::analysis(const vector<string>& args) {
           continue;
       }
 
-
-      Board board(boardXSize,boardYSize);
+      Board board(boardXSize,boardYSize,rules);
       for(int i = 0; i<placements.size(); i++) {
         board.setStone(placements[i].loc,placements[i].pla);
       }

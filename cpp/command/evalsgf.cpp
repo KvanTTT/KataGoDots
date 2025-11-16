@@ -172,20 +172,21 @@ int MainCmds::evalsgf(const vector<string>& args) {
     return 1;
   }
 
-  //Parse rules -------------------------------------------------------------------
-  Rules defaultRules = Rules::getTrompTaylorish();
-  Player perspective = Setup::parseReportAnalysisWinrates(cfg,P_BLACK);
-
   //Parse sgf file and board ------------------------------------------------------------------
 
   std::unique_ptr<CompactSgf> sgf = CompactSgf::loadFile(sgfFile);
 
-  Board board;
+  //Parse rules -------------------------------------------------------------------
+  Rules defaultRules = Rules::getDefaultOrTrompTaylorish(sgf->isDots);
+  Player perspective = Setup::parseReportAnalysisWinrates(cfg,P_BLACK);
+
+  Board board(defaultRules);
   Player nextPla;
-  BoardHistory hist;
+  BoardHistory hist(defaultRules);
 
   auto setUpBoardUsingRules = [&board,&nextPla,&hist,overrideKomi,&sgf,&extraMoves](const Rules& initialRules, int moveNum) {
-    sgf->setupInitialBoardAndHist(initialRules, board, nextPla, hist);
+    hist = sgf->setupInitialBoardAndHist(initialRules, nextPla);
+    board = hist.initialBoard;
     vector<Move>& moves = sgf->moves;
 
     if(!isnan(overrideKomi)) {
@@ -219,7 +220,7 @@ int MainCmds::evalsgf(const vector<string>& args) {
     [](const string& msg) { cout << msg << endl; }
   );
   if(overrideRules != "") {
-    initialRules = Rules::parseRules(overrideRules);
+    initialRules = Rules::parseRules(overrideRules, initialRules.isDots);
   }
 
   // Set up once now for error catcihng
@@ -379,7 +380,7 @@ int MainCmds::evalsgf(const vector<string>& args) {
       continue;
     }
 
-    AsyncBot* bot = new AsyncBot(params, nnEval, humanEval, &logger, searchRandSeed);
+    AsyncBot* bot = new AsyncBot(params, nnEval, humanEval, &logger, searchRandSeed, initialRules);
 
     bot->setPosition(nextPla,board,hist);
     if(hintLoc != "") {
@@ -664,8 +665,15 @@ int MainCmds::evalsgf(const vector<string>& args) {
       int nnXLen = nnEval->getNNXLen();
       int nnYLen = nnEval->getNNYLen();
       int modelVersion = nnEval->getModelVersion();
-      int numSpatialFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion);
-      int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(modelVersion);
+
+      bool nnEvalIsInDotsMode = nnEval->getDotsGame();
+      assert(nnEvalIsInDotsMode == sgf->isDots);
+      if (nnEvalIsInDotsMode != sgf->isDots) {
+        cout << "SGF and model mismatch (Go and Dots games)";
+      }
+
+      int numSpatialFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion, nnEvalIsInDotsMode);
+      int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(modelVersion, nnEvalIsInDotsMode);
 
       NumpyBuffer<float> binaryInputNCHW(std::vector<int64_t>({1,numSpatialFeatures,nnXLen,nnYLen}));
       NumpyBuffer<float> globalInputNC(std::vector<int64_t>({1,numGlobalFeatures}));

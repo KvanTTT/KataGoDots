@@ -436,11 +436,11 @@ int MainCmds::samplesgfs(const vector<string>& args) {
     else {
       string fileName = sgf.fileName;
       CompactSgf compactSgf(sgf);
-      Board board;
+
       Player nextPla;
-      BoardHistory hist;
       Rules rules = compactSgf.getRulesOrFailAllowUnspecified(Rules::getSimpleTerritory());
-      compactSgf.setupInitialBoardAndHist(rules, board, nextPla, hist);
+      BoardHistory hist = compactSgf.setupInitialBoardAndHist(rules, nextPla);
+      Board& board = hist.initialBoard;
 
       if(valueFluctuationMakeKomiFair) {
         Rand rand;
@@ -502,7 +502,7 @@ int MainCmds::samplesgfs(const vector<string>& args) {
           //Only log on errors that aren't simply due to ko rules, but quit out regardless
           suc = hist.makeBoardMoveTolerant(board,sgfMoves[m].loc,sgfMoves[m].pla,preventEncore);
           if(!suc)
-            logger.write("Illegal move in " + fileName + " turn " + Global::intToString(m) + " move " + Location::toString(sgfMoves[m].loc, board.x_size, board.y_size));
+            logger.write("Illegal move in " + fileName + " turn " + Global::intToString(m) + " move " + Location::toString(sgfMoves[m].loc, board.x_size, board.y_size, board.isDots()));
           break;
         }
         hist.makeBoardMoveAssumeLegal(board,sgfMoves[m].loc,sgfMoves[m].pla,NULL,preventEncore);
@@ -1386,10 +1386,10 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
     //Don't use the SGF rules - randomize them for a bit more entropy
     Rules rules = gameInit->createRules();
 
-    Board board;
     Player nextPla;
-    BoardHistory hist;
-    sgf.setupInitialBoardAndHist(rules, board, nextPla, hist);
+    BoardHistory hist = sgf.setupInitialBoardAndHist(rules, nextPla);
+    Board& board = hist.initialBoard;
+
     if(!gameInit->isAllowedBSize(board.x_size,board.y_size)) {
       numFilteredSgfs.fetch_add(1);
       return;
@@ -1469,7 +1469,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
         //Only log on errors that aren't simply due to ko rules, but quit out regardless
         suc = hist.makeBoardMoveTolerant(board,sgfMoves[m].loc,sgfMoves[m].pla,preventEncore);
         if(!suc)
-          logger.write("Illegal move in " + fileName + " turn " + Global::intToString(m) + " move " + Location::toString(sgfMoves[m].loc, board.x_size, board.y_size));
+          logger.write("Illegal move in " + fileName + " turn " + Global::intToString(m) + " move " + Location::toString(sgfMoves[m].loc, board.x_size, board.y_size, board.isDots()));
         break;
       }
       hist.makeBoardMoveAssumeLegal(board,sgfMoves[m].loc,sgfMoves[m].pla,NULL,preventEncore);
@@ -1662,7 +1662,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
     for(int i = 0; i<startTurn; i++) {
       bool multiStoneSuicideLegal = true;
       //Just in case
-      if(!board.isLegal(treeHist.moveHistory[i].loc,treeHist.moveHistory[i].pla,multiStoneSuicideLegal))
+      if(!board.isLegal(treeHist.moveHistory[i].loc, treeHist.moveHistory[i].pla, multiStoneSuicideLegal, false))
         return;
       board.playMoveAssumeLegal(treeHist.moveHistory[i].loc,treeHist.moveHistory[i].pla);
     }
@@ -2280,10 +2280,10 @@ int MainCmds::viewstartposes(const vector<string>& args) {
 
     if(bot != NULL || !checkLegality) {
       cout << "StartPos: " << s << "/" << startPoses.size() << "\n";
-      cout << "Next pla: " << PlayerIO::playerToString(pla) << "\n";
+      cout << "Next pla: " << PlayerIO::playerToString(pla, board.isDots()) << "\n";
       cout << "Weight: " << startPos.weight << "\n";
       cout << "TrainingWeight: " << startPos.trainingWeight << "\n";
-      cout << "StartPosInitialNextPla: " << PlayerIO::playerToString(startPos.nextPla) << "\n";
+      cout << "StartPosInitialNextPla: " << PlayerIO::playerToString(startPos.nextPla, board.isDots()) << "\n";
       cout << "StartPosMoves: ";
       for(int i = 0; i<(int)startPos.moves.size(); i++)
         cout << (startPos.moves[i].pla == P_WHITE ? "w" : "b") << Location::toString(startPos.moves[i].loc,board) << " ";

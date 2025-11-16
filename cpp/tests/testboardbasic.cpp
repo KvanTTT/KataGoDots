@@ -13,10 +13,10 @@ void Tests::runBoardIOTests() {
   //============================================================================
   {
     const char* name = "Location parse test";
-    auto testLoc = [&out](const char* s, int xSize, int ySize) {
+    auto testLoc = [&out](const char* s, int xSize, int ySize, bool isDots) {
       try {
         Loc loc = Location::ofString(s,xSize,ySize);
-        out << s << " " << Location::toString(loc,xSize,ySize) << " x " << Location::getX(loc,xSize) << " y " << Location::getY(loc,xSize) << endl;
+        out << s << " " << Location::toString(loc, xSize, ySize, isDots) << " x " << Location::getX(loc,xSize) << " y " << Location::getY(loc,xSize) << endl;
       }
       catch(const StringError& e) {
         out << e.what() << endl;
@@ -34,27 +34,28 @@ void Tests::runBoardIOTests() {
         out << "----------------------------------" << endl;
         out << xSize << " " << ySize << endl;
 
-        testLoc("A1",xSize,ySize);
-        testLoc("A0",xSize,ySize);
-        testLoc("B2",xSize,ySize);
-        testLoc("b2",xSize,ySize);
-        testLoc("A",xSize,ySize);
-        testLoc("B",xSize,ySize);
-        testLoc("1",xSize,ySize);
-        testLoc("pass",xSize,ySize);
-        testLoc("H9",xSize,ySize);
-        testLoc("I9",xSize,ySize);
-        testLoc("J9",xSize,ySize);
-        testLoc("J10",xSize,ySize);
-        testLoc("K8",xSize,ySize);
-        testLoc("k19",xSize,ySize);
-        testLoc("a22",xSize,ySize);
-        testLoc("y1",xSize,ySize);
-        testLoc("z1",xSize,ySize);
-        testLoc("aa1",xSize,ySize);
-        testLoc("AA26",xSize,ySize);
-        testLoc("AZ26",xSize,ySize);
-        testLoc("BC50",xSize,ySize);
+        testLoc("A1",xSize,ySize,false);
+        testLoc("A0",xSize,ySize,false);
+        testLoc("B2",xSize,ySize,false);
+        testLoc("b2",xSize,ySize,false);
+        testLoc("A",xSize,ySize,false);
+        testLoc("B",xSize,ySize,false);
+        testLoc("1",xSize,ySize,false);
+        testLoc("pass",xSize,ySize,false);
+        testLoc("ground",xSize,ySize,true);
+        testLoc("H9",xSize,ySize,false);
+        testLoc("I9",xSize,ySize,false);
+        testLoc("J9",xSize,ySize,false);
+        testLoc("J10",xSize,ySize,false);
+        testLoc("K8",xSize,ySize,false);
+        testLoc("k19",xSize,ySize,false);
+        testLoc("a22",xSize,ySize,false);
+        testLoc("y1",xSize,ySize,false);
+        testLoc("z1",xSize,ySize,false);
+        testLoc("aa1",xSize,ySize,false);
+        testLoc("AA26",xSize,ySize,false);
+        testLoc("AZ26",xSize,ySize,false);
+        testLoc("BC50",xSize,ySize,false);
       }
     }
 
@@ -69,6 +70,7 @@ Could not parse board location: A
 Could not parse board location: B
 Could not parse board location: 1
 pass pass x 0 y -1
+ground ground x 0 y -1
 H9 H9 x 7 y 0
 Could not parse board location: I9
 J9 J9 x 8 y 0
@@ -92,6 +94,7 @@ Could not parse board location: A
 Could not parse board location: B
 Could not parse board location: 1
 pass pass x 0 y -1
+ground ground x 0 y -1
 H9 H9 x 7 y 10
 Could not parse board location: I9
 J9 J9 x 8 y 10
@@ -115,6 +118,7 @@ Could not parse board location: A
 Could not parse board location: B
 Could not parse board location: 1
 pass pass x 0 y -1
+ground ground x 0 y -1
 H9 H9 x 7 y 0
 Could not parse board location: I9
 J9 J9 x 8 y 0
@@ -138,6 +142,7 @@ Could not parse board location: A
 Could not parse board location: B
 Could not parse board location: 1
 pass pass x 0 y -1
+ground ground x 0 y -1
 H9 H9 x 7 y 10
 Could not parse board location: I9
 J9 J9 x 8 y 10
@@ -161,6 +166,7 @@ Could not parse board location: A
 Could not parse board location: B
 Could not parse board location: 1
 pass pass x 0 y -1
+ground ground x 0 y -1
 H9 H9 x 7 y 17
 Could not parse board location: I9
 J9 J9 x 8 y 17
@@ -184,6 +190,7 @@ Could not parse board location: A
 Could not parse board location: B
 Could not parse board location: 1
 pass pass x 0 y -1
+ground ground x 0 y -1
 H9 H9 x 7 y 10
 Could not parse board location: I9
 J9 J9 x 8 y 10
@@ -207,6 +214,7 @@ Could not parse board location: A
 Could not parse board location: B
 Could not parse board location: 1
 pass pass x 0 y -1
+ground ground x 0 y -1
 H9 H9 x 7 y 17
 Could not parse board location: I9
 J9 J9 x 8 y 17
@@ -230,6 +238,7 @@ Could not parse board location: A
 Could not parse board location: B
 Could not parse board location: 1
 pass pass x 0 y -1
+ground ground x 0 y -1
 H9 H9 x 7 y 61
 Could not parse board location: I9
 J9 J9 x 8 y 61
@@ -253,6 +262,7 @@ Could not parse board location: A
 Could not parse board location: B
 Could not parse board location: 1
 pass pass x 0 y -1
+ground ground x 0 y -1
 H9 H9 x 7 y 17
 Could not parse board location: I9
 J9 J9 x 8 y 17
@@ -276,6 +286,7 @@ Could not parse board location: A
 Could not parse board location: B
 Could not parse board location: 1
 pass pass x 0 y -1
+ground ground x 0 y -1
 H9 H9 x 7 y 61
 Could not parse board location: I9
 J9 J9 x 8 y 61
@@ -728,7 +739,7 @@ After white
   //============================================================================
   {
     const char* name = "Distance";
-    Board board(17,12);
+    Board board(17,12,Rules::DEFAULT_GO);
 
     auto testDistance = [&](int x0, int y0, int x1, int y1) {
       out << "distance (" << x0 << "," << y0 << ") (" << x1 << "," << y1 << ") = " <<
@@ -1901,15 +1912,16 @@ void Tests::runBoardUndoTest() {
   int suicideCount = 0;
   int koCaptureCount = 0;
   int passCount = 0;
+  int resignCount = 0;
   int regularMoveCount = 0;
   auto run = [&](const Board& startBoard, bool multiStoneSuicideLegal) {
     static const int steps = 1000;
-    Board* boards = new Board[steps+1];
+    vector<Board> boards;
     Board::MoveRecord records[steps];
 
-    boards[0] = startBoard;
+    boards.push_back(startBoard);
     for(int n = 1; n <= steps; n++) {
-      boards[n] = boards[n-1];
+      boards.push_back(boards[n-1]);
       Loc loc;
       Player pla;
       while(true) {
@@ -1917,7 +1929,7 @@ void Tests::runBoardUndoTest() {
         //Maximum range of board location values when 19x19:
         int numLocs = (19+1)*(19+2)+1;
         loc = (Loc)rand.nextUInt(numLocs);
-        if(boards[n].isLegal(loc,pla,multiStoneSuicideLegal))
+        if(boards[n].isLegal(loc, pla, multiStoneSuicideLegal, false))
           break;
       }
 
@@ -1925,6 +1937,8 @@ void Tests::runBoardUndoTest() {
 
       if(loc == Board::PASS_LOC)
         passCount++;
+      else if(loc == Board::RESIGN_LOC)
+        resignCount++;
       else if(boards[n-1].isSuicide(loc,pla))
         suicideCount++;
       else {
@@ -1940,26 +1954,27 @@ void Tests::runBoardUndoTest() {
       testAssert(boardsSeemEqual(boards[n],board));
       board.checkConsistency();
     }
-    delete[] boards;
   };
 
-  run(Board(19,19),true);
-  run(Board(4,4),true);
-  run(Board(4,4),false);
+  run(Board(19,19,Rules::DEFAULT_GO),true);
+  run(Board(4,4,Rules::DEFAULT_GO),true);
+  run(Board(4,4,Rules::DEFAULT_GO),false);
 
   ostringstream out;
   out << endl;
   out << "regularMoveCount " << regularMoveCount << endl;
   out << "passCount " << passCount << endl;
+  out << "resignCount " << resignCount << endl;
   out << "koCaptureCount " << koCaptureCount << endl;
   out << "suicideCount " << suicideCount << endl;
 
   string expected = R"%%(
 
-regularMoveCount 2446
-passCount 475
-koCaptureCount 24
-suicideCount 79
+regularMoveCount 2116
+passCount 376
+resignCount 443
+koCaptureCount 19
+suicideCount 65
 
 )%%";
   expect("Board undo test move counts",out,expected);
@@ -1968,7 +1983,7 @@ suicideCount 79
 void Tests::runBoardHandicapTest() {
   cout << "Running board handicap test" << endl;
   {
-    Board board = Board(19,19);
+    Board board = Board(19,19,Rules::DEFAULT_GO);
     Player nextPla = P_BLACK;
     Rules rules = Rules::parseRules("chinese");
     BoardHistory hist(board,nextPla,rules,0);
@@ -1990,9 +2005,9 @@ void Tests::runBoardHandicapTest() {
   }
 
   {
-    Board board = Board(19,19);
     Player nextPla = P_BLACK;
-    Rules rules = Rules::parseRules("chinese");
+    const Rules rules = Rules::parseRules("chinese");
+    Board board = Board(19,19,rules);
     BoardHistory hist(board,nextPla,rules,0);
 
     hist.setAssumeMultipleStartingBlackMovesAreHandicap(true);
@@ -2009,9 +2024,9 @@ void Tests::runBoardHandicapTest() {
   }
 
   {
-    Board board = Board(19,19);
     Player nextPla = P_BLACK;
-    Rules rules = Rules::parseRules("aga");
+    const Rules rules = Rules::parseRules("aga");
+    Board board = Board(19,19,rules);
     BoardHistory hist(board,nextPla,rules,0);
 
     hist.setAssumeMultipleStartingBlackMovesAreHandicap(true);
@@ -2028,9 +2043,9 @@ void Tests::runBoardHandicapTest() {
   }
 
   {
-    Board board = Board(19,19);
     Player nextPla = P_BLACK;
-    Rules rules = Rules::parseRules("aga");
+    const Rules rules = Rules::parseRules("aga");
+    Board board = Board(19,19,rules);
     BoardHistory hist(board,nextPla,rules,0);
 
     hist.setAssumeMultipleStartingBlackMovesAreHandicap(true);
@@ -2059,9 +2074,9 @@ void Tests::runBoardHandicapTest() {
   }
 
   {
-    Board board = Board(19,19);
     Player nextPla = P_BLACK;
-    Rules rules = Rules::parseRules("chinese");
+    const Rules rules = Rules::parseRules("chinese");
+    Board board = Board(19,19,rules);
     BoardHistory hist(board,nextPla,rules,0);
 
     hist.setAssumeMultipleStartingBlackMovesAreHandicap(true);
@@ -2094,18 +2109,20 @@ void Tests::runBoardStressTest() {
   {
     Rand rand("runBoardStressTests");
     static const int numBoards = 4;
-    Board boards[numBoards];
-    boards[0] = Board();
-    boards[1] = Board(9,16);
-    boards[2] = Board(13,7);
-    boards[3] = Board(4,4);
+    vector<Board> boards;
+    Rules rules = Rules::DEFAULT_GO;
+    boards.emplace_back(Board::DEFAULT_LEN_X, Board::DEFAULT_LEN_Y, rules);
+    boards.emplace_back(9,16,rules);
+    boards.emplace_back(13,7,rules);
+    boards.emplace_back(4,4,rules);
     bool multiStoneSuicideLegal[4] = {false,false,true,false};
-    Board copies[numBoards];
+    vector<Board> copies;
     Player pla = C_BLACK;
     int suicideCount = 0;
     int koBanCount = 0;
     int koCaptureCount = 0;
     int passCount = 0;
+    int resignCount = 0;
     int regularMoveCount = 0;
     for(int n = 0; n < 20000; n++) {
       Loc locs[numBoards];
@@ -2132,13 +2149,14 @@ void Tests::runBoardStressTest() {
         }
       }
 
+      copies.clear();
       for(int i = 0; i<numBoards; i++)
-        copies[i] = boards[i];
+        copies.push_back(boards[i]);
 
       bool isLegal[numBoards];
       bool suc[numBoards];
       for(int i = 0; i<numBoards; i++) {
-        isLegal[i] = boards[i].isLegal(locs[i],pla,multiStoneSuicideLegal[i]);
+        isLegal[i] = boards[i].isLegal(locs[i], pla, multiStoneSuicideLegal[i], false);
         testAssert(boardsSeemEqual(copies[i],boards[i]));
         suc[i] = boards[i].playMove(locs[i],pla,multiStoneSuicideLegal[i]);
       }
@@ -2167,14 +2185,17 @@ void Tests::runBoardStressTest() {
           }
         }
         else {
-          if(loc == Board::PASS_LOC) {
+          if (loc == Board::PASS_LOC || loc == Board::RESIGN_LOC) {
             testAssert(boardsSeemEqual(copy,board));
             testAssert(board.ko_loc == Board::NULL_LOC);
-            passCount++;
+            if (loc == Board::PASS_LOC)
+              passCount++;
+            else
+              resignCount++;
           }
           else if(copy.isSuicide(loc,pla)) {
             testAssert(board.colors[loc] == C_EMPTY);
-            testAssert(board.isLegal(loc,pla,multiStoneSuicideLegal[i]));
+            testAssert(board.isLegal(loc, pla, multiStoneSuicideLegal[i], false));
             testAssert(multiStoneSuicideLegal[i]);
             testAssert(!copy.wouldBeCapture(loc,pla));
             suicideCount++;
@@ -2208,6 +2229,7 @@ void Tests::runBoardStressTest() {
     out << endl;
     out << "regularMoveCount " << regularMoveCount << endl;
     out << "passCount " << passCount << endl;
+    out << "resignCount " << resignCount << endl;
     out << "koCaptureCount " << koCaptureCount << endl;
     out << "koBanCount " << koBanCount << endl;
     out << "suicideCount " << suicideCount << endl;
@@ -2218,8 +2240,9 @@ void Tests::runBoardStressTest() {
 
 regularMoveCount 38017
 passCount 273
+resignCount 289
 koCaptureCount 212
-koBanCount 45
+koBanCount 44
 suicideCount 440
 Caps 4753 5024
 Caps 4821 4733
@@ -2238,7 +2261,7 @@ Caps 4420 4335
       for(int y = 0; y<b.y_size; y++) {
         for(int x = 0; x<b.x_size; x++) {
           Loc loc = Location::getLoc(x,y,b.x_size);
-          placements.push_back(Move(loc,b.colors[loc]));
+          placements.emplace_back(loc,b.colors[loc]);
         }
       }
       for(int i = 1; i<placements.size(); i++)
@@ -2251,7 +2274,7 @@ Caps 4420 4335
         for(int x = 0; x<b.x_size; x++) {
           Loc loc = Location::getLoc(x,y,b.x_size);
           if(b.colors[loc] != C_EMPTY)
-            placements.push_back(Move(loc,b.colors[loc]));
+            placements.emplace_back(loc,b.colors[loc]);
         }
       }
       for(int i = 1; i<placements.size(); i++)
@@ -2260,7 +2283,7 @@ Caps 4420 4335
     };
 
     for(int rep = 0; rep<1000; rep++) {
-      Board board0(5 + rand.nextUInt(14), 5 + rand.nextUInt(14));
+      Board board0(5 + rand.nextUInt(14), 5 + rand.nextUInt(14),Rules::DEFAULT_GO);
       Board board1 = board0;
       Board board2 = board0;
       Board board3 = board0;
@@ -2272,7 +2295,7 @@ Caps 4420 4335
       for(int i = 0; i<numMoves1; i++) {
         Loc loc = Location::getLoc(rand.nextUInt(board1.x_size),rand.nextUInt(board1.y_size),board1.x_size);
         Player pla = rand.nextBool(0.5) ? P_BLACK : P_WHITE;
-        if(board1.isLegal(loc,pla,true)) {
+        if(board1.isLegal(loc, pla, true, false)) {
           bool suc4 = board4.setStoneFailIfNoLibs(loc,pla);
           testAssert(suc4 == !(board1.wouldBeCapture(loc,pla) || board1.isSuicide(loc,pla)));
           if(!suc4) {
@@ -2345,16 +2368,16 @@ Caps 4420 4335
   {
     Rand rand("runBoardSetStoneTests2");
     for(int rep = 0; rep<1000; rep++) {
-      Board board(1 + rand.nextUInt(18), 1 + rand.nextUInt(18));
+      Board board(1 + rand.nextUInt(18), 1 + rand.nextUInt(18),Rules::DEFAULT_GO);
       std::vector<Move> placements;
       for(int i = 0; i<1000; i++) {
         Loc loc = Location::getLoc(rand.nextUInt(board.x_size),rand.nextUInt(board.y_size),board.x_size);
         Player pla = rand.nextBool(0.5) ? P_BLACK : P_WHITE;
-        if(board.isLegal(loc,pla,true)) {
+        if(board.isLegal(loc, pla, true, false)) {
           placements.push_back(Move(loc,pla));
           bool anyCaps = board.wouldBeCapture(loc,pla) || board.isSuicide(loc,pla);
           board.playMoveAssumeLegal(loc,pla);
-          Board copy(board.x_size,board.y_size);
+          Board copy(board.x_size,board.y_size,board.rules);
           bool suc = copy.setStonesFailIfNoLibs(placements);
           testAssert(suc == !anyCaps);
           copy.checkConsistency();
@@ -2368,7 +2391,7 @@ Caps 4420 4335
   {
     Rand rand("runBoardSetStoneTests3");
     for(int rep = 0; rep<1000; rep++) {
-      Board board(1 + rand.nextUInt(18), 1 + rand.nextUInt(18));
+      Board board(1 + rand.nextUInt(18), 1 + rand.nextUInt(18),Rules::DEFAULT_GO);
       for(int i = 0; i<300; i++) {
         Loc loc = Location::getLoc(rand.nextUInt(board.x_size),rand.nextUInt(board.y_size),board.x_size);
         Color color = rand.nextBool(0.25) ? C_EMPTY : rand.nextBool(0.5) ? P_BLACK : P_WHITE;
@@ -2384,7 +2407,7 @@ Caps 4420 4335
 
         placements.push_back(Move(loc,color));
         if(prevPlacedLocs.find(loc) != prevPlacedLocs.end()) {
-          Board copy(board.x_size,board.y_size);
+          Board copy(board.x_size,board.y_size,board.rules);
           bool suc = copy.setStonesFailIfNoLibs(placements);
           testAssert(!suc);
           placements.pop_back();
@@ -2507,9 +2530,9 @@ oxxxxx.xo
     //if(rep < 100)
     //  hist.printDebugInfo(cout,board);
 
-    testAssert(boardCopy.isEqualForTesting(board, true, true));
-    testAssert(boardCopy.isEqualForTesting(histCopy.getRecentBoard(0), true, true));
-    testAssert(histCopy.getRecentBoard(0).isEqualForTesting(hist.getRecentBoard(0), true, true));
+    testAssert(boardCopy.isEqualForTesting(board));
+    testAssert(boardCopy.isEqualForTesting(histCopy.getRecentBoard(0)));
+    testAssert(histCopy.getRecentBoard(0).isEqualForTesting(hist.getRecentBoard(0)));
     testAssert(BoardHistory::getSituationRulesAndKoHash(boardCopy,histCopy,pla,drawEquivalentWinsForWhite) == hist.getSituationRulesAndKoHash(board,hist,pla,drawEquivalentWinsForWhite));
     testAssert(histCopy.currentSelfKomi(P_BLACK, drawEquivalentWinsForWhite) == hist.currentSelfKomi(P_BLACK, drawEquivalentWinsForWhite));
     testAssert(histCopy.currentSelfKomi(P_WHITE, drawEquivalentWinsForWhite) == hist.currentSelfKomi(P_WHITE, drawEquivalentWinsForWhite));

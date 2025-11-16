@@ -9,6 +9,15 @@
 using namespace std;
 using namespace TestCommon;
 
+static TrainingDataWriter createTestTrainingDataWriter(
+  const int inputVersion,
+  const int nnXLen,
+  const int nnYLen,
+  const string& seed,
+  const int onlyWriteEvery) {
+  return TrainingDataWriter(string(), &cout, inputVersion, 256, 1.0f, nnXLen, nnYLen, seed, onlyWriteEvery);
+}
+
 static NNEvaluator* startNNEval(
   const string& modelFile, const string& seed, Logger& logger,
   int defaultSymmetry, bool inputsUseNHWC, bool useNHWC, bool useFP16
@@ -16,8 +25,8 @@ static NNEvaluator* startNNEval(
   const string& modelName = modelFile;
   vector<int> gpuIdxByServerThread = {0};
   int maxBatchSize = 16;
-  int nnXLen = NNPos::MAX_BOARD_LEN;
-  int nnYLen = NNPos::MAX_BOARD_LEN;
+  int nnXLen = NNPos::MAX_BOARD_LEN_X;
+  int nnYLen = NNPos::MAX_BOARD_LEN_Y;
   bool requireExactNNLen = false;
   int nnCacheSizePowerOfTwo = 16;
   int nnMutexPoolSizePowerOfTwo = 12;
@@ -51,7 +60,8 @@ static NNEvaluator* startNNEval(
     gpuIdxByServerThread,
     seed,
     nnRandomize,
-    defaultSymmetry
+    defaultSymmetry,
+    false // TODO: Fix for Dots Game
   );
 
   nnEval->spawnServerThreads();
@@ -66,13 +76,9 @@ void Tests::runTrainingWriteTests() {
   cout << "Running training write tests" << endl;
   NeuralNet::globalInitialize();
 
-  int maxRows = 256;
-  double firstFileMinRandProp = 1.0;
-  int debugOnlyWriteEvery = 5;
-
-  const bool logToStdout = true;
-  const bool logToStderr = false;
-  const bool logTime = false;
+  constexpr bool logToStdout = true;
+  constexpr bool logToStderr = false;
+  constexpr bool logTime = false;
   Logger logger(nullptr, logToStdout, logToStderr, logTime);
 
   auto run = [&](
@@ -82,7 +88,7 @@ void Tests::runTrainingWriteTests() {
     int boardXLen, int boardYLen,
     bool cheapLongSgf
   ) {
-    TrainingDataWriter dataWriter(&cout,inputsVersion, maxRows, firstFileMinRandProp, nnXLen, nnYLen, debugOnlyWriteEvery, seedBase+"dwriter");
+    TrainingDataWriter dataWriter = createTestTrainingDataWriter(inputsVersion, nnXLen, nnYLen, seedBase + "dwriter", 5);
 
     NNEvaluator* nnEval = startNNEval("/dev/null",seedBase+"nneval",logger,0,inputsNHWC,useNHWC,false);
 
@@ -96,7 +102,7 @@ void Tests::runTrainingWriteTests() {
     botSpec.nnEval = nnEval;
     botSpec.baseParams = params;
 
-    Board initialBoard(boardXLen,boardYLen);
+    Board initialBoard(boardXLen,boardYLen,rules);
     Player initialPla = P_BLACK;
     int initialEncorePhase = 0;
     BoardHistory initialHist(initialBoard,initialPla,rules,initialEncorePhase);
@@ -225,7 +231,7 @@ void Tests::runSelfplayInitTestsWithNN(const string& modelFile) {
     botSpec.nnEval = nnEval;
     botSpec.baseParams = params;
 
-    Board initialBoard(11,11);
+    Board initialBoard(11,11,rules);
     Player initialPla = P_BLACK;
     int initialEncorePhase = 0;
     BoardHistory initialHist(initialBoard,initialPla,rules,initialEncorePhase);
@@ -406,7 +412,7 @@ void Tests::runMoreSelfplayTestsWithNN(const string& modelFile) {
     botSpec.nnEval = nnEval;
     botSpec.baseParams = params;
 
-    Board initialBoard(11,11);
+    Board initialBoard(11,11,rules);
     Player initialPla = P_BLACK;
     int initialEncorePhase = 0;
     if(testHint) {
@@ -586,7 +592,7 @@ void Tests::runMoreSelfplayTestsWithNN(const string& modelFile) {
     botSpec.nnEval = nnEval;
     botSpec.baseParams = params;
 
-    Board initialBoard(11,11);
+    Board initialBoard(11,11,rules);
     Player initialPla = P_BLACK;
     int initialEncorePhase = 0;
     BoardHistory initialHist(initialBoard,initialPla,rules,initialEncorePhase);
@@ -932,9 +938,9 @@ xxxxxxxx.
       FinishedGameData* data = gameRunner->runGame(seed, botSpec, botSpec, forkData, NULL, logger, shouldStop, shouldPause, nullptr, nullptr, nullptr);
       cout << data->startHist.rules << endl;
       cout << "Start moves size " << data->startHist.moveHistory.size()
-           << " Start pla " << PlayerIO::playerToString(data->startPla)
+           << " Start pla " << PlayerIO::playerToString(data->startPla,data->startHist.rules.isDots)
            << " XY " << data->startBoard.x_size << " " << data->startBoard.y_size
-           << " Extra black " << data->numExtraBlack
+           << " Extra " << PlayerIO::playerToString(P_BLACK, data->startHist.rules.isDots) << " " << data->numExtraBlack
            << " Draw equiv " << data->drawEquivalentWinsForWhite
            << " Mode " << data->mode
            << " BeganInEncorePhase " << data->beganInEncorePhase
@@ -1008,10 +1014,9 @@ xxxxxxxx.
     vector<Move> moves = sgf->moves;
 
     Rules initialRules = Rules::parseRules("chinese");
-    Board board;
     Player nextPla;
-    BoardHistory hist;
-    sgf->setupInitialBoardAndHist(initialRules, board, nextPla, hist);
+    BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla);
+    Board& board = hist.initialBoard;
     for(size_t i = 0; i<moves.size(); i++) {
       if(i % 10 == 0) {
         bool doEndGameIfAllPassAlive = true;
@@ -1056,8 +1061,6 @@ xxxxxxxx.
     cout << "====================================================================================================" << endl;
     cout << "Testing turnnumber and early temperatures" << endl;
 
-    int maxRows = 256;
-    double firstFileMinRandProp = 1.0;
     int debugOnlyWriteEvery = 1;
     int inputsVersion = 7;
 
@@ -1142,10 +1145,10 @@ xxxxxxxx.
       GameRunner* gameRunner = new GameRunner(cfg, seed, playSettings, logger);
       auto shouldStop = []() noexcept { return false; };
       WaitableFlag* shouldPause = nullptr;
-      TrainingDataWriter dataWriter(&cout,inputsVersion, maxRows, firstFileMinRandProp, 9, 9, debugOnlyWriteEvery, seed);
+      TrainingDataWriter dataWriter = createTestTrainingDataWriter(inputsVersion, 9, 9, seed, debugOnlyWriteEvery);
 
       Sgf::PositionSample startPosSample;
-      startPosSample.board = Board(9,9);
+      startPosSample.board = Board(9,9,rules);
       startPosSample.nextPla = P_BLACK;
       startPosSample.moves = std::vector<Move>();
       startPosSample.initialTurnNumber = 0;
@@ -1173,10 +1176,10 @@ xxxxxxxx.
       GameRunner* gameRunner = new GameRunner(cfg, seed, playSettings, logger);
       auto shouldStop = []() noexcept { return false; };
       WaitableFlag* shouldPause = nullptr;
-      TrainingDataWriter dataWriter(&cout,inputsVersion, maxRows, firstFileMinRandProp, 9, 9, debugOnlyWriteEvery, seed);
+      TrainingDataWriter dataWriter = createTestTrainingDataWriter(inputsVersion, 9, 9, seed, debugOnlyWriteEvery);
 
       Sgf::PositionSample startPosSample;
-      startPosSample.board = Board(9,9);
+      startPosSample.board = Board(9,9,rules);
       startPosSample.nextPla = P_BLACK;
       startPosSample.moves = std::vector<Move>();
       startPosSample.initialTurnNumber = 40;
@@ -1203,9 +1206,6 @@ xxxxxxxx.
     cout << "====================================================================================================" << endl;
     cout << "Testing no result" << endl;
 
-    int maxRows = 256;
-    double firstFileMinRandProp = 1.0;
-    int debugOnlyWriteEvery = 1;
     int inputsVersion = 7;
 
     SearchParams params = SearchParams::forTestsV2();
@@ -1272,9 +1272,9 @@ xxxxxxxx.
     botSpec.nnEval = nnEval;
     botSpec.baseParams = params;
 
-    string seed = "seed-testing-temperature";
-
     {
+      string seed = "seed-testing-temperature";
+      int debugOnlyWriteEvery = 1;
       cout << "Turn number initial 0 selfplay with high temperatures" << endl;
       nnEval->clearCache();
       nnEval->clearStats();
@@ -1284,7 +1284,7 @@ xxxxxxxx.
       GameRunner* gameRunner = new GameRunner(cfg, seed, playSettings, logger);
       auto shouldStop = []() noexcept { return false; };
       WaitableFlag* shouldPause = nullptr;
-      TrainingDataWriter dataWriter(&cout,inputsVersion, maxRows, firstFileMinRandProp, 9, 9, debugOnlyWriteEvery, seed);
+      TrainingDataWriter dataWriter = createTestTrainingDataWriter(inputsVersion, 9, 9, seed, debugOnlyWriteEvery);
 
       Sgf::PositionSample startPosSample;
       startPosSample.board = Board::parseBoard(9,9,R"%%(
@@ -2248,7 +2248,7 @@ void Tests::runSelfplayStatTestsWithNN(const string& modelFile) {
     playSettings.forSelfPlay = true;
 
     Sgf::PositionSample startPosSample;
-    startPosSample.board = Board(19,19);
+    startPosSample.board = Board(19,19,Rules::DEFAULT_GO);
     startPosSample.nextPla = P_BLACK;
     startPosSample.moves = std::vector<Move>();
     startPosSample.initialTurnNumber = 0;
@@ -2300,7 +2300,7 @@ void Tests::runSelfplayStatTestsWithNN(const string& modelFile) {
     playSettings.forSelfPlay = true;
 
     Sgf::PositionSample startPosSample;
-    startPosSample.board = Board(19,19);
+    startPosSample.board = Board(19,19,Rules::DEFAULT_GO);
     startPosSample.nextPla = P_BLACK;
     startPosSample.moves = std::vector<Move>();
     startPosSample.initialTurnNumber = 0;
@@ -2454,7 +2454,7 @@ oox.x....
     playSettings.forSelfPlay = true;
 
     Sgf::PositionSample startPosSample;
-    startPosSample.board = Board(19,19);
+    startPosSample.board = Board(19,19,Rules::DEFAULT_GO);
     startPosSample.nextPla = P_BLACK;
     startPosSample.moves = std::vector<Move>({
         Move(Location::getLoc(3,3,19),P_BLACK),
@@ -2509,7 +2509,7 @@ oox.x....
     playSettings.forSelfPlay = true;
 
     Sgf::PositionSample startPosSample;
-    startPosSample.board = Board(19,19);
+    startPosSample.board = Board(19,19,Rules::DEFAULT_GO);
     startPosSample.nextPla = P_BLACK;
     startPosSample.moves = std::vector<Move>({
         Move(Location::getLoc(3,3,19),P_BLACK),
@@ -2563,7 +2563,7 @@ oox.x....
     playSettings.forSelfPlay = true;
 
     Sgf::PositionSample startPosSample;
-    startPosSample.board = Board(19,19);
+    startPosSample.board = Board(19,19,Rules::DEFAULT_GO);
     startPosSample.nextPla = P_BLACK;
     startPosSample.moves = std::vector<Move>({
         Move(Location::getLoc(3,3,19),P_BLACK),
@@ -2618,7 +2618,7 @@ oox.x....
     playSettings.forSelfPlay = true;
 
     Sgf::PositionSample startPosSample;
-    startPosSample.board = Board(19,19);
+    startPosSample.board = Board(19,19,Rules::DEFAULT_GO);
     startPosSample.nextPla = P_BLACK;
     startPosSample.moves = std::vector<Move>({
         Move(Location::getLoc(3,3,19),P_BLACK),
@@ -2676,7 +2676,7 @@ oox.x....
     playSettings.forSelfPlay = true;
 
     Sgf::PositionSample startPosSample;
-    startPosSample.board = Board(19,19);
+    startPosSample.board = Board(19,19,Rules::DEFAULT_GO);
     startPosSample.nextPla = P_BLACK;
     startPosSample.moves = std::vector<Move>();
     startPosSample.initialTurnNumber = 0;
@@ -2723,7 +2723,6 @@ oox.x....
   NeuralNet::globalCleanup();
 }
 
-
 void Tests::runSekiTrainWriteTests(const string& modelFile) {
   bool inputsNHWC = true;
   bool useNHWC = false;
@@ -2731,9 +2730,6 @@ void Tests::runSekiTrainWriteTests(const string& modelFile) {
 
   cout << "Running test for how a seki gets recorded" << endl;
   NeuralNet::globalInitialize();
-
-  int nnXLen = 13;
-  int nnYLen = 13;
 
   const bool logToStdout = true;
   const bool logToStderr = false;
@@ -2744,10 +2740,8 @@ void Tests::runSekiTrainWriteTests(const string& modelFile) {
 
   auto run = [&](const string& sgfStr, const string& seedBase, const Rules& rules) {
     int inputsVersion = 6;
-    int maxRows = 256;
-    double firstFileMinRandProp = 1.0;
     int debugOnlyWriteEvery = 1000;
-    TrainingDataWriter dataWriter(&cout,inputsVersion, maxRows, firstFileMinRandProp, nnXLen, nnYLen, debugOnlyWriteEvery, seedBase+"dwriter");
+    TrainingDataWriter dataWriter = createTestTrainingDataWriter(inputsVersion, 13, 13, seedBase + "dwriter", debugOnlyWriteEvery);
 
     nnEval->clearCache();
     nnEval->clearStats();
@@ -2763,16 +2757,14 @@ void Tests::runSekiTrainWriteTests(const string& modelFile) {
     botSpec.baseParams = params;
 
     std::unique_ptr<CompactSgf> sgf = CompactSgf::parse(sgfStr);
-    Board initialBoard;
     Player initialPla;
-    BoardHistory initialHist;
 
     ExtraBlackAndKomi extraBlackAndKomi;
     extraBlackAndKomi.extraBlack = 0;
     extraBlackAndKomi.komiMean = rules.komi;
     extraBlackAndKomi.komiStdev = 0;
     int turnIdx = (int)sgf->moves.size();
-    sgf->setupBoardAndHistAssumeLegal(rules,initialBoard,initialPla,initialHist,turnIdx);
+    auto [initialHist, initialBoard] = sgf->setupBoardAndHistAssumeLegal(rules, initialPla, turnIdx);
 
     bool doEndGameIfAllPassAlive = true;
     bool clearBotAfterSearch = true;
@@ -2854,7 +2846,7 @@ void Tests::runSekiTrainWriteTests(const string& modelFile) {
       vector<double> buf;
       vector<bool> isAlive = PlayUtils::computeAnticipatedStatusesWithOwnership(bot,board,hist,pla,numVisits,buf);
       testAssert(bot->alwaysIncludeOwnerMap == false);
-      cout << "Search assumes " << PlayerIO::playerToString(pla) << " first" << endl;
+      cout << "Search assumes " << PlayerIO::playerToString(pla,hist.rules.isDots) << " first" << endl;
       cout << "Rules " << hist.rules << endl;
       cout << board << endl;
       for(int y = 0; y<board.y_size; y++) {

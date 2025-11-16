@@ -66,7 +66,8 @@ NNEvaluator::NNEvaluator(
   const vector<int>& gpuIdxByServerThr,
   const string& rSeed,
   bool doRandomize,
-  int defaultSymmetry
+  int defaultSymmetry,
+  const bool newDotsGame
 )
   :modelName(mName),
    modelFileName(mFileName),
@@ -106,12 +107,13 @@ NNEvaluator::NNEvaluator(
    currentDoRandomize(doRandomize),
    currentDefaultSymmetry(defaultSymmetry),
    currentBatchSize(maxBatchSz),
-   queryQueue()
+   queryQueue(),
+   dotsGame(newDotsGame)
 {
-  if(nnXLen > NNPos::MAX_BOARD_LEN)
-    throw StringError("Maximum supported nnEval board size is " + Global::intToString(NNPos::MAX_BOARD_LEN));
-  if(nnYLen > NNPos::MAX_BOARD_LEN)
-    throw StringError("Maximum supported nnEval board size is " + Global::intToString(NNPos::MAX_BOARD_LEN));
+  if(nnXLen > NNPos::MAX_BOARD_LEN_X)
+    throw StringError("Maximum supported nnEval board size x is " + Global::intToString(NNPos::MAX_BOARD_LEN_X));
+  if(nnYLen > NNPos::MAX_BOARD_LEN_Y)
+    throw StringError("Maximum supported nnEval board size y is " + Global::intToString(NNPos::MAX_BOARD_LEN_Y));
   if(maxBatchSize <= 0)
     throw StringError("maxBatchSize is negative: " + Global::intToString(maxBatchSize));
   if(gpuIdxByServerThread.size() != numThreads)
@@ -137,7 +139,6 @@ NNEvaluator::NNEvaluator(
     const ModelDesc& desc = NeuralNet::getModelDesc(loadedModel);
     internalModelName = desc.name;
     modelVersion = desc.modelVersion;
-    inputsVersion = NNModelVersion::getInputsVersion(modelVersion);
     numInputMetaChannels = desc.numInputMetaChannels;
     postProcessParams = desc.postProcessParams;
     computeContext = NeuralNet::createComputeContext(
@@ -149,8 +150,8 @@ NNEvaluator::NNEvaluator(
   else {
     internalModelName = "random";
     modelVersion = NNModelVersion::defaultModelVersion;
-    inputsVersion = NNModelVersion::getInputsVersion(modelVersion);
   }
+  inputsVersion = NNModelVersion::getInputsVersion(modelVersion, newDotsGame);
 
   //Reserve a decent amount above the batch size so that allocation is unlikely.
   queryQueue.reserve(maxBatchSize * 4 * gpuIdxByServerThread.size());
@@ -283,6 +284,9 @@ int NNEvaluator::getNNYLen() const {
 }
 int NNEvaluator::getModelVersion() const {
   return modelVersion;
+}
+bool NNEvaluator::getDotsGame() const {
+  return dotsGame;
 }
 double NNEvaluator::getTrunkSpatialConvDepth() const {
   return NeuralNet::getModelDesc(loadedModel).getTrunkSpatialConvDepth();
@@ -566,7 +570,7 @@ void NNEvaluator::serve(
         }
       }
 
-      NeuralNet::getOutput(gpuHandle, buf.inputBuffers, numRows, resultBufs.data(), outputBuf);
+      NeuralNet::getOutput(gpuHandle, buf.inputBuffers, numRows, resultBufs.data(), outputBuf, dotsGame);
       assert(outputBuf.size() == numRows);
 
       m_numRowsProcessed.fetch_add(numRows, std::memory_order_relaxed);
@@ -776,29 +780,17 @@ void NNEvaluator::evaluate(
   buf.boardYSizeForServer = board.y_size;
 
   if(!debugSkipNeuralNet) {
-    const int rowSpatialLen = NNModelVersion::getNumSpatialFeatures(modelVersion) * nnXLen * nnYLen;
+    const int rowSpatialLen = NNModelVersion::getNumSpatialFeatures(modelVersion, dotsGame) * nnXLen * nnYLen;
     if(buf.rowSpatialBuf.size() < rowSpatialLen)
       buf.rowSpatialBuf.resize(rowSpatialLen);
-    const int rowGlobalLen = NNModelVersion::getNumGlobalFeatures(modelVersion);
+    const int rowGlobalLen = NNModelVersion::getNumGlobalFeatures(modelVersion, dotsGame);
     if(buf.rowGlobalBuf.size() < rowGlobalLen)
       buf.rowGlobalBuf.resize(rowGlobalLen);
     const int rowMetaLen = numInputMetaChannels;
     if(buf.rowMetaBuf.size() < rowMetaLen)
       buf.rowMetaBuf.resize(rowMetaLen);
 
-    static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
-    if(inputsVersion == 3)
-      NNInputs::fillRowV3(board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
-    else if(inputsVersion == 4)
-      NNInputs::fillRowV4(board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
-    else if(inputsVersion == 5)
-      NNInputs::fillRowV5(board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
-    else if(inputsVersion == 6)
-      NNInputs::fillRowV6(board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
-    else if(inputsVersion == 7)
-      NNInputs::fillRowV7(board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
-    else
-      ASSERT_UNREACHABLE;
+    NNInputs::fillRowVN(inputsVersion, board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
 
     if(rowMetaLen > 0) {
       if(sgfMeta == NULL)
@@ -868,7 +860,18 @@ void NNEvaluator::evaluate(
     assert(nextPlayer == history.presumedNextMovePla);
     for(int i = 0; i<policySize; i++) {
       Loc loc = NNPos::posToLoc(i,xSize,ySize,nnXLen,nnYLen);
-      isLegal[i] = history.isLegal(board,loc,nextPlayer);
+      bool legal;
+      if (loc == Board::PASS_LOC && history.rules.isDots) {
+        // We need at least one legal loc, so choose grounding if it wins the game or there are no legal pos moves.
+        // Also, choose grounding in case of effective draw because the further game makes no sense.
+        legal = legalCount == 0 || history.winOrEffectiveDrawByGrounding(board, nextPlayer);
+      } else {
+        legal = history.isLegal(board,loc,nextPlayer);
+      }
+      isLegal[i] = legal;
+      if (legal) {
+        legalCount++;
+      }
     }
 
     if(nnInputParams.avoidMYTDaggerHack && xSize >= 13 && ySize >= 13) {
@@ -882,6 +885,7 @@ void NNEvaluator::evaluate(
       }
     }
 
+    legalCount = 0;
     for(int i = 0; i<policySize; i++) {
       float policyValue;
       if(isLegal[i]) {

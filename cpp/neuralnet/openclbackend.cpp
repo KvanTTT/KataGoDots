@@ -2482,13 +2482,13 @@ struct Model {
 
     nnXLen = nnX;
     nnYLen = nnY;
-    if(nnXLen > NNPos::MAX_BOARD_LEN)
-      throw StringError(Global::strprintf("nnXLen (%d) is greater than NNPos::MAX_BOARD_LEN (%d)",
-        nnXLen, NNPos::MAX_BOARD_LEN
+    if(nnXLen > NNPos::MAX_BOARD_LEN_X)
+      throw StringError(Global::strprintf("nnXLen (%d) is greater than NNPos::MAX_BOARD_LEN_X (%d)",
+        nnXLen, NNPos::MAX_BOARD_LEN_X
       ));
-    if(nnYLen > NNPos::MAX_BOARD_LEN)
-      throw StringError(Global::strprintf("nnYLen (%d) is greater than NNPos::MAX_BOARD_LEN (%d)",
-        nnYLen, NNPos::MAX_BOARD_LEN
+    if(nnYLen > NNPos::MAX_BOARD_LEN_Y)
+      throw StringError(Global::strprintf("nnYLen (%d) is greater than NNPos::MAX_BOARD_LEN_Y (%d)",
+        nnYLen, NNPos::MAX_BOARD_LEN_Y
       ));
 
     numInputChannels = desc->numInputChannels;
@@ -2499,12 +2499,12 @@ struct Model {
     numScoreValueChannels = desc->numScoreValueChannels;
     numOwnershipChannels = desc->numOwnershipChannels;
 
-    int numFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion);
+    int numFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion, desc->isDotsGame);
     if(numInputChannels != numFeatures)
       throw StringError(Global::strprintf("Neural net numInputChannels (%d) was not the expected number based on version (%d)",
         numInputChannels, numFeatures
       ));
-    int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(modelVersion);
+    int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(modelVersion, desc->isDotsGame);
     if(numInputGlobalChannels != numGlobalFeatures)
       throw StringError(Global::strprintf("Neural net numInputGlobalChannels (%d) was not the expected number based on version (%d)",
         numInputGlobalChannels, numGlobalFeatures
@@ -2890,8 +2890,8 @@ struct InputBuffers {
     singleScoreValueResultElts = (size_t)m.numScoreValueChannels;
     singleOwnershipResultElts = (size_t)m.numOwnershipChannels * nnXLen * nnYLen;
 
-    assert(NNModelVersion::getNumSpatialFeatures(m.modelVersion) == m.numInputChannels);
-    assert(NNModelVersion::getNumGlobalFeatures(m.modelVersion) == m.numInputGlobalChannels);
+    assert(NNModelVersion::getNumSpatialFeatures(m.modelVersion, m.isDotsGame) == m.numInputChannels);
+    assert(NNModelVersion::getNumGlobalFeatures(m.modelVersion, m.isDotsGame) == m.numInputGlobalChannels);
     if(m.numInputMetaChannels > 0) {
       assert(SGFMetadata::METADATA_INPUT_NUM_CHANNELS == m.numInputMetaChannels);
     }
@@ -2952,14 +2952,13 @@ void NeuralNet::freeInputBuffers(InputBuffers* inputBuffers) {
   delete inputBuffers;
 }
 
-
 void NeuralNet::getOutput(
   ComputeHandle* gpuHandle,
   InputBuffers* inputBuffers,
-  int numBatchEltsFilled,
+  const int numBatchEltsFilled,
   NNResultBuf** inputBufs,
-  vector<NNOutput*>& outputs
-) {
+  const vector<NNOutput*>& outputs,
+  const bool dotsGame) {
   assert(numBatchEltsFilled <= inputBuffers->maxBatchSize);
   assert(numBatchEltsFilled > 0);
   const int batchSize = numBatchEltsFilled;
@@ -2967,8 +2966,8 @@ void NeuralNet::getOutput(
   const int nnYLen = gpuHandle->nnYLen;
   const int modelVersion = gpuHandle->model->modelVersion;
 
-  const int numSpatialFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion);
-  const int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(modelVersion);
+  const int numSpatialFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion, dotsGame);
+  const int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(modelVersion, dotsGame);
   const int numMetaFeatures = inputBuffers->singleInputMetaElts;
   assert(numSpatialFeatures == gpuHandle->model->numInputChannels);
   assert(numSpatialFeatures * nnXLen * nnYLen == inputBuffers->singleInputElts);

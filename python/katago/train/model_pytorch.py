@@ -6,6 +6,8 @@ import torch.nn.functional
 import torch.nn.init
 import packaging
 import packaging.version
+from argparse import ArgumentTypeError
+from enum import Enum
 from typing import List, Dict, Optional, Set
 
 from ..train import modelconfigs
@@ -1384,7 +1386,7 @@ class PolicyHead(torch.nn.Module):
 
 
 class ValueHead(torch.nn.Module):
-    def __init__(self, c_in, c_v1, c_v2, c_sv2, num_scorebeliefs, config, activation, pos_len):
+    def __init__(self, c_in, c_v1, c_v2, c_sv2, num_scorebeliefs, config, activation, pos_len_x, pos_len_y):
         super(ValueHead, self).__init__()
         self.activation = activation
         self.conv1 = torch.nn.Conv2d(c_in, c_v1, kernel_size=1, padding="same", bias=False)
@@ -1407,8 +1409,9 @@ class ValueHead(torch.nn.Module):
         self.conv_futurepos = torch.nn.Conv2d(c_in, 2, kernel_size=1, padding="same", bias=False)
         self.conv_seki = torch.nn.Conv2d(c_in, 4, kernel_size=1, padding="same", bias=False)
 
-        self.pos_len = pos_len
-        self.scorebelief_mid = self.pos_len*self.pos_len + EXTRA_SCORE_DISTR_RADIUS
+        self.pos_len_x = pos_len_x
+        self.pos_len_y = pos_len_y
+        self.scorebelief_mid = self.pos_len_x * self.pos_len_y + EXTRA_SCORE_DISTR_RADIUS
         self.scorebelief_len = self.scorebelief_mid * 2
         self.num_scorebeliefs = num_scorebeliefs
         self.c_sv2 = c_sv2
@@ -1602,8 +1605,21 @@ class MetadataEncoder(torch.nn.Module):
         return self.out_scale * self.linear_output_to_trunk(x)
 
 
+class Game(Enum):
+    GO = 0
+    DOTS = 1
+
+def parse_game(value: str) -> Game | ArgumentTypeError:
+    value = value.upper()
+    if value == "GO":
+        return Game.GO
+    elif value == "DOTS":
+        return Game.DOTS
+    else:
+        return ArgumentTypeError(f"Game must be 'go' or 'dots', got '{value}'")
+
 class Model(torch.nn.Module):
-    def __init__(self, config: modelconfigs.ModelConfig, pos_len: int):
+    def __init__(self, config: modelconfigs.ModelConfig, pos_len_x: int, pos_len_y: int, games=None):
         super(Model, self).__init__()
 
         self.config = config
@@ -1620,7 +1636,9 @@ class Model(torch.nn.Module):
         self.c_sv2 = config["sbv2_num_channels"]
         self.num_scorebeliefs = config["num_scorebeliefs"]
         self.num_total_blocks = len(self.block_kind)
-        self.pos_len = pos_len
+        self.pos_len_x = pos_len_x
+        self.pos_len_y = pos_len_y
+        self.games = games or [Game.GO]
 
         if config["version"] <= 12:
             self.td_score_multiplier = 20.0
@@ -1661,7 +1679,7 @@ class Model(torch.nn.Module):
         else:
             self.metadata_encoder = None
 
-        self.bin_input_shape = [22, pos_len, pos_len]
+        self.bin_input_shape = [22, pos_len_x, pos_len_y]
         self.global_input_shape = [19]
 
         self.blocks = torch.nn.ModuleList()
@@ -1770,16 +1788,8 @@ class Model(torch.nn.Module):
             self.config,
             self.activation,
         )
-        self.value_head = ValueHead(
-            self.c_trunk,
-            self.c_v1,
-            self.c_v2,
-            self.c_sv2,
-            self.num_scorebeliefs,
-            self.config,
-            self.activation,
-            self.pos_len,
-        )
+        self.value_head = ValueHead(self.c_trunk, self.c_v1, self.c_v2, self.c_sv2, self.num_scorebeliefs, self.config,
+                                    self.activation, self.pos_len_x, self.pos_len_y)
         if self.has_intermediate_head:
             self.norm_intermediate_trunkfinal = NormMask(self.c_trunk, self.config, fixup_use_gamma=False, is_last_batchnorm=True)
             self.act_intermediate_trunkfinal = act(self.activation)
@@ -1790,16 +1800,9 @@ class Model(torch.nn.Module):
                 self.config,
                 self.activation,
             )
-            self.intermediate_value_head = ValueHead(
-                self.c_trunk,
-                self.c_v1,
-                self.c_v2,
-                self.c_sv2,
-                self.num_scorebeliefs,
-                self.config,
-                self.activation,
-                self.pos_len,
-            )
+            self.intermediate_value_head = ValueHead(self.c_trunk, self.c_v1, self.c_v2, self.c_sv2,
+                                                     self.num_scorebeliefs, self.config, self.activation,
+                                                     self.pos_len_x, self.pos_len_y)
 
     @property
     def device(self):

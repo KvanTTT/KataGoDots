@@ -124,15 +124,15 @@ static Hash128 getExtraPosHash(const Board& board) {
   for(int y = 0; y<board.y_size; y++) {
     for(int x = 0; x<board.x_size; x++) {
       Loc loc = Location::getLoc(x,y,board.x_size);
-      hash ^= Board::ZOBRIST_BOARD_HASH2[loc][board.colors[loc]];
+      hash ^= Board::ZOBRIST_BOARD_HASH2[loc][board.getColor(loc)];
     }
   }
   return hash;
 }
 
 void BookHash::getHashAndSymmetry(const BoardHistory& hist, int repBound, BookHash& hashRet, int& symmetryToAlignRet, vector<int>& symmetriesRet, int bookVersion) {
-  Board boardsBySym[SymmetryHelpers::NUM_SYMMETRIES];
-  BoardHistory histsBySym[SymmetryHelpers::NUM_SYMMETRIES];
+  vector<Board> boardsBySym;
+  vector<BoardHistory> histsBySym;
   Hash128 accums[SymmetryHelpers::NUM_SYMMETRIES];
 
   // Make sure the book all matches orientation for rectangular boards.
@@ -143,8 +143,8 @@ void BookHash::getHashAndSymmetry(const BoardHistory& hist, int repBound, BookHa
     SymmetryHelpers::NUM_SYMMETRIES_WITHOUT_TRANSPOSE : SymmetryHelpers::NUM_SYMMETRIES;
 
   for(int symmetry = 0; symmetry < numSymmetries; symmetry++) {
-    boardsBySym[symmetry] = SymmetryHelpers::getSymBoard(hist.initialBoard,symmetry);
-    histsBySym[symmetry] = BoardHistory(boardsBySym[symmetry], hist.initialPla, hist.rules, hist.initialEncorePhase);
+    boardsBySym.emplace_back(SymmetryHelpers::getSymBoard(hist.initialBoard,symmetry));
+    histsBySym.emplace_back(boardsBySym[symmetry], hist.initialPla, hist.rules, hist.initialEncorePhase);
     accums[symmetry] = Hash128();
   }
 
@@ -2621,7 +2621,7 @@ int64_t Book::exportToHtmlDir(
     const int symmetry = 0;
     SymBookNode symNode(node, symmetry);
 
-    BoardHistory hist;
+    BoardHistory hist(Rules::DEFAULT_GO);
     vector<Loc> moveHistory;
     bool suc = symNode.getBoardHistoryReachingHere(hist,moveHistory);
     if(!suc) {
@@ -2664,7 +2664,7 @@ int64_t Book::exportToHtmlDir(
     for(int y = 0; y<board.y_size; y++) {
       for(int x = 0; x<board.x_size; x++) {
         Loc loc = Location::getLoc(x,y,board.x_size);
-        dataVarsStr += Global::intToString(board.colors[loc]) + ",";
+        dataVarsStr += Global::intToString(board.getColor(loc)) + ",";
       }
     }
     dataVarsStr += "];\n";
@@ -2869,7 +2869,7 @@ void Book::saveToFile(const string& fileName) const {
     paramsDump["version"] = bookVersion;
     paramsDump["initialBoard"] = Board::toJson(initialBoard);
     paramsDump["initialRules"] = initialRules.toJson();
-    paramsDump["initialPla"] = PlayerIO::playerToString(initialPla);
+    paramsDump["initialPla"] = PlayerIO::playerToString(initialPla, initialRules.isDots);
     paramsDump["repBound"] = repBound;
     paramsDump["errorFactor"] = params.errorFactor;
     paramsDump["costPerMove"] = params.costPerMove;
@@ -2922,7 +2922,7 @@ void Book::saveToFile(const string& fileName) const {
     json nodeData = json::object();
     if(bookVersion >= 2) {
       nodeData["id"] = nodeIdx;
-      nodeData["pla"] = PlayerIO::playerToStringShort(node->pla);
+      nodeData["pla"] = PlayerIO::playerToStringShort(node->pla, initialRules.isDots);
       nodeData["syms"] = node->symmetries;
       nodeData["wl"] = roundDouble(node->thisValuesNotInBook.winLossValue, 100000000);
       nodeData["sM"] = roundDouble(node->thisValuesNotInBook.scoreMean, 1000000);
@@ -2939,7 +2939,7 @@ void Book::saveToFile(const string& fileName) const {
     }
     else {
       nodeData["hash"] = node->hash.toString();
-      nodeData["pla"] = PlayerIO::playerToString(node->pla);
+      nodeData["pla"] = PlayerIO::playerToString(node->pla, initialRules.isDots);
       nodeData["symmetries"] = node->symmetries;
       nodeData["winLossValue"] = node->thisValuesNotInBook.winLossValue;
       nodeData["scoreMean"] = node->thisValuesNotInBook.scoreMean;
@@ -3030,7 +3030,7 @@ Book* Book::loadFromFile(const std::string& fileName, int numThreadsForRecompute
       assertContains(params,"initialBoard");
       Board initialBoard = Board::ofJson(params["initialBoard"]);
       assertContains(params,"initialRules");
-      Rules initialRules = Rules::parseRules(params["initialRules"].dump());
+      Rules initialRules = Rules::parseRules(params["initialRules"].dump(), params.value("dots", false));
       Player initialPla = PlayerIO::parsePlayer(params["initialPla"].get<string>());
       int repBound = params["repBound"].get<int>();
 

@@ -39,9 +39,10 @@ struct SgfNode {
   void accumMoves(std::vector<Move>& moves, int xSize, int ySize) const;
 
   Color getPLSpecifiedColor() const;
-  Rules getRulesFromRUTagOrFail() const;
+  Rules getRulesFromRUTagOrFail(bool isDots) const;
   Player getSgfWinner() const;
   float getKomiOrFail() const;
+  bool getIsDotsGame() const;
   float getKomiOrDefault(float defaultKomi) const;
 
   std::string getPlayerName(Player pla) const;
@@ -69,6 +70,7 @@ struct Sgf {
 
   static std::vector<std::unique_ptr<Sgf>> loadSgfOrSgfsLogAndIgnoreErrors(const std::string& file, Logger& logger);
 
+  bool isDotsGame() const;
   XYSize getXYSize() const;
   float getKomiOrFail() const;
   float getKomiOrDefault(float defaultKomi) const;
@@ -216,6 +218,7 @@ struct Sgf {
 
 struct CompactSgf {
   std::string fileName;
+  bool isDots;
   SgfNode rootNode;
   std::vector<Move> placements;
   std::vector<Move> moves;
@@ -241,12 +244,12 @@ struct CompactSgf {
   Rules getRulesOrFailAllowUnspecified(const Rules& defaultRules) const;
   Rules getRulesOrWarn(const Rules& defaultRules, std::function<void(const std::string& msg)> f) const;
 
-  void setupInitialBoardAndHist(const Rules& initialRules, Board& board, Player& nextPla, BoardHistory& hist) const;
+  BoardHistory setupInitialBoardAndHist(const Rules& initialRules, Player& nextPla) const;
   void playMovesAssumeLegal(Board& board, Player& nextPla, BoardHistory& hist, int64_t turnIdx) const;
-  void setupBoardAndHistAssumeLegal(const Rules& initialRules, Board& board, Player& nextPla, BoardHistory& hist, int64_t turnIdx) const;
+  std::pair<BoardHistory, Board> setupBoardAndHistAssumeLegal(const Rules& initialRules, Player& nextPla, int64_t turnIdx) const;
   //These throw a StringError upon illegal move.
   void playMovesTolerant(Board& board, Player& nextPla, BoardHistory& hist, int64_t turnIdx, bool preventEncore) const;
-  void setupBoardAndHistTolerant(const Rules& initialRules, Board& board, Player& nextPla, BoardHistory& hist, int64_t turnIdx, bool preventEncore) const;
+  std::pair<BoardHistory, Board> setupBoardAndHistTolerant(const Rules& initialRules, Player& nextPla, int64_t turnIdx, bool preventEncore) const;
 };
 
 namespace WriteSgf {

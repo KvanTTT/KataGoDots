@@ -10,9 +10,13 @@
 #include "../game/boardhistory.h"
 #include "../game/rules.h"
 
+void setRowBin(float* rowBin, int pos, int feature, float value, int posStride, int featureStride);
+
 namespace NNPos {
+  constexpr int MAX_BOARD_LEN_X = Board::MAX_LEN_X;
+  constexpr int MAX_BOARD_LEN_Y = Board::MAX_LEN_Y;
   constexpr int MAX_BOARD_LEN = Board::MAX_LEN;
-  constexpr int MAX_BOARD_AREA = MAX_BOARD_LEN * MAX_BOARD_LEN;
+  constexpr int MAX_BOARD_AREA = MAX_BOARD_LEN_X * MAX_BOARD_LEN_Y;
   //Policy output adds +1 for the pass move
   constexpr int MAX_NN_POLICY_SIZE = MAX_BOARD_AREA + 1;
   //Extra score distribution radius, used for writing score in data rows and for the neural net score belief output
@@ -56,6 +60,60 @@ struct MiscNNInputParams {
 };
 
 namespace NNInputs {
+  enum class DotsSpatialFeature  {
+    OnBoard_0, // 0: On board
+    PlayerActive_1, // 1: Pla stone
+    PlayerOppActive_2, // 2: Opp stone
+    PlayerPlaced_3, // 3: 1 libs
+    PlayerOppPlaced_4, // 4: 2 libs
+    DeadDots_5, // 5: 3 libs
+    Reserved_6, // 6: superKoBanned (in the encore, no-second-ko-capture locations, encore ko prohibitions where we have to pass for ko)
+    Reserved_7, // 7: koRecapBlocked (in the encore, no-second-ko-capture locations, encore ko prohibitions where we have to pass for ko)
+    Grounded_8, // 8: unused? (in the encore, no-second-ko-capture locations, encore ko prohibitions where we have to pass for ko)
+
+    Prev1Loc_9, // 9: prev 1 Loc history
+    Prev2Loc_10, // 10: prev 2 Loc history
+    Prev3Loc_11, // 11: prev 3 Loc history
+    Prev4Loc_12, // 12: prev 4 Loc history
+    Prev5Loc_13, // 13: prev 5 Loc history
+
+    LadderCaptured_14, // 14: ladder captured
+    LadderCapturedPrevious_15, // 15: ladder captured prev
+    LadderCapturedPrevious2_16, // 16: ladder captured prev 2
+    LadderWorkingMoves_17, // 17: ladder working moves
+
+    PlayerCaptures_18, // 18: pla current territory, not counting group tax
+    PlayerOppCaptures_19, // 19: opp current territory, not counting group tax
+    PlayerSurroundings_20, // 20: pla second encore starting stones
+    PlayerOppSurroundings_21, // 21: opp second encore starting stones
+
+    COUNT, // = 22
+  };
+
+  enum class DotsGlobalFeature  {
+    Reserved_0, // 0: prev loc 1 PASS
+    Reserved_1, // 1: prev loc 2 PASS
+    Reserved_2, // 2: prev loc 3 PASS
+    Reserved_3, // 3: prev loc 4 PASS
+    Reserved_4, // 4: prev loc 5 PASS
+    Komi_5, // 5: Komi
+    Reserved_6, // 6: Ko rule (KO_POSITIONAL, KO_SPIGHT)
+    Reserved_7, // 7: Ko rule (KO_SITUATIONAL)
+    Suicide_8, // 8: Suicide
+    Reserved_9, // 9: Scoring
+    TaxIsEnabled_10, // 10: TAX is enabled
+    TaxAll_11, // 11: TAX_ALL
+    Reserved_12, // 12: encore phase > 0
+    Reserved_13, // 13: encore phase > 1
+    WinByGrounding_14, // 14: does a pass end the current phase given the ruleset and history?
+    PlayoutDoublingAdvantageIsEnabled_15, // 15: playoutDoublingAdvantage is enabled (handicap play)
+    PlayoutDoublingAdvantage_16, // 16: playoutDoublingAdvantage
+    CaptureEmpty_17, // 17: button
+    FieldSizeKomiParity_18, // 18: board size komi parity
+
+    COUNT, // = 19
+  };
+
   const int NUM_FEATURES_SPATIAL_V3 = 22;
   const int NUM_FEATURES_GLOBAL_V3 = 14;
 
@@ -71,11 +129,26 @@ namespace NNInputs {
   const int NUM_FEATURES_SPATIAL_V7 = 22;
   const int NUM_FEATURES_GLOBAL_V7 = 19;
 
+  constexpr int NUM_FEATURES_SPATIAL_V7_DOTS = static_cast<int>(DotsSpatialFeature::COUNT);
+  constexpr int NUM_FEATURES_GLOBAL_V7_DOTS = static_cast<int>(DotsGlobalFeature::COUNT);
+
+  static_assert(NUM_FEATURES_SPATIAL_V7_DOTS == NUM_FEATURES_SPATIAL_V7); // Might be changed later if needed
+  static_assert(NUM_FEATURES_GLOBAL_V7_DOTS == NUM_FEATURES_GLOBAL_V7);
+
   Hash128 getHash(
     const Board& board, const BoardHistory& boardHistory, Player nextPlayer,
     const MiscNNInputParams& nnInputParams
   );
 
+  int getNumberOfSpatialFeatures(int version, bool isDots);
+  int getNumberOfGlobalFeatures(int version, bool isDots);
+
+  void fillRowVN(
+    int version,
+    const Board& board, const BoardHistory& hist, Player nextPlayer,
+    const MiscNNInputParams& nnInputParams,
+    int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
+  );
   void fillRowV3(
     const Board& board, const BoardHistory& boardHistory, Player nextPlayer,
     const MiscNNInputParams& nnInputParams, int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
@@ -95,6 +168,11 @@ namespace NNInputs {
   void fillRowV7(
     const Board& board, const BoardHistory& boardHistory, Player nextPlayer,
     const MiscNNInputParams& nnInputParams, int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
+  );
+  void fillRowV7Dots(
+    const Board& board, const BoardHistory& hist, Player nextPlayer,
+    const MiscNNInputParams& nnInputParams,
+    int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
   );
 
   //If groupTax is specified, for each color region of area, reduce weight on empty spaces equally to reduce the total sum by 2.
@@ -162,6 +240,15 @@ struct NNOutput {
 namespace SymmetryHelpers {
   //A symmetry is 3 bits flipY(bit 0), flipX(bit 1), transpose(bit 2). They are applied in that order.
   //The first four symmetries only reflect, and do not transpose X and Y.
+  constexpr int SYMMETRY_NONE = 0;
+  constexpr int SYMMETRY_FLIP_Y = 1;
+  constexpr int SYMMETRY_FLIP_X = 2;
+  constexpr int SYMMETRY_FLIP_Y_X = 3; // Rotate 180
+  constexpr int SYMMETRY_TRANSPOSE = 4; // Rotate 90 CW + Flip X; Rotate 90 CCW + FlipY
+  constexpr int SYMMETRY_TRANSPOSE_FLIP_X = 5; // Rotate 90 CW
+  constexpr int SYMMETRY_TRANSPOSE_FLIP_Y = 6; // Rotate 90 CCW
+  constexpr int SYMMETRY_TRANSPOSE_FLIP_Y_X = 7; // Rotate 90 CW + Flip Y; Rotate 90 CCW + FlipX
+
   constexpr int NUM_SYMMETRIES = 8;
   constexpr int NUM_SYMMETRIES_WITHOUT_TRANSPOSE = 4;
 
@@ -209,6 +296,8 @@ namespace SymmetryHelpers {
   void getSymmetryDifferences(
     const Board& board, const Board& other, double maxDifferenceToReport, double symmetryDifferences[NUM_SYMMETRIES]
   );
+
+  std::string symmetryToString(int symmetry);
 }
 
 //Utility functions for computing the "scoreValue", the unscaled utility of various numbers of points, prior to multiplication by

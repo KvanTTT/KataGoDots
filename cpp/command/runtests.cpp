@@ -30,6 +30,7 @@ int MainCmds::runtests(const vector<string>& args) {
   Board::initHash();
   ScoreValue::initTables();
 
+  Global::runTests();
   BSearch::runTests();
   Rand::runTests();
   DateTime::runTests();
@@ -37,6 +38,16 @@ int MainCmds::runtests(const vector<string>& args) {
   ComputeElos::runTests();
   Base64::runTests();
   ThreadTest::runTests();
+
+  Tests::runDotsFieldTests();
+  Tests::runDotsGroundingTests();
+  Tests::runDotsBoardHistoryGroundingTests();
+  Tests::runDotsPosHashTests();
+  Tests::runDotsStartPosTests();
+
+  Tests::runDotsSymmetryTests();
+  Tests::runDotsOwnershipTests();
+  Tests::runDotsCapturingTests();
 
   Tests::runBoardIOTests();
   Tests::runBoardBasicTests();
@@ -47,13 +58,15 @@ int MainCmds::runtests(const vector<string>& args) {
 
   Tests::runBoardUndoTest();
   Tests::runBoardHandicapTest();
-  Tests::runBoardStressTest();
 
   Tests::runSgfTests();
   Tests::runBasicSymmetryTests();
   Tests::runBoardSymmetryTests();
   Tests::runSymmetryDifferenceTests();
   Tests::runBoardReplayTest();
+
+  Tests::runDotsStressTests();
+  Tests::runBoardStressTest();
 
   ScoreValue::freeTables();
 
@@ -434,7 +447,7 @@ int MainCmds::runnnevalcanarytests(const vector<string>& args) {
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       modelFile,modelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN,NNPos::MAX_BOARD_LEN,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_GTP
     );
   }
@@ -493,7 +506,7 @@ int MainCmds::runbeginsearchspeedtest(const vector<string>& args) {
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       modelFile,modelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-      Board::MAX_LEN,Board::MAX_LEN,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      Board::MAX_LEN_X,Board::MAX_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_GTP
     );
   }
@@ -617,7 +630,7 @@ int MainCmds::runownershipspeedtest(const vector<string>& args) {
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       modelFile,modelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-      Board::MAX_LEN,Board::MAX_LEN,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      Board::MAX_LEN_X,Board::MAX_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_GTP
     );
   }

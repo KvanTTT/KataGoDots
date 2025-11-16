@@ -554,9 +554,9 @@ oo...ooo
 
   {
     cout << "Single symmetry and full symmetry raw nets" << endl;
-    Board board(19,19);
     Player nextPla = P_BLACK;
     Rules rules = Rules::parseRules("Japanese");
+    Board board(19,19,rules);
     rules.komi = -4;
     BoardHistory hist(board,nextPla,rules,0);
     hist.makeBoardMoveAssumeLegal(board,Location::ofString("A1",board),P_BLACK,NULL);
@@ -762,7 +762,7 @@ void Tests::runSearchTestsV9(const string& modelFile, bool inputsNHWC, bool useN
   Logger logger(nullptr, logToStdout, logToStderr, logTime);
 
   int symmetry = 4;
-  NNEvaluator* nnEval = startNNEval(modelFile,logger,"",NNPos::MAX_BOARD_LEN,NNPos::MAX_BOARD_LEN,symmetry,inputsNHWC,useNHWC,useFP16,false,false);
+  NNEvaluator* nnEval = startNNEval(modelFile,logger,"",NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,symmetry,inputsNHWC,useNHWC,useFP16,false,false);
   runV9Positions(nnEval, logger);
   delete nnEval;
 

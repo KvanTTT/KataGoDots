@@ -681,10 +681,12 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
   const int numTotalThreads = numWorkerThreads * numSearchThreads;
 
   const int dataBoardLen = cfg.getInt("dataBoardLen",3,Board::MAX_LEN);
+  const int dataBoardLenX = cfg.contains(DATA_LEN_X_KEY) ? cfg.getInt(DATA_LEN_X_KEY,3,Board::MAX_LEN_X) : dataBoardLen;
+  const int dataBoardLenY = cfg.contains(DATA_LEN_Y_KEY) ? cfg.getInt(DATA_LEN_Y_KEY,3,Board::MAX_LEN_Y) : dataBoardLen;
   const int maxApproxRowsPerTrainFile = cfg.getInt("maxApproxRowsPerTrainFile",1,100000000);
 
   const std::vector<std::pair<int,int>> allowedBoardSizes =
-    cfg.getNonNegativeIntDashedPairs("allowedBoardSizes", 2, Board::MAX_LEN);
+    cfg.getNonNegativeIntDashedPairs("allowedBoardSizes", 2, Board::MAX_LEN_X, Board::MAX_LEN_Y);
 
   if(dataBoardLen > Board::MAX_LEN)
     throw StringError("dataBoardLen > maximum board len, must recompile to increase");
@@ -712,7 +714,7 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       nnModelFile,nnModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN,NNPos::MAX_BOARD_LEN,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_ANALYSIS
     );
   }
@@ -814,8 +816,8 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
         (maxApproxRowsPerTrainFile * 4/3 + Board::MAX_PLAY_SIZE * 2 + 100),
         numBinaryChannels,
         numGlobalChannels,
-        dataBoardLen,
-        dataBoardLen,
+        dataBoardLenX,
+        dataBoardLenY,
         hasMetadataInput
       )
     );
@@ -868,12 +870,13 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
       return;
     }
 
-    if(xySize.x > dataBoardLen || xySize.y > dataBoardLen) {
+    if(xySize.x > dataBoardLenX || xySize.y > dataBoardLenY) {
       logger.write(
-        "SGF board size > dataBoardLen in " + fileName + ":"
+        "SGF board sizeX > dataBoardLenX or sizeY > dataBoardLenY in " + fileName + ":"
         + " " + Global::intToString(xySize.x)
         + " " + Global::intToString(xySize.y)
-        + " " + Global::intToString(dataBoardLen)
+        + " " + Global::intToString(dataBoardLenX)
+        + " " + Global::intToString(dataBoardLenY)
       );
       reportSgfDone(false,"SGFGreaterThanDataBoardLen");
       return;
@@ -1372,11 +1375,13 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
     // No friendly pass since we want to complete consistent with strict rules
     rules.friendlyPassOk = false;
 
-    Board board;
+    // TODO: Fix construction of board and hist
+    Board board(Rules::DEFAULT_GO);
     Player nextPla;
-    BoardHistory hist;
+    BoardHistory hist(Rules::DEFAULT_GO);
     try {
-      sgf->setupInitialBoardAndHist(rules, board, nextPla, hist);
+      hist = sgf->setupInitialBoardAndHist(rules, nextPla);
+      board = hist.initialBoard;
     }
     catch(const StringError& e) {
       logger.write("Bad initial setup in sgf " + fileName + " " + e.what());
@@ -1878,7 +1883,7 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
       }
       bool suc = hist.isLegal(board,move.loc,move.pla);
       if(!suc) {
-        logger.write("Illegal move near start in " + fileName + " move " + Location::toString(move.loc, board.x_size, board.y_size) + sizeStr);
+        logger.write("Illegal move near start in " + fileName + " move " + Location::toString(move.loc, board) + sizeStr);
         reportSgfDone(false,"MovesIllegalMoveNearStart");
         return;
       }
@@ -1943,7 +1948,7 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
       }
       bool suc = hist.isLegal(board,move.loc,move.pla);
       if(!suc) {
-        logger.write("Illegal move in " + fileName + " turn " + Global::intToString(m) + " move " + Location::toString(move.loc, board.x_size, board.y_size));
+        logger.write("Illegal move in " + fileName + " turn " + Global::intToString(m) + " move " + Location::toString(move.loc, board));
         reportSgfDone(false,"MovesIllegal");
         return;
       }

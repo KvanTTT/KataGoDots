@@ -12,12 +12,12 @@ namespace NNModelVersion {
   constexpr int oldestInputsVersionImplemented = 3;
 
   // Which V* feature version from NNInputs does a given model version consume?
-  int getInputsVersion(int modelVersion);
+  int getInputsVersion(int modelVersion, bool dotsGame);
 
   // Convenience functions, feeds forward the number of features and the size of
   // the row vector that the net takes as input
-  int getNumSpatialFeatures(int modelVersion);
-  int getNumGlobalFeatures(int modelVersion);
+  int getNumSpatialFeatures(int modelVersion, bool dotsGame);
+  int getNumGlobalFeatures(int modelVersion, bool dotsGame);
 
   // SGF metadata encoder input versions
   int getNumInputMetaChannels(int metaEncoderVersion);

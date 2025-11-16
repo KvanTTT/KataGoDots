@@ -86,10 +86,10 @@ void Tests::runRulesTests() {
       for(int x = 0; x<board.x_size; x++) {
         Loc loc = Location::getLoc(x,y,board.x_size);
         if(board.colors[loc] == C_EMPTY && !board.isIllegalSuicide(loc,pla,hist.rules.multiStoneSuicideLegal) && !hist.isLegal(board,loc,pla)) {
-          o << "Illegal: " << Location::toStringMach(loc,board.x_size) << " " << PlayerIO::colorToChar(pla) << endl;
+          o << "Illegal: " << Location::toStringMach(loc, board.x_size, board.isDots()) << " " << PlayerIO::colorToChar(pla) << endl;
         }
         if(hist.koRecapBlocked[loc]) {
-          o << "Ko-recap-blocked: " << Location::toStringMach(loc,board.x_size) << endl;
+          o << "Ko-recap-blocked: " << Location::toStringMach(loc, board.x_size, board.isDots()) << endl;
         }
       }
     }
@@ -109,7 +109,7 @@ void Tests::runRulesTests() {
     if(!hist.isGameFinished)
       o << "Game is not over" << endl;
     else {
-      o << "Winner: " << PlayerIO::playerToString(hist.winner) << endl;
+      o << "Winner: " << PlayerIO::playerToString(hist.winner,hist.rules.isDots) << endl;
       o << "W-B Score: " << hist.finalWhiteMinusBlackScore << endl;
       o << "isNoResult: " << hist.isNoResult << endl;
       o << "isResignation: " << hist.isResignation << endl;
@@ -3463,13 +3463,11 @@ HASH: 5C26A060FA78FD93FFF559C72BD7C6A4
 
     std::unique_ptr<CompactSgf> sgf = CompactSgf::parse(sgfStr);
 
-    Board board;
-    BoardHistory hist;
     Player nextPla = P_BLACK;
     int turnIdxToSetup = (int)sgf->moves.size();
     Rules initialRules = sgf->getRulesOrFailAllowUnspecified(Rules());
 
-    sgf->setupBoardAndHistAssumeLegal(initialRules, board, nextPla, hist, turnIdxToSetup);
+    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, turnIdxToSetup);
     string expected = R"%%(
 HASH: EB867913318513FD9DE98EDE86AE8CE0
    A B C D E F G H J K L M
@@ -5272,20 +5270,49 @@ Last moves pass pass pass pass H7 G9 F9 H7
     Rand baseRand(name);
 
     constexpr int numBoards = 6;
-    Board boards[numBoards] = {
-      Board(2,2),
-      Board(5,1),
-      Board(6,1),
-      Board(2,3),
-      Board(4,2),
-    };
     for(int i = 0; i<numBoards; i++) {
       for(int j = 0; j<rules.size(); j++) {
         Player nextPla = P_BLACK;
-        Board board = boards[i];
-        BoardHistory hist(board,nextPla,rules[j],0);
-        Board board2 = boards[i];
-        BoardHistory hist2(board2,nextPla,rules[j],0);
+        const Rules& currentRules = rules[j];
+
+        int x_size;
+        int y_size;
+        switch(i) {
+          case 0:
+            x_size = 2;
+            y_size = 2;
+            break;
+          case 1:
+            x_size = 5;
+            y_size = 1;
+            break;
+          case 2:
+            x_size = 6;
+            y_size = 1;
+            break;
+          case 3:
+            x_size = 2;
+            y_size = 3;
+            break;
+          case 4:
+            x_size = 4;
+            y_size = 2;
+            break;
+          case 5:
+            x_size = Board::DEFAULT_LEN_X;
+            y_size = Board::DEFAULT_LEN_Y;
+            break;
+          default:
+            throw std::runtime_error("Invalid board index");
+            break;
+        }
+
+        Board board = Board(x_size,y_size,currentRules);
+        Board board2 = Board(x_size,y_size,currentRules);
+
+        BoardHistory hist(board,nextPla,currentRules,0);
+        BoardHistory hist2(board2,nextPla,currentRules,0);
+
         KoHashTable* table = new KoHashTable();
 
         Rand rand(baseRand.nextUInt64());
@@ -5369,27 +5396,30 @@ Last moves pass pass pass pass H7 G9 F9 H7
       bool suc;
 
       Rules parsed;
-      suc = Rules::tryParseRules(rules[i].toString(),parsed);
+      suc = Rules::tryParseRules(rules[i].toString(), parsed, rules[i].isDots);
       testAssert(suc);
       testAssert(rules[i] == parsed);
 
       Rules parsed2;
-      suc = Rules::tryParseRulesWithoutKomi(rules[i].toStringNoKomi(),parsed2,rules[i].komi);
+      suc = Rules::tryParseRulesWithoutKomi(rules[i].toString(false), parsed2, rules[i].komi, rules[i].isDots);
       testAssert(suc);
       testAssert(rules[i] == parsed2);
 
       Rules parsed3;
-      suc = Rules::tryParseRules(rules[i].toJsonString(),parsed3);
+      suc = Rules::tryParseRules(rules[i].toJsonString(), parsed3, rules[i].isDots);
+      if (!suc) {
+        cout << "Failed to parse rules: " << rules[i].toJsonString() << endl;
+      }
       testAssert(suc);
       testAssert(rules[i] == parsed3);
 
       Rules parsed4;
-      suc = Rules::tryParseRulesWithoutKomi(rules[i].toJsonStringNoKomi(),parsed4,rules[i].komi);
+      suc = Rules::tryParseRulesWithoutKomi(rules[i].toJsonStringNoKomi(), parsed4, rules[i].komi, rules[i].isDots);
       testAssert(suc);
       testAssert(rules[i] == parsed4);
 
       Rules parsed5;
-      suc = Rules::tryParseRulesWithoutKomi(rules[i].toJsonStringNoKomiMaybeOmitStuff(),parsed5,rules[i].komi);
+      suc = Rules::tryParseRulesWithoutKomi(rules[i].toJsonStringNoKomiMaybeOmitStuff(), parsed5, rules[i].komi, rules[i].isDots);
       testAssert(suc);
       testAssert(rules[i] == parsed5);
     }

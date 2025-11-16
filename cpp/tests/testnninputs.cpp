@@ -14,20 +14,7 @@ static void printNNInputHWAndBoard(
   ostream& out, int inputsVersion, const Board& board, const BoardHistory& hist,
   int nnXLen, int nnYLen, bool inputsUseNHWC, T* row, int c
 ) {
-  int numFeatures;
-  static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
-  if(inputsVersion == 3)
-    numFeatures = NNInputs::NUM_FEATURES_SPATIAL_V3;
-  else if(inputsVersion == 4)
-    numFeatures = NNInputs::NUM_FEATURES_SPATIAL_V4;
-  else if(inputsVersion == 5)
-    numFeatures = NNInputs::NUM_FEATURES_SPATIAL_V5;
-  else if(inputsVersion == 6)
-    numFeatures = NNInputs::NUM_FEATURES_SPATIAL_V6;
-  else if(inputsVersion == 7)
-    numFeatures = NNInputs::NUM_FEATURES_SPATIAL_V7;
-  else
-    testAssert(false);
+  const int numFeatures = NNInputs::getNumberOfSpatialFeatures(inputsVersion, false);
 
   out << "Channel: " << c << endl;
 
@@ -67,20 +54,7 @@ static void printNNInputHWAndBoard(
 
 template <typename T>
 static void printNNInputGlobal(ostream& out, int inputsVersion, T* row, int c) {
-  int numFeatures;
-  static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
-  if(inputsVersion == 3)
-    numFeatures = NNInputs::NUM_FEATURES_GLOBAL_V3;
-  else if(inputsVersion == 4)
-    numFeatures = NNInputs::NUM_FEATURES_GLOBAL_V4;
-  else if(inputsVersion == 5)
-    numFeatures = NNInputs::NUM_FEATURES_GLOBAL_V5;
-  else if(inputsVersion == 6)
-    numFeatures = NNInputs::NUM_FEATURES_GLOBAL_V6;
-  else if(inputsVersion == 7)
-    numFeatures = NNInputs::NUM_FEATURES_GLOBAL_V7;
-  else
-    testAssert(false);
+  const int numFeatures = NNInputs::getNumberOfGlobalFeatures(inputsVersion, false);
   (void)numFeatures;
 
   out << "Channel: " << c;
@@ -117,6 +91,21 @@ static double finalScoreIfGameEndedNow(const BoardHistory& baseHist, const Board
 //==================================================================================================================
 //==================================================================================================================
 
+static Hash128 fillRowAndGetHash(
+  const int version,
+  const Board& board, const BoardHistory& hist,
+  const Player nextPla,
+  const MiscNNInputParams& nnInputParams,
+  const int nnXLen,
+  const int nnYLen,
+  const bool inputsUseNHWC,
+  float* rowBin,
+  float* rowGlobal
+  ) {
+  const Hash128 hash = NNInputs::getHash(board,hist,nextPla,nnInputParams);
+  NNInputs::fillRowVN(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+  return hash;
+}
 
 void Tests::runNNInputsV3V4Tests() {
   cout << "Running NN inputs V3V4V5V6 tests" << endl;
@@ -124,59 +113,10 @@ void Tests::runNNInputsV3V4Tests() {
   out << std::setprecision(5);
 
   auto allocateRows = [](int version, int nnXLen, int nnYLen, int& numFeaturesBin, int& numFeaturesGlobal, float*& rowBin, float*& rowGlobal) {
-    static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
-    if(version == 3) {
-      numFeaturesBin = NNInputs::NUM_FEATURES_SPATIAL_V3;
-      numFeaturesGlobal = NNInputs::NUM_FEATURES_GLOBAL_V3;
-      rowBin = new float[NNInputs::NUM_FEATURES_SPATIAL_V3 * nnXLen * nnYLen];
-      rowGlobal = new float[NNInputs::NUM_FEATURES_GLOBAL_V3];
-    }
-    else if(version == 4) {
-      numFeaturesBin = NNInputs::NUM_FEATURES_SPATIAL_V4;
-      numFeaturesGlobal = NNInputs::NUM_FEATURES_GLOBAL_V4;
-      rowBin = new float[NNInputs::NUM_FEATURES_SPATIAL_V4 * nnXLen * nnYLen];
-      rowGlobal = new float[NNInputs::NUM_FEATURES_GLOBAL_V4];
-    }
-    else if(version == 5) {
-      numFeaturesBin = NNInputs::NUM_FEATURES_SPATIAL_V5;
-      numFeaturesGlobal = NNInputs::NUM_FEATURES_GLOBAL_V5;
-      rowBin = new float[NNInputs::NUM_FEATURES_SPATIAL_V5 * nnXLen * nnYLen];
-      rowGlobal = new float[NNInputs::NUM_FEATURES_GLOBAL_V5];
-    }
-    else if(version == 6) {
-      numFeaturesBin = NNInputs::NUM_FEATURES_SPATIAL_V6;
-      numFeaturesGlobal = NNInputs::NUM_FEATURES_GLOBAL_V6;
-      rowBin = new float[NNInputs::NUM_FEATURES_SPATIAL_V6 * nnXLen * nnYLen];
-      rowGlobal = new float[NNInputs::NUM_FEATURES_GLOBAL_V6];
-    }
-    else if(version == 7) {
-      numFeaturesBin = NNInputs::NUM_FEATURES_SPATIAL_V7;
-      numFeaturesGlobal = NNInputs::NUM_FEATURES_GLOBAL_V7;
-      rowBin = new float[NNInputs::NUM_FEATURES_SPATIAL_V7 * nnXLen * nnYLen];
-      rowGlobal = new float[NNInputs::NUM_FEATURES_GLOBAL_V7];
-    }
-    else
-      testAssert(false);
-  };
-
-  auto fillRows = [](int version, Hash128& hash,
-                     Board& board, const BoardHistory& hist, Player nextPla, MiscNNInputParams nnInputParams, int nnXLen, int nnYLen, bool inputsUseNHWC,
-                     float* rowBin, float* rowGlobal) {
-    hash = NNInputs::getHash(board,hist,nextPla,nnInputParams);
-
-    static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
-    if(version == 3)
-      NNInputs::fillRowV3(board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
-    else if(version == 4)
-      NNInputs::fillRowV4(board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
-    else if(version == 5)
-      NNInputs::fillRowV5(board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
-    else if(version == 6)
-      NNInputs::fillRowV6(board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
-    else if(version == 7)
-      NNInputs::fillRowV7(board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
-    else
-      testAssert(false);
+    numFeaturesBin = NNInputs::getNumberOfSpatialFeatures(version, false);
+    numFeaturesGlobal = NNInputs::getNumberOfGlobalFeatures(version, false);
+    rowBin = new float[numFeaturesBin * nnXLen * nnYLen];
+    rowGlobal = new float[numFeaturesGlobal];
   };
 
   static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
@@ -195,12 +135,11 @@ void Tests::runNNInputsV3V4Tests() {
 
     for(int version = minVersion; version <= maxVersion; version++) {
       cout << "VERSION " << version << endl;
-      Board board;
       Player nextPla;
-      BoardHistory hist;
       Rules initialRules = Rules::getTrompTaylorish();
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
-      sgf->setupInitialBoardAndHist(initialRules, board, nextPla, hist);
+      BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla);
+      Board& board = hist.initialBoard;
       vector<Move>& moves = sgf->moves;
 
       for(size_t i = 0; i<moves.size(); i++) {
@@ -219,10 +158,11 @@ void Tests::runNNInputsV3V4Tests() {
       allocateRows(version,nnXLen,nnYLen,numFeaturesBin,numFeaturesGlobal,rowBin,rowGlobal);
 
       auto run = [&](bool inputsUseNHWC) {
-        Hash128 hash;
         MiscNNInputParams nnInputParams;
         nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-        fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+
+        const Hash128 hash = fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+
         out << hash << endl;
         for(int c = 0; c<numFeaturesBin; c++)
           printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,c);
@@ -254,12 +194,11 @@ void Tests::runNNInputsV3V4Tests() {
 
     for(int version = minVersion; version <= maxVersion; version++) {
       cout << "VERSION " << version << endl;
-      Board board;
       Player nextPla;
-      BoardHistory hist;
       Rules initialRules = Rules::getTrompTaylorish();
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
-      sgf->setupInitialBoardAndHist(initialRules, board, nextPla, hist);
+      BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla);
+      Board& board = hist.initialBoard;
       vector<Move>& moves = sgf->moves;
 
       for(size_t i = 0; i<moves.size(); i++) {
@@ -278,10 +217,9 @@ void Tests::runNNInputsV3V4Tests() {
       allocateRows(version,nnXLen,nnYLen,numFeaturesBin,numFeaturesGlobal,rowBin,rowGlobal);
 
       auto run = [&](bool inputsUseNHWC) {
-        Hash128 hash;
         MiscNNInputParams nnInputParams;
         nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-        fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+        const Hash128 hash = fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
         out << hash << endl;
         int c = version != 5 ? 6 : 3;
         printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,c);
@@ -314,12 +252,11 @@ void Tests::runNNInputsV3V4Tests() {
 
     for(int version = minVersion; version <= maxVersion; version++) {
       cout << "VERSION " << version << endl;
-      Board board;
       Player nextPla;
-      BoardHistory hist;
       Rules initialRules = Rules::getTrompTaylorish();
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
-      sgf->setupInitialBoardAndHist(initialRules, board, nextPla, hist);
+      BoardHistory hist =  sgf->setupInitialBoardAndHist(initialRules, nextPla);
+      Board& board = hist.initialBoard;
       vector<Move>& moves = sgf->moves;
 
       for(size_t i = 0; i<moves.size(); i++) {
@@ -338,10 +275,9 @@ void Tests::runNNInputsV3V4Tests() {
       allocateRows(version,nnXLen,nnYLen,numFeaturesBin,numFeaturesGlobal,rowBin,rowGlobal);
 
       auto run = [&](bool inputsUseNHWC) {
-        Hash128 hash;
         MiscNNInputParams nnInputParams;
         nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-        fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+        const Hash128 hash = fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
         out << hash << endl;
         for(int c = 0; c<numFeaturesBin; c++)
           printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,c);
@@ -373,12 +309,11 @@ void Tests::runNNInputsV3V4Tests() {
 
     for(int version = minVersion; version <= maxVersion; version++) {
       cout << "VERSION " << version << endl;
-      Board board;
       Player nextPla;
-      BoardHistory hist;
       Rules initialRules = Rules::getTrompTaylorish();
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
-      sgf->setupInitialBoardAndHist(initialRules, board, nextPla, hist);
+      BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla);
+      Board& board = hist.initialBoard;
       vector<Move>& moves = sgf->moves;
 
       for(size_t i = 0; i<moves.size(); i++) {
@@ -397,10 +332,9 @@ void Tests::runNNInputsV3V4Tests() {
       allocateRows(version,nnXLen,nnYLen,numFeaturesBin,numFeaturesGlobal,rowBin,rowGlobal);
 
       auto run = [&](bool inputsUseNHWC) {
-        Hash128 hash;
         MiscNNInputParams nnInputParams;
         nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-        fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+        const Hash128 hash = fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
         out << hash << endl;
         for(int c = 0; c<numFeaturesBin; c++)
           printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,c);
@@ -456,10 +390,9 @@ xxx..xx
       allocateRows(version,nnXLen,nnYLen,numFeaturesBin,numFeaturesGlobal,rowBin,rowGlobal);
 
       bool inputsUseNHWC = true;
-      Hash128 hash;
       MiscNNInputParams nnInputParams;
       nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-      fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+      Hash128 hash = fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
 
       int c = 18;
       printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,c);
@@ -470,14 +403,14 @@ xxx..xx
 
       nextPla = P_WHITE;
       hist.clear(board,nextPla,initialRules,0);
-      fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+      hash = fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
       for(c = 0; c<numFeaturesGlobal; c++)
         printNNInputGlobal(out,version,rowGlobal,c);
 
       nextPla = P_BLACK;
       initialRules.komi = 1;
       hist.clear(board,nextPla,initialRules,0);
-      fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+      hash = fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
       for(c = 0; c<numFeaturesGlobal; c++)
         printNNInputGlobal(out,version,rowGlobal,c);
 
@@ -495,7 +428,6 @@ xxx..xx
     cout << "-----------------------------------------------------------------" <<  endl;
 
     for(int size = 7; size >= 6; size--) {
-      Board board = Board(size,size);
       Player nextPla = P_BLACK;
 
       vector<Rules> rules = {
@@ -595,12 +527,13 @@ xxx..xx
           for(int c = 0; c<numFeaturesGlobal; c++) {
             for(int j = 0; j<24; j++) {
               testAssert(i + j < rules.size());
-              BoardHistory hist(board,nextPla,rules[i+j],0);
+              const Rules& currentRules = rules[i+j];
+              Board board = Board(size,size,currentRules);
+              BoardHistory hist(board,nextPla,currentRules,0);
               bool inputsUseNHWC = true;
-              Hash128 hash;
               MiscNNInputParams nnInputParams;
               nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-              fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+              fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
               out << rowGlobal[c] << " ";
             }
             out << endl;
@@ -632,12 +565,11 @@ xxx..xx
       if(version == 5)
         continue;
       cout << "VERSION " << version << endl;
-      Board board;
       Player nextPla;
-      BoardHistory hist;
       Rules initialRules = Rules(Rules::KO_SIMPLE, Rules::SCORING_TERRITORY, Rules::TAX_SEKI, false, false, Rules::WHB_ZERO, false, 0.0f);
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
-      sgf->setupInitialBoardAndHist(initialRules, board, nextPla, hist);
+      BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla);
+      Board& board = hist.initialBoard;
 
       int nnXLen = 6;
       int nnYLen = 6;
@@ -664,10 +596,9 @@ xxx..xx
           }
           out << endl;
           bool inputsUseNHWC = true;
-          Hash128 hash;
           MiscNNInputParams nnInputParams;
           nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-          fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+          fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
           out << "Pass Hist Channels: ";
           for(int c = 0; c<5; c++)
             out << rowGlobal[c] << " ";
@@ -709,12 +640,11 @@ xxx..xx
       if(version == 5)
         continue;
       cout << "VERSION " << version << endl;
-      Board board;
       Player nextPla;
-      BoardHistory hist;
       Rules initialRules;
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
-      sgf->setupInitialBoardAndHist(initialRules, board, nextPla, hist);
+      BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla);
+      Board& board = hist.initialBoard;
       vector<Move>& moves = sgf->moves;
 
       int nnXLen = 13;
@@ -735,10 +665,9 @@ xxx..xx
         if(i == 163) {
           out << "Move " << i << endl;
           bool inputsUseNHWC = true;
-          Hash128 hash;
           MiscNNInputParams nnInputParams;
           nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-          fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+          fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
           printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,18);
           printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,19);
         }
@@ -793,10 +722,9 @@ o.xoo.x
 
           auto run = [&](bool inputsUseNHWC) {
             Player nextPla = hist.moveHistory.size() > 0 ? getOpp(hist.moveHistory[hist.moveHistory.size()-1].pla) : hist.initialPla;
-            Hash128 hash;
             MiscNNInputParams nnInputParams;
             nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-            fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+            const Hash128 hash = fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
             out << hash << endl;
             printNNInputGlobal(out,version,rowGlobal,5);
             int c = 18;
@@ -887,16 +815,15 @@ o.xoo.x
       float* rowGlobal;
       allocateRows(version,nnXLen,nnYLen,numFeaturesBin,numFeaturesGlobal,rowBin,rowGlobal);
 
-      Board board = Board(9,1);
       Player nextPla = P_BLACK;
       Rules initialRules = Rules::getSimpleTerritory();
+      Board board = Board(9,1,initialRules);
       BoardHistory hist(board,nextPla,initialRules,0);
 
       auto run = [&](bool inputsUseNHWC) {
-        Hash128 hash;
         MiscNNInputParams nnInputParams;
         nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-        fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+        fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
         printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,9);
         printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,10);
         printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,11);
@@ -960,20 +887,19 @@ o.xoo.x
 
       auto test = [&](const Board& board, const BoardHistory& hist, Player nextPla) {
         bool inputsUseNHWC = true;
-        Hash128 hash;
         Board b = board;
         MiscNNInputParams nnInputParams;
         nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
-        fillRows(version,hash,b,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+        fillRowAndGetHash(version,b,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
         for(int c = 0; c<numFeaturesGlobal; c++)
           cout << rowGlobal[c] << " ";
         cout << endl;
       };
 
       for(int i = 0; i<rules.size(); i++) {
-        Board board = Board(size,size);
         Player nextPla = P_BLACK;
-        Rules initialRules = rules[i];
+        const Rules& initialRules = rules[i];
+        Board board = Board(size,size,initialRules);
         BoardHistory hist(board,nextPla,initialRules,0);
         cout << "----------------------------------------" << endl;
         cout << "Black makes 3 moves in a row" << endl;
@@ -1408,11 +1334,10 @@ ooxooxo
             cout << "rules " << rulesToUse.toString() << endl;
             cout << "enablePassingHacks " << enablePassingHacks << " conservativePassAndIsRoot " << conservativePassAndIsRoot << endl;
             cout << "VERSION " << version << endl;
-            Board board;
             Player nextPla;
-            BoardHistory hist;
             Rules rules = sgf->getRulesOrFailAllowUnspecified(rulesToUse);
-            sgf->setupInitialBoardAndHist(rules, board, nextPla, hist);
+            BoardHistory hist = sgf->setupInitialBoardAndHist(rules, nextPla);
+            Board& board = hist.initialBoard;
 
             int nnXLen = 9;
             int nnYLen = 9;
@@ -1426,12 +1351,11 @@ ooxooxo
 
             for(size_t i = 0; i<moves.size()+1; i++) {
               bool inputsUseNHWC = false;
-              Hash128 hash;
               MiscNNInputParams nnInputParams;
               nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
               nnInputParams.enablePassingHacks = enablePassingHacks;
               nnInputParams.conservativePassAndIsRoot = conservativePassAndIsRoot;
-              fillRows(version,hash,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+              const Hash128 hash = fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
 
               auto histLocStr = [&](int lookback) {
                 int numPosesFound = 0;

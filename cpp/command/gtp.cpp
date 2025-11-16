@@ -1,23 +1,28 @@
-#include "../core/global.h"
+#include <optional>
+
+#include "../command/commandline.h"
 #include "../core/commandloop.h"
 #include "../core/config_parser.h"
-#include "../core/fileutils.h"
-#include "../core/timer.h"
 #include "../core/datetime.h"
-#include "../core/makedir.h"
+#include "../core/fileutils.h"
+#include "../core/global.h"
 #include "../core/test.h"
+#include "../core/timer.h"
 #include "../dataio/sgf.h"
-#include "../search/searchnode.h"
+#include "../main.h"
+#include "../program/play.h"
+#include "../program/playutils.h"
+#include "../program/setup.h"
 #include "../search/asyncbot.h"
 #include "../search/patternbonustable.h"
-#include "../program/setup.h"
-#include "../program/playutils.h"
-#include "../program/play.h"
+#include "../search/searchnode.h"
 #include "../tests/tests.h"
-#include "../command/commandline.h"
-#include "../main.h"
 
 using namespace std;
+
+const string GET_MOVES_COMMAND = "get_moves";
+const string GET_POSITION_COMMAND = "get_position";
+const string GET_BOARDSIZE = "get_boardsize";
 
 static const vector<string> knownCommands = {
   //Basic GTP commands
@@ -31,14 +36,17 @@ static const vector<string> knownCommands = {
   //GTP extension - specify "boardsize X:Y" or "boardsize X Y" for non-square sizes
   //rectangular_boardsize is an alias for boardsize, intended to make it more evident that we have such support
   "boardsize",
+  GET_BOARDSIZE,
   "rectangular_boardsize",
 
   "clear_board",
   "set_position",
+  GET_POSITION_COMMAND,
   "komi",
   //GTP extension - get KataGo's current komi setting
   "get_komi",
   "play",
+  GET_MOVES_COMMAND,
   "undo",
 
   //GTP extension - specify rules
@@ -198,7 +206,7 @@ static bool noWhiteStonesOnBoard(const Board& board) {
   for(int y = 0; y < board.y_size; y++) {
     for(int x = 0; x < board.x_size; x++) {
       Loc loc = Location::getLoc(x,y,board.x_size);
-      if(board.colors[loc] == P_WHITE)
+      if(board.getColor(loc) == P_WHITE)
         return false;
     }
   }
@@ -415,7 +423,7 @@ struct GTPEngine {
      isGenmoveParams(true),
      bTimeControls(),
      wTimeControls(),
-     initialBoard(),
+     initialBoard(initialRules),
      initialPla(P_BLACK),
      moveHistory(),
      recentWinLossValues(),
@@ -457,9 +465,10 @@ struct GTPEngine {
   //Specify -1 for the sizes for a default
   void setOrResetBoardSize(ConfigParser& cfg, Logger& logger, Rand& seedRand, int boardXSize, int boardYSize, bool loggingToStderr) {
     bool wasDefault = false;
+    bool isDots = cfg.getBoolOrDefault(DOTS_KEY, false);
     if(boardXSize == -1 || boardYSize == -1) {
-      boardXSize = Board::DEFAULT_LEN;
-      boardYSize = Board::DEFAULT_LEN;
+      boardXSize = isDots ? Board::DEFAULT_LEN_X_DOTS : Board::DEFAULT_LEN_X;
+      boardYSize = isDots ? Board::DEFAULT_LEN_Y_DOTS : Board::DEFAULT_LEN_Y;
       wasDefault = true;
     }
 
@@ -469,8 +478,8 @@ struct GTPEngine {
 
     if(cfg.contains("gtpForceMaxNNSize") && cfg.getBool("gtpForceMaxNNSize")) {
       defaultRequireExactNNLen = false;
-      nnXLen = Board::MAX_LEN;
-      nnYLen = Board::MAX_LEN;
+      nnXLen = Board::MAX_LEN_X;
+      nnYLen = Board::MAX_LEN_Y;
     }
 
     //If the neural net is wrongly sized, we need to create or recreate it
@@ -550,14 +559,16 @@ struct GTPEngine {
       else
         searchRandSeed = Global::uint64ToString(seedRand.nextUInt64());
 
-      bot = new AsyncBot(genmoveParams, nnEval, humanEval, &logger, searchRandSeed);
+      bot = new AsyncBot(genmoveParams, nnEval, humanEval, &logger, searchRandSeed, currentRules);
       bot->setCopyOfExternalPatternBonusTable(patternBonusTable);
       isGenmoveParams = true;
 
-      Board board(boardXSize,boardYSize);
-      Player pla = P_BLACK;
+      Board board(boardXSize,boardYSize,currentRules);
+      board.setStartPos(seedRand);
+      constexpr Player pla = P_BLACK;
       BoardHistory hist(board,pla,currentRules,0);
-      vector<Move> newMoveHistory;
+      hist.setInitialTurnNumber(board.numStonesOnBoard());
+      const vector<Move> newMoveHistory;
       setPositionAndRules(pla,board,hist,board,pla,newMoveHistory);
       clearStatsForNewGame();
     }
@@ -569,7 +580,7 @@ struct GTPEngine {
       bot->setCopyOfExternalPatternBonusTable(patternBonusTable);
   }
 
-  void setPositionAndRules(Player pla, const Board& board, const BoardHistory& h, const Board& newInitialBoard, Player newInitialPla, const vector<Move> newMoveHistory) {
+  void setPositionAndRules(Player pla, const Board& board, const BoardHistory& h, const Board& newInitialBoard, Player newInitialPla, const vector<Move>& newMoveHistory) {
     BoardHistory hist(h);
     //Ensure we always have this value correct
     hist.setAssumeMultipleStartingBlackMovesAreHandicap(assumeMultipleStartingBlackMovesAreHandicap);
@@ -587,7 +598,8 @@ struct GTPEngine {
     assert(bot->getRootHist().rules == currentRules);
     int newXSize = bot->getRootBoard().x_size;
     int newYSize = bot->getRootBoard().y_size;
-    Board board(newXSize,newYSize);
+    Board board(newXSize,newYSize,currentRules);
+    board.setStartPos(gtpRand);
     Player pla = P_BLACK;
     BoardHistory hist(board,pla,currentRules,0);
     vector<Move> newMoveHistory;
@@ -597,24 +609,33 @@ struct GTPEngine {
 
   bool setPosition(const vector<Move>& initialStones) {
     assert(bot->getRootHist().rules == currentRules);
-    int newXSize = bot->getRootBoard().x_size;
-    int newYSize = bot->getRootBoard().y_size;
-    Board board(newXSize,newYSize);
-    bool suc = board.setStonesFailIfNoLibs(initialStones);
-    if(!suc)
-      return false;
+    const int newXSize = bot->getRootBoard().x_size;
+    const int newYSize = bot->getRootBoard().y_size;
+
+    vector<Move> startPosMoves;
+    bool startPosIsRandom;
+    vector<Move> remainingPlacementMoves;
+    const int startPos =
+      Rules::recognizeStartPos(initialStones, newXSize, newYSize, startPosMoves, startPosIsRandom, &remainingPlacementMoves);
+
+    currentRules.startPos = startPos;
+    currentRules.startPosIsRandom = startPosIsRandom;
+
+    Board board(newXSize,newYSize,currentRules);
+    if (!board.setStonesFailIfNoLibs(startPosMoves, true)) return false;
+    if (!board.setStonesFailIfNoLibs(remainingPlacementMoves)) return false;
 
     //Sanity check
-    for(int i = 0; i<initialStones.size(); i++) {
-      if(board.colors[initialStones[i].loc] != initialStones[i].pla) {
+    for (const auto initialStone : initialStones) {
+      if(board.getPlacedColor(initialStone.loc) != initialStone.pla) {
         assert(false);
         return false;
       }
     }
-    Player pla = P_BLACK;
+    constexpr Player pla = P_BLACK;
     BoardHistory hist(board,pla,currentRules,0);
-    hist.setInitialTurnNumber(board.numStonesOnBoard()); //Heuristic to guess at what turn this is
-    vector<Move> newMoveHistory;
+    hist.setInitialTurnNumber(board.numStonesOnBoard()); // Heuristic to guess at what turn this is
+    const vector<Move> newMoveHistory;
     setPositionAndRules(pla,board,hist,board,pla,newMoveHistory);
     clearStatsForNewGame();
     return true;
@@ -635,30 +656,46 @@ struct GTPEngine {
   }
 
   bool play(Loc loc, Player pla) {
-    assert(bot->getRootHist().rules == currentRules);
-    bool suc = bot->makeMove(loc,pla,preventEncore);
-    if(suc)
-      moveHistory.push_back(Move(loc,pla));
-    return suc;
+    auto& hist = bot->getRootHist();
+    assert(hist.rules == currentRules);
+    if (hist.isGameFinished) {
+      return false;
+    }
+
+    if(bot->makeMove(loc,pla,preventEncore)) {
+      moveHistory.emplace_back(loc,pla);
+      return true;
+    }
+    return false;
   }
 
-  bool undo() {
-    if(moveHistory.size() <= 0)
+  bool undo(const int movesCount) {
+    auto& hist = bot->getRootHist();
+    assert(hist.rules == currentRules);
+
+    if (movesCount == 0) {
+      return true;
+    }
+
+    const int newMovesCount = static_cast<int>(moveHistory.size() - movesCount);
+    if (newMovesCount < 0) {
       return false;
-    assert(bot->getRootHist().rules == currentRules);
+    }
 
-    vector<Move> moveHistoryCopy = moveHistory;
+    if(moveHistory.empty())
+      return false;
 
-    Board undoneBoard = initialBoard;
+    const vector<Move> moveHistoryCopy = moveHistory;
+
+    const Board undoneBoard = initialBoard;
     BoardHistory undoneHist(undoneBoard,initialPla,currentRules,0);
-    undoneHist.setInitialTurnNumber(bot->getRootHist().initialTurnNumber);
-    vector<Move> emptyMoveHistory;
+    undoneHist.setInitialTurnNumber(hist.initialTurnNumber);
+    const vector<Move> emptyMoveHistory;
     setPositionAndRules(initialPla,undoneBoard,undoneHist,initialBoard,initialPla,emptyMoveHistory);
 
-    for(int i = 0; i<moveHistoryCopy.size()-1; i++) {
-      Loc moveLoc = moveHistoryCopy[i].loc;
-      Player movePla = moveHistoryCopy[i].pla;
-      bool suc = play(moveLoc,movePla);
+    for(int i = 0; i < newMovesCount; i++) {
+      const Move newMove = moveHistoryCopy[i];
+      const bool suc = play(newMove.loc, newMove.pla);
       assert(suc);
       (void)suc; //Avoid warning when asserts are off
     }
@@ -1166,8 +1203,9 @@ struct GTPEngine {
       response = "genmove returned null location or illegal move";
       ostringstream sout;
       sout << "genmove null location or illegal move!?!" << "\n";
-      sout << search->getRootBoard() << "\n";
-      sout << "Pla: " << PlayerIO::playerToString(pla) << "\n";
+      const auto& rootBoard = search->getRootBoard();
+      sout << rootBoard << "\n";
+      sout << "Pla: " << PlayerIO::playerToString(pla,rootBoard.isDots()) << "\n";
       sout << "MoveLoc: " << Location::toString(moveLoc,search->getRootBoard()) << "\n";
       logger.write(sout.str());
       genmoveTimeSum += genmoveTimer.getSeconds();
@@ -1289,24 +1327,28 @@ struct GTPEngine {
     if(args.analyzing) {
       response = "play " + response;
     }
-
-    return;
   }
 
-  void clearCache() {
+  void clearCache() const {
     bot->clearSearch();
     bot->clearEvalCache();
     nnEval->clearCache();
-    if(humanEval != NULL)
+    if(humanEval != nullptr)
       humanEval->clearCache();
   }
 
+  // TODO: Fix handicap placement for Dots game
   void placeFixedHandicap(int n, string& response, bool& responseIsError) {
-    int xSize = bot->getRootBoard().x_size;
-    int ySize = bot->getRootBoard().y_size;
-    Board board(xSize,ySize);
+    const int xSize = bot->getRootBoard().x_size;
+    const int ySize = bot->getRootBoard().y_size;
+    Board board(xSize,ySize,currentRules);
+    board.setStartPos(gtpRand);
+    vector<Loc> handicapLocs;
     try {
-      PlayUtils::placeFixedHandicap(board,n);
+      handicapLocs = PlayUtils::generateFixedHandicap(board, n);
+      for (const auto loc : handicapLocs) {
+        board.setStoneFailIfNoLibs(loc, P_BLACK);
+      }
     }
     catch(const StringError& e) {
       responseIsError = true;
@@ -1325,18 +1367,13 @@ struct GTPEngine {
     pla = P_WHITE;
 
     response = "";
-    for(int y = 0; y<board.y_size; y++) {
-      for(int x = 0; x<board.x_size; x++) {
-        Loc loc = Location::getLoc(x,y,board.x_size);
-        if(board.colors[loc] != C_EMPTY) {
-          response += " " + Location::toString(loc,board);
-        }
-      }
+    for (const auto loc : handicapLocs) {
+      response += " " + Location::toString(loc ,board);
     }
     response = Global::trim(response);
     (void)responseIsError;
 
-    vector<Move> newMoveHistory;
+    const vector<Move> newMoveHistory;
     setPositionAndRules(pla,board,hist,board,pla,newMoveHistory);
     clearStatsForNewGame();
   }
@@ -1344,9 +1381,9 @@ struct GTPEngine {
   void placeFreeHandicap(int n, string& response, bool& responseIsError, Rand& rand) {
     stopAndWait();
 
-    //If asked to place more, we just go ahead and only place up to 30, or a quarter of the board
-    int xSize = bot->getRootBoard().x_size;
-    int ySize = bot->getRootBoard().y_size;
+    // If asked to place more, we just go ahead and only place up to 30, or a quarter of the board
+    const int xSize = bot->getRootBoard().x_size;
+    const int ySize = bot->getRootBoard().y_size;
     int maxHandicap = xSize*ySize / 4;
     if(maxHandicap > 30)
       maxHandicap = 30;
@@ -1355,11 +1392,12 @@ struct GTPEngine {
 
     assert(bot->getRootHist().rules == currentRules);
 
-    Board board(xSize,ySize);
+    Board board(xSize,ySize,currentRules);
+    board.setStartPos(rand);
     Player pla = P_BLACK;
     BoardHistory hist(board,pla,currentRules,0);
     double extraBlackTemperature = 0.25;
-    PlayUtils::playExtraBlack(bot->getSearchStopAndWait(), n, board, hist, extraBlackTemperature, rand);
+    const auto& handicapLocs = PlayUtils::playExtraBlack(bot->getSearchStopAndWait(), n, board, hist, extraBlackTemperature, rand);
     //Also switch the initial player, expecting white should be next.
     hist.clear(board,P_WHITE,currentRules,0);
     hist.setAssumeMultipleStartingBlackMovesAreHandicap(assumeMultipleStartingBlackMovesAreHandicap);
@@ -1367,13 +1405,8 @@ struct GTPEngine {
     pla = P_WHITE;
 
     response = "";
-    for(int y = 0; y<board.y_size; y++) {
-      for(int x = 0; x<board.x_size; x++) {
-        Loc loc = Location::getLoc(x,y,board.x_size);
-        if(board.colors[loc] != C_EMPTY) {
-          response += " " + Location::toString(loc,board);
-        }
-      }
+    for (const auto loc : handicapLocs) {
+      response += " " + Location::toString(loc,board);
     }
     response = Global::trim(response);
     (void)responseIsError;
@@ -1877,6 +1910,51 @@ static GTPEngine::AnalyzeArgs parseAnalyzeCommand(
   return args;
 }
 
+static optional<std::string> parseMovesSequence(const vector<string>& pieces, const Board& board, bool passIsAllowed, vector<Move>& movesToPlay) {
+  optional<std::string> response = std::nullopt;
+
+  auto renderPieces = [pieces](const int& index) {
+    const vector subvector(pieces.begin(), pieces.begin() + index + 1);
+    return " (" + Global::concat(subvector, " ") + ")";
+  };
+
+  for (int pieceInd = 0; pieceInd < pieces.size(); pieceInd += 2) {
+    Player pla;
+    Loc loc;
+    if(!PlayerIO::tryParsePlayer(pieces[pieceInd], pla)) {
+      response = "Could not parse color: '" + pieces[pieceInd] + "'" + renderPieces(pieceInd);
+      break;
+    }
+
+    const int locIndex = pieceInd + 1;
+    if (locIndex >= pieces.size()) {
+      response = "Expected location after color: '" + pieces[pieceInd] + "'" + renderPieces(pieceInd);
+      break;
+    }
+
+    if (!tryParseLoc(pieces[locIndex], board, loc)) {
+      response = "Could not parse location: '" + pieces[locIndex] + "'" + renderPieces(locIndex);
+      break;
+    }
+
+    if (loc == Board::PASS_LOC && !passIsAllowed) {
+      response = Location::toString(loc, board) + " is disallowed" + renderPieces(locIndex);
+      break;
+    }
+
+    movesToPlay.emplace_back(loc, pla);
+  }
+
+  return response;
+}
+
+static string printMoves(const vector<Move>& moves, const Board& board) {
+  std::ostringstream builder;
+  for (const auto move : moves) {
+    builder << PlayerIO::playerToStringShort(move.pla, board.isDots()) << " " << Location::toString(move.loc, board) << " ";
+  }
+  return builder.str();
+}
 
 int MainCmds::gtp(const vector<string>& args) {
   Board::initHash();
@@ -1929,9 +2007,9 @@ int MainCmds::gtp(const vector<string>& args) {
   //Defaults to 7.5 komi, gtp will generally override this
   const bool loadKomiFromCfg = false;
   Rules initialRules = Setup::loadSingleRules(cfg,loadKomiFromCfg);
-  logger.write("Using " + initialRules.toStringNoKomiMaybeNice() + " rules initially, unless GTP/GUI overrides this");
+  logger.write("Using " + initialRules.toStringNoSgfDefinedPropertiesMaybeNice() + " rules initially, unless GTP/GUI overrides this");
   if(startupPrintMessageToStderr && !logger.isLoggingToStderr()) {
-    cerr << "Using " + initialRules.toStringNoKomiMaybeNice() + " rules initially, unless GTP/GUI overrides this" << endl;
+    cerr << "Using " + initialRules.toStringNoSgfDefinedPropertiesMaybeNice() + " rules initially, unless GTP/GUI overrides this" << endl;
   }
   bool isForcingKomi = false;
   float forcedKomi = 0;
@@ -2001,6 +2079,7 @@ int MainCmds::gtp(const vector<string>& args) {
     initialGenmoveParams.avoidRepeatedPatternUtility : 0.005;
   const double initialDelayMoveScale = cfg.contains("delayMoveScale") ? cfg.getDouble("delayMoveScale",0.0,10000.0) : 0.0;
   const double initialDelayMoveMax = cfg.contains("delayMoveMax") ? cfg.getDouble("delayMoveMax",0.0,1000000.0) : 1000000.0;
+
 
   int defaultBoardXSize = -1;
   int defaultBoardYSize = -1;
@@ -2225,7 +2304,7 @@ int MainCmds::gtp(const vector<string>& args) {
     }
 
     else if(command == "name") {
-      response = "KataGo";
+      response = "KataGoDots";
     }
 
     else if(command == "version") {
@@ -2301,13 +2380,24 @@ int MainCmds::gtp(const vector<string>& args) {
         responseIsError = true;
         response = "unacceptable size";
       }
-      else if(newXSize > Board::MAX_LEN || newYSize > Board::MAX_LEN) {
+      else if(newXSize > Board::MAX_LEN_X) {
         responseIsError = true;
-        response = Global::strprintf("unacceptable size (Board::MAX_LEN is %d, consider increasing and recompiling)",(int)Board::MAX_LEN);
+        response = Global::strprintf("unacceptable size (Board::MAX_LEN_X is %d, consider increasing and recompiling)",(int)Board::MAX_LEN_X);
+      }
+      else if(newYSize > Board::MAX_LEN_Y) {
+        responseIsError = true;
+        response = Global::strprintf("unacceptable size (Board::MAX_LEN_Y is %d, consider increasing and recompiling)",(int)Board::MAX_LEN_Y);
       }
       else {
         engine->setOrResetBoardSize(cfg,logger,seedRand,newXSize,newYSize,logger.isLoggingToStderr());
       }
+    }
+
+    else if (command == GET_BOARDSIZE) {
+      const auto& rootBoard = engine->bot->getRootBoard();
+      response = Global::intToString(rootBoard.x_size) + (rootBoard.x_size == rootBoard.y_size
+        ? ""
+        : ":" + Global::intToString(rootBoard.y_size));
     }
 
     else if(command == "clear_board") {
@@ -2362,7 +2452,8 @@ int MainCmds::gtp(const vector<string>& args) {
       bool parseSuccess = false;
       Rules newRules;
       try {
-        newRules = Rules::parseRulesWithoutKomi(rest,engine->getCurrentRules().komi);
+        Rules currentRules = engine->getCurrentRules();
+        newRules = Rules::parseRulesWithoutKomi(rest, currentRules.komi, currentRules.isDots);
         parseSuccess = true;
       }
       catch(const StringError& err) {
@@ -2376,9 +2467,9 @@ int MainCmds::gtp(const vector<string>& args) {
           responseIsError = true;
           response = error;
         }
-        logger.write("Changed rules to " + newRules.toStringNoKomiMaybeNice());
+        logger.write("Changed rules to " + newRules.toStringNoSgfDefinedPropertiesMaybeNice());
         if(!logger.isLoggingToStderr())
-          cerr << "Changed rules to " + newRules.toStringNoKomiMaybeNice() << endl;
+          cerr << "Changed rules to " + newRules.toStringNoSgfDefinedPropertiesMaybeNice() << endl;
       }
     }
 
@@ -2406,9 +2497,9 @@ int MainCmds::gtp(const vector<string>& args) {
             responseIsError = true;
             response = error;
           }
-          logger.write("Changed rules to " + newRules.toStringNoKomiMaybeNice());
+          logger.write("Changed rules to " + newRules.toStringNoSgfDefinedPropertiesMaybeNice());
           if(!logger.isLoggingToStderr())
-            cerr << "Changed rules to " + newRules.toStringNoKomiMaybeNice() << endl;
+            cerr << "Changed rules to " + newRules.toStringNoSgfDefinedPropertiesMaybeNice() << endl;
         }
       }
     }
@@ -2423,19 +2514,19 @@ int MainCmds::gtp(const vector<string>& args) {
       else {
         string s = Global::toLower(Global::trim(pieces[0]));
         if(s == "chinese") {
-          newRules = Rules::parseRulesWithoutKomi("chinese-kgs",engine->getCurrentRules().komi);
+          newRules = Rules::parseRulesWithoutKomi("chinese-kgs", engine->getCurrentRules().komi);
           parseSuccess = true;
         }
         else if(s == "aga") {
-          newRules = Rules::parseRulesWithoutKomi("aga",engine->getCurrentRules().komi);
+          newRules = Rules::parseRulesWithoutKomi("aga", engine->getCurrentRules().komi);
           parseSuccess = true;
         }
         else if(s == "new_zealand") {
-          newRules = Rules::parseRulesWithoutKomi("new_zealand",engine->getCurrentRules().komi);
+          newRules = Rules::parseRulesWithoutKomi("new_zealand", engine->getCurrentRules().komi);
           parseSuccess = true;
         }
         else if(s == "japanese") {
-          newRules = Rules::parseRulesWithoutKomi("japanese",engine->getCurrentRules().komi);
+          newRules = Rules::parseRulesWithoutKomi("japanese", engine->getCurrentRules().komi);
           parseSuccess = true;
         }
         else {
@@ -2450,9 +2541,9 @@ int MainCmds::gtp(const vector<string>& args) {
           responseIsError = true;
           response = error;
         }
-        logger.write("Changed rules to " + newRules.toStringNoKomiMaybeNice());
+        logger.write("Changed rules to " + newRules.toStringNoSgfDefinedPropertiesMaybeNice());
         if(!logger.isLoggingToStderr())
-          cerr << "Changed rules to " + newRules.toStringNoKomiMaybeNice() << endl;
+          cerr << "Changed rules to " + newRules.toStringNoSgfDefinedPropertiesMaybeNice() << endl;
       }
     }
 
@@ -2910,77 +3001,71 @@ int MainCmds::gtp(const vector<string>& args) {
     }
 
     else if(command == "play") {
-      Player pla;
-      Loc loc;
-      if(pieces.size() != 2) {
-        responseIsError = true;
-        response = "Expected two arguments for play but got '" + Global::concat(pieces," ") + "'";
-      }
-      else if(!PlayerIO::tryParsePlayer(pieces[0],pla)) {
-        responseIsError = true;
-        response = "Could not parse color: '" + pieces[0] + "'";
-      }
-      else if(!tryParseLoc(pieces[1],engine->bot->getRootBoard(),loc)) {
-        responseIsError = true;
-        response = "Could not parse vertex: '" + pieces[1] + "'";
-      }
-      else {
-        bool suc = engine->play(loc,pla);
-        if(!suc) {
-          responseIsError = true;
-          response = "illegal move";
+      vector<Move> movesToPlay;
+      const Board& rootBoard = engine->bot->getRootBoard();
+
+      if (auto parseError = parseMovesSequence(pieces, rootBoard, true, movesToPlay); parseError == std::nullopt) {
+        for (int moveInd = 0; moveInd < movesToPlay.size(); moveInd++) {
+          if (Move move = movesToPlay[moveInd]; !engine->play(move.loc, move.pla)) {
+            responseIsError = true;
+            response = "Illegal move " + PlayerIO::playerToString(move.pla, rootBoard.isDots()) + " " + Location::toString(move.loc, rootBoard);
+            assert(engine->undo(moveInd)); // Rollback already placed moves
+            break;
+          }
         }
-        maybeStartPondering = true;
+
+        if (!responseIsError) {
+          maybeStartPondering = true;
+        }
+      } else {
+        responseIsError = true;
+        response = parseError.value();
       }
     }
 
     else if(command == "set_position") {
-      if(pieces.size() % 2 != 0) {
+      vector<Move> initialStones;
+      const Board& rootBoard = engine->bot->getRootBoard();
+
+      if (auto parseError = parseMovesSequence(pieces, rootBoard, false, initialStones); parseError == std::nullopt) {
+        maybeSaveAvoidPatterns(false);
+        if(!engine->setPosition(initialStones)) {
+          responseIsError = true;
+          response = "Illegal stone placements - overlapping stones or stones with no liberties?";
+        }
+        maybeStartPondering = false;
+      } else {
         responseIsError = true;
-        response = "Expected a space-separated sequence of <COLOR> <VERTEX> pairs but got '" + Global::concat(pieces," ") + "'";
-      }
-      else {
-        vector<Move> initialStones;
-        for(int i = 0; i<pieces.size(); i += 2) {
-          Player pla;
-          Loc loc;
-          if(!PlayerIO::tryParsePlayer(pieces[i],pla)) {
-            responseIsError = true;
-            response = "Expected a space-separated sequence of <COLOR> <VERTEX> pairs but got '" + Global::concat(pieces," ") + "': ";
-            response += "could not parse color: '" + pieces[i] + "'";
-            break;
-          }
-          else if(!tryParseLoc(pieces[i+1],engine->bot->getRootBoard(),loc)) {
-            responseIsError = true;
-            response = "Expected a space-separated sequence of <COLOR> <VERTEX> pairs but got '" + Global::concat(pieces," ") + "': ";
-            response += "could not parse vertex: '" + pieces[i+1] + "'";
-            break;
-          }
-          else if(loc == Board::PASS_LOC) {
-            responseIsError = true;
-            response = "Expected a space-separated sequence of <COLOR> <VERTEX> pairs but got '" + Global::concat(pieces," ") + "': ";
-            response += "could not parse vertex: '" + pieces[i+1] + "'";
-            break;
-          }
-          initialStones.push_back(Move(loc,pla));
-        }
-        if(!responseIsError) {
-          maybeSaveAvoidPatterns(false);
-          bool suc = engine->setPosition(initialStones);
-          if(!suc) {
-            responseIsError = true;
-            response = "Illegal stone placements - overlapping stones or stones with no liberties?";
-          }
-          maybeStartPondering = false;
-        }
+        response = parseError.value();
       }
     }
 
+    else if (command == GET_MOVES_COMMAND) {
+      const BoardHistory& history = engine->bot->getRootHist();
+      response = printMoves(history.moveHistory, engine->bot->getRootBoard());
+    }
+
+    else if (command == GET_POSITION_COMMAND) {
+      const auto& rootBoard = engine->bot->getRootBoard();
+      // TODO: fix for handicap start moves
+      response = printMoves(rootBoard.start_pos_moves, rootBoard);
+    }
+
     else if(command == "undo") {
-      bool suc = engine->undo();
-      if(!suc) {
-        responseIsError = true;
-        response = "cannot undo";
+      int undoCount = 1;
+      if (!pieces.empty()) {
+        if (!Global::tryStringToInt(pieces[0], undoCount) || undoCount < 0) {
+          responseIsError = true;
+          response = "Expected nonnegative integer for undo count";
+        }
+      }
+
+      if (!responseIsError) {
+        if (!engine->undo(undoCount)) {
+          responseIsError = true;
+          response = "cannot undo";
+          break;
+        }
       }
     }
 
@@ -3129,7 +3214,7 @@ int MainCmds::gtp(const vector<string>& args) {
         responseIsError = true;
         response = "Number of handicap stones less than 2: '" + pieces[0] + "'";
       }
-      else if(!engine->bot->getRootBoard().isEmpty()) {
+      else if(!engine->bot->getRootBoard().isStartPos()) {
         responseIsError = true;
         response = "Board is not empty";
       }
@@ -3153,7 +3238,7 @@ int MainCmds::gtp(const vector<string>& args) {
         responseIsError = true;
         response = "Number of handicap stones less than 2: '" + pieces[0] + "'";
       }
-      else if(!engine->bot->getRootBoard().isEmpty()) {
+      else if(!engine->bot->getRootBoard().isStartPos()) {
         responseIsError = true;
         response = "Board is not empty";
       }
@@ -3164,23 +3249,25 @@ int MainCmds::gtp(const vector<string>& args) {
     }
 
     else if(command == "set_free_handicap") {
-      if(!engine->bot->getRootBoard().isEmpty()) {
+      if(!engine->bot->getRootBoard().isStartPos()) {
         responseIsError = true;
         response = "Board is not empty";
       }
       else {
         vector<Move> locs;
-        int xSize = engine->bot->getRootBoard().x_size;
-        int ySize = engine->bot->getRootBoard().y_size;
-        Board board(xSize,ySize);
-        for(int i = 0; i<pieces.size(); i++) {
+        const Board* rootBoard = &engine->bot->getRootBoard();
+        int xSize = rootBoard->x_size;
+        int ySize = rootBoard->y_size;
+        Board board(xSize,ySize,rootBoard->rules);
+        board.setStartPos(seedRand);
+        for(const auto & piece : pieces) {
           Loc loc;
-          bool suc = tryParseLoc(pieces[i],board,loc);
+          bool suc = tryParseLoc(piece,board,loc);
           if(!suc || loc == Board::PASS_LOC) {
             responseIsError = true;
-            response = "Invalid handicap location: " + pieces[i];
+            response = "Invalid handicap location: " + piece;
           }
-          locs.push_back(Move(loc,P_BLACK));
+          locs.emplace_back(loc,P_BLACK);
         }
         bool suc = board.setStonesFailIfNoLibs(locs);
         if(!suc) {
@@ -3205,12 +3292,12 @@ int MainCmds::gtp(const vector<string>& args) {
       double finalWhiteMinusBlackScore = 0.0;
       engine->computeAnticipatedWinnerAndScore(winner,finalWhiteMinusBlackScore);
 
-      if(winner == C_EMPTY)
+      if (winner == C_EMPTY)
         response = "0";
-      else if(winner == C_BLACK)
-        response = "B+" + Global::strprintf("%.1f",-finalWhiteMinusBlackScore);
-      else if(winner == C_WHITE)
-        response = "W+" + Global::strprintf("%.1f",finalWhiteMinusBlackScore);
+      else if (winner == C_BLACK || winner == C_WHITE) {
+        double finalScore = winner == C_BLACK ? -finalWhiteMinusBlackScore : finalWhiteMinusBlackScore;
+        response = PlayerIO::playerToStringShort(winner, engine->currentRules.isDots) + "+" + Global::strprintf("%.1f", finalScore);
+      }
       else
         ASSERT_UNREACHABLE;
     }
@@ -3243,7 +3330,7 @@ int MainCmds::gtp(const vector<string>& args) {
             for(int y = 0; y<board.y_size; y++) {
               for(int x = 0; x<board.x_size; x++) {
                 Loc loc = Location::getLoc(x,y,board.x_size);
-                if(board.colors[loc] != C_EMPTY && isAlive[loc])
+                if(board.getColor(loc) != C_EMPTY && isAlive[loc])
                   locsToReport.push_back(loc);
               }
             }
@@ -3252,7 +3339,7 @@ int MainCmds::gtp(const vector<string>& args) {
             for(int y = 0; y<board.y_size; y++) {
               for(int x = 0; x<board.x_size; x++) {
                 Loc loc = Location::getLoc(x,y,board.x_size);
-                if(board.colors[loc] != C_EMPTY && !isAlive[loc])
+                if(board.getColor(loc) != C_EMPTY && !isAlive[loc])
                   locsToReport.push_back(loc);
               }
             }
@@ -3275,7 +3362,7 @@ int MainCmds::gtp(const vector<string>& args) {
         response = "Expected one or two arguments for loadsgf but got '" + Global::concat(pieces," ") + "'";
       }
       else {
-        string filename = pieces[0];
+        const string& filename = pieces[0];
         bool parseFailed = false;
         bool moveNumberSpecified = false;
         int moveNumber = 0;
@@ -3295,7 +3382,6 @@ int MainCmds::gtp(const vector<string>& args) {
         else {
           Board sgfInitialBoard;
           Player sgfInitialNextPla;
-          BoardHistory sgfInitialHist;
           Rules sgfRules;
           Board sgfBoard;
           Player sgfNextPla;
@@ -3315,7 +3401,7 @@ int MainCmds::gtp(const vector<string>& args) {
               engine->getCurrentRules(), //Use current rules as default
               [&logger](const string& msg) { logger.write(msg); cerr << msg << endl; }
             );
-            if(engine->nnEval != NULL) {
+            if(engine->nnEval != nullptr) {
               bool rulesWereSupported;
               Rules supportedRules = engine->nnEval->getSupportedRules(sgfRules,rulesWereSupported);
               if(!rulesWereSupported) {
@@ -3345,7 +3431,8 @@ int MainCmds::gtp(const vector<string>& args) {
               }
             }
 
-            sgf->setupInitialBoardAndHist(sgfRules, sgfInitialBoard, sgfInitialNextPla, sgfInitialHist);
+            BoardHistory sgfInitialHist = sgf->setupInitialBoardAndHist(sgfRules, sgfInitialNextPla);
+            sgfInitialBoard = sgfInitialHist.initialBoard;
             sgfInitialHist.setInitialTurnNumber(sgfInitialBoard.numStonesOnBoard()); //Should give more accurate temperaure and time control behavior
             sgfBoard = sgfInitialBoard;
             sgfNextPla = sgfInitialNextPla;
@@ -3574,59 +3661,65 @@ int MainCmds::gtp(const vector<string>& args) {
       }
 
       if(parsed) {
-        engine->stopAndWait();
-
-        int boardSizeX = engine->bot->getRootBoard().x_size;
-        int boardSizeY = engine->bot->getRootBoard().y_size;
-        if(boardSizeX != boardSizeY) {
+        const auto& rootBoard = engine->bot->getRootBoard();
+        if (rootBoard.rules.isDots) {
           responseIsError = true;
-          response =
-            "Current board size is " + Global::intToString(boardSizeX) + "x" + Global::intToString(boardSizeY) +
-            ", no built-in benchmarks for rectangular boards";
-        }
-        else {
-          std::unique_ptr<CompactSgf> sgf = nullptr;
-          try {
-            string sgfData = TestCommon::getBenchmarkSGFData(boardSizeX);
-            sgf = CompactSgf::parse(sgfData);
-          }
-          catch(const StringError& e) {
+          response = "Not yet supported for Dots";
+        } else {
+          engine->stopAndWait();
+          int boardSizeX = rootBoard.x_size;
+          int boardSizeY = rootBoard.y_size;
+          if(boardSizeX != boardSizeY) {
             responseIsError = true;
-            response = e.what();
+            response =
+              "Current board size is " + Global::intToString(boardSizeX) + "x" + Global::intToString(boardSizeY) +
+              ", no built-in benchmarks for rectangular boards";
           }
-          if(sgf != nullptr) {
-            const PlayUtils::BenchmarkResults* baseline = NULL;
-            const double secondsPerGameMove = 1.0;
-            const bool printElo = false;
-            SearchParams params = engine->getGenmoveParams();
-            params.maxTime = 1.0e20;
-            params.maxPlayouts = ((int64_t)1) << 50;
-            params.maxVisits = numVisits;
-            //Make sure the "equals" for GTP is printed out prior to the benchmark line
-            printGTPResponseHeader();
-
+          else {
+            std::unique_ptr<CompactSgf> sgf = nullptr;
             try {
-              PlayUtils::BenchmarkResults results = PlayUtils::benchmarkSearchOnPositionsAndPrint(
-                params,
-                *sgf,
-                10,
-                engine->nnEval,
-                baseline,
-                secondsPerGameMove,
-                printElo
-              );
-              (void)results;
+              string sgfData = TestCommon::getBenchmarkSGFData(boardSizeX);
+              sgf = CompactSgf::parse(sgfData);
             }
             catch(const StringError& e) {
               responseIsError = true;
               response = e.what();
-              sgf = nullptr;
             }
             if(sgf != nullptr) {
-              //Act of benchmarking will write to stdout with a newline at the end, so we just need one more newline ourselves
-              //to complete GTP protocol.
-              suppressResponse = true;
-              cout << endl;
+              const PlayUtils::BenchmarkResults* baseline = nullptr;
+              const double secondsPerGameMove = 1.0;
+              const bool printElo = false;
+              SearchParams params = engine->getGenmoveParams();
+              params.maxTime = 1.0e20;
+              params.maxPlayouts = ((int64_t)1) << 50;
+              params.maxVisits = numVisits;
+              //Make sure the "equals" for GTP is printed out prior to the benchmark line
+              printGTPResponseHeader();
+
+              try {
+                PlayUtils::BenchmarkResults results = PlayUtils::benchmarkSearchOnPositionsAndPrint(
+                  params,
+                  *sgf,
+                  10,
+                  engine->nnEval,
+                  baseline,
+                  secondsPerGameMove,
+                  printElo
+                );
+                (void)results;
+              }
+              catch(const StringError& e) {
+                responseIsError = true;
+                response = e.what();
+
+                sgf = nullptr;
+              }
+              if(sgf != nullptr) {
+                //Act of benchmarking will write to stdout with a newline at the end, so we just need one more newline ourselves
+                //to complete GTP protocol.
+                suppressResponse = true;
+                cout << endl;
+              }
             }
           }
         }

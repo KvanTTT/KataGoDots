@@ -1,13 +1,13 @@
 #include "../program/play.h"
 
-#include "../core/global.h"
 #include "../core/fileutils.h"
+#include "../core/global.h"
 #include "../core/timer.h"
+#include "../dataio/files.h"
 #include "../program/playutils.h"
 #include "../program/setup.h"
 #include "../search/asyncbot.h"
 #include "../search/searchnode.h"
-#include "../dataio/files.h"
 
 #include "../core/test.h"
 
@@ -15,8 +15,8 @@ using namespace std;
 
 //----------------------------------------------------------------------------------------------------------
 
-InitialPosition::InitialPosition()
-  :board(),hist(),pla(C_EMPTY)
+InitialPosition::InitialPosition(const Rules& rules)
+  :board(rules),hist(rules),pla(C_EMPTY)
 {}
 InitialPosition::InitialPosition(const Board& b, const BoardHistory& h, Player p, bool plainFork, bool sekiFork, bool hintFork, double tw)
   :board(b),hist(h),pla(p),isPlainFork(plainFork),isSekiFork(sekiFork),isHintFork(hintFork),trainingWeight(tw)
@@ -93,32 +93,38 @@ GameInitializer::GameInitializer(ConfigParser& cfg, Logger& logger, const string
 }
 
 void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
+  dotsGame = cfg.getBoolOrDefault(DOTS_KEY, false);
 
-  allowedKoRuleStrs = cfg.getStrings("koRules", Rules::koRuleStrings());
-  allowedScoringRuleStrs = cfg.getStrings("scoringRules", Rules::scoringRuleStrings());
-  allowedTaxRuleStrs = cfg.getStrings("taxRules", Rules::taxRuleStrings());
-  allowedMultiStoneSuicideLegals = cfg.getBools("multiStoneSuicideLegals");
-  allowedButtons = cfg.getBools("hasButtons");
+  if (dotsGame) {
+    if (cfg.containsAny({"koRules", "scoringRules", "taxRules", "hasButtons"})) {
+      throw IOError("koRules, scoringRules, taxRules, hasButtons are not applicable for Dots game. Please remove them from " + cfg.getFileName());
+    }
 
-  for(size_t i = 0; i < allowedKoRuleStrs.size(); i++)
-    allowedKoRules.push_back(Rules::parseKoRule(allowedKoRuleStrs[i]));
-  for(size_t i = 0; i < allowedScoringRuleStrs.size(); i++)
-    allowedScoringRules.push_back(Rules::parseScoringRule(allowedScoringRuleStrs[i]));
-  for(size_t i = 0; i < allowedTaxRuleStrs.size(); i++)
-    allowedTaxRules.push_back(Rules::parseTaxRule(allowedTaxRuleStrs[i]));
+    allowedCaptureEmtpyBasesRules = cfg.getBools(DOTS_CAPTURE_EMPTY_BASES_KEY);
+    if (allowedCaptureEmtpyBasesRules.empty())
+      throw IOError(DOTS_CAPTURE_EMPTY_BASES_KEY + " must have at least one value in " + cfg.getFileName());
+  } else {
+    allowedKoRuleStrs = cfg.getStrings("koRules", Rules::koRuleStrings());
+    allowedScoringRuleStrs = cfg.getStrings("scoringRules", Rules::scoringRuleStrings());
+    allowedTaxRuleStrs = cfg.getStrings("taxRules", Rules::taxRuleStrings());
+    allowedButtons = cfg.getBools("hasButtons");
 
-  if(allowedKoRules.size() <= 0)
-    throw IOError("koRules must have at least one value in " + cfg.getFileName());
-  if(allowedScoringRules.size() <= 0)
-    throw IOError("scoringRules must have at least one value in " + cfg.getFileName());
-  if(allowedTaxRules.size() <= 0)
-    throw IOError("taxRules must have at least one value in " + cfg.getFileName());
-  if(allowedMultiStoneSuicideLegals.size() <= 0)
-    throw IOError("multiStoneSuicideLegals must have at least one value in " + cfg.getFileName());
-  if(allowedButtons.size() <= 0)
-    throw IOError("hasButtons must have at least one value in " + cfg.getFileName());
+    for(size_t i = 0; i < allowedKoRuleStrs.size(); i++)
+      allowedKoRules.push_back(Rules::parseKoRule(allowedKoRuleStrs[i]));
+    for(size_t i = 0; i < allowedScoringRuleStrs.size(); i++)
+      allowedScoringRules.push_back(Rules::parseScoringRule(allowedScoringRuleStrs[i]));
+    for(size_t i = 0; i < allowedTaxRuleStrs.size(); i++)
+      allowedTaxRules.push_back(Rules::parseTaxRule(allowedTaxRuleStrs[i]));
 
-  {
+    if(allowedKoRules.size() <= 0)
+      throw IOError("koRules must have at least one value in " + cfg.getFileName());
+    if(allowedScoringRules.size() <= 0)
+      throw IOError("scoringRules must have at least one value in " + cfg.getFileName());
+    if(allowedTaxRules.size() <= 0)
+      throw IOError("taxRules must have at least one value in " + cfg.getFileName());
+    if(allowedButtons.size() <= 0)
+      throw IOError("hasButtons must have at least one value in " + cfg.getFileName());
+
     bool hasAreaScoring = false;
     for(int i = 0; i<allowedScoringRules.size(); i++)
       if(allowedScoringRules[i] == Rules::SCORING_AREA)
@@ -129,6 +135,24 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
         hasTrueButton = true;
     if(!hasAreaScoring && hasTrueButton)
       throw IOError("If scoringRules does not include AREA, hasButtons must be false in " + cfg.getFileName());
+  }
+
+  allowedMultiStoneSuicideLegals = cfg.getBools("multiStoneSuicideLegals");
+  if(allowedMultiStoneSuicideLegals.size() <= 0)
+    throw IOError("multiStoneSuicideLegals must have at least one value in " + cfg.getFileName());
+
+  if (cfg.contains(START_POSES_KEY) || dotsGame) {
+    auto allowedStartPosRuleStrs = cfg.getStrings(START_POSES_KEY, Rules::startPosStrings());
+    for(size_t i = 0; i < allowedStartPosRuleStrs.size(); i++)
+      allowedStartPosRules.push_back(Rules::parseStartPos(allowedStartPosRuleStrs[i]));
+    if(allowedStartPosRules.size() <= 0)
+      throw IOError(START_POSES_KEY + " must have at least one value in " + cfg.getFileName());
+  }
+
+  if (cfg.contains(START_POSES_ARE_RANDOM_KEY) || dotsGame) {
+    allowedStartPosRandomRules = cfg.getBools(START_POSES_ARE_RANDOM_KEY);
+    if(allowedStartPosRandomRules.size() <= 0)
+      throw IOError(START_POSES_ARE_RANDOM_KEY + " must have at least one value in " + cfg.getFileName());
   }
 
   if(cfg.contains("bSizes") == cfg.contains("bSizesXY"))
@@ -176,7 +200,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
   else if(cfg.contains("bSizesXY")) {
     if(cfg.contains("allowRectangleProb"))
       throw IOError("Cannot specify allowRectangleProb when specifying bSizesXY, please adjust the relative frequency of rectangles yourself");
-    allowedBSizes = cfg.getNonNegativeIntDashedPairs("bSizesXY", 2, Board::MAX_LEN);
+    allowedBSizes = cfg.getNonNegativeIntDashedPairs("bSizesXY", 2, Board::MAX_LEN_X, Board::MAX_LEN_Y);
     allowedBSizeRelProbs = cfg.getDoubles("bSizeRelProbs",0.0,1e100);
 
     double relProbSum = 0.0;
@@ -191,7 +215,8 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
   if(cfg.contains("komiMean") && (cfg.contains("komiAuto") && cfg.getBool("komiAuto")))
     throw IOError("Must specify only one of komiMean=<komi value> or komiAuto=True in config");
 
-  komiMean = cfg.contains("komiMean") ? cfg.getFloat("komiMean",Rules::MIN_USER_KOMI,Rules::MAX_USER_KOMI) : 7.5f;
+  komiMean = cfg.contains("komiMean") ? cfg.getFloat("komiMean",Rules::MIN_USER_KOMI,Rules::MAX_USER_KOMI) :
+    dotsGame ? 0.0f : 7.5f;
   komiStdev = cfg.contains("komiStdev") ? cfg.getFloat("komiStdev",0.0f,60.0f) : 0.0f;
   handicapProb = cfg.contains("handicapProb") ? cfg.getDouble("handicapProb",0.0,1.0) : 0.0;
   handicapCompensateKomiProb = cfg.contains("handicapCompensateKomiProb") ? cfg.getDouble("handicapCompensateKomiProb",0.0,1.0) : 0.0;
@@ -243,6 +268,10 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
 
   startPosesProb = 0.0;
   if(cfg.contains("startPosesFromSgfDir")) {
+    if (!allowedStartPosRules.empty()) {
+      throw StringError("startPosesFromSgfDir is not compatible with " + START_POSES_KEY + ". Please specify only one key.");
+    }
+
     startPoses.clear();
     startPosCumProbs.clear();
     startPosesProb = cfg.getDouble("startPosesProb",0.0,1.0);
@@ -459,6 +488,9 @@ int GameInitializer::getMaxBoardXSize() const {
 int GameInitializer::getMaxBoardYSize() const {
   return maxBoardYSize;
 }
+bool GameInitializer::isDotsGame() const {
+  return dotsGame;
+}
 
 Rules GameInitializer::createRules() {
   lock_guard<std::mutex> lock(createGameMutex);
@@ -466,16 +498,25 @@ Rules GameInitializer::createRules() {
 }
 
 Rules GameInitializer::createRulesUnsynchronized() {
-  Rules rules;
-  rules.koRule = allowedKoRules[rand.nextUInt((uint32_t)allowedKoRules.size())];
-  rules.scoringRule = allowedScoringRules[rand.nextUInt((uint32_t)allowedScoringRules.size())];
-  rules.taxRule = allowedTaxRules[rand.nextUInt((uint32_t)allowedTaxRules.size())];
-  rules.multiStoneSuicideLegal = allowedMultiStoneSuicideLegals[rand.nextUInt((uint32_t)allowedMultiStoneSuicideLegals.size())];
+  auto rules = Rules(dotsGame);
+  rules.multiStoneSuicideLegal = allowedMultiStoneSuicideLegals[rand.nextUInt(static_cast<uint32_t>(allowedMultiStoneSuicideLegals.size()))];
+  if (!allowedStartPosRules.empty()) {
+    rules.startPos = allowedStartPosRules[rand.nextUInt(static_cast<uint32_t>(allowedStartPosRules.size()))];
+  }
+  if (!allowedStartPosRandomRules.empty()) {
+    rules.startPosIsRandom = allowedStartPosRandomRules[rand.nextUInt(static_cast<uint32_t>(allowedStartPosRandomRules.size()))];
+  }
 
-  if(rules.scoringRule == Rules::SCORING_AREA)
-    rules.hasButton = allowedButtons[rand.nextUInt((uint32_t)allowedButtons.size())];
-  else
-    rules.hasButton = false;
+  if (dotsGame) {
+     rules.dotsCaptureEmptyBases = allowedCaptureEmtpyBasesRules[rand.nextUInt(static_cast<uint32_t>(allowedCaptureEmtpyBasesRules.size()))];
+  } else {
+    rules.koRule = allowedKoRules[rand.nextUInt((uint32_t)allowedKoRules.size())];
+    rules.scoringRule = allowedScoringRules[rand.nextUInt((uint32_t)allowedScoringRules.size())];
+    rules.taxRule = allowedTaxRules[rand.nextUInt((uint32_t)allowedTaxRules.size())];
+    rules.hasButton = rules.scoringRule == Rules::SCORING_AREA
+    ? allowedButtons[rand.nextUInt((uint32_t)allowedButtons.size())]
+      : false;
+  }
   return rules;
 }
 
@@ -588,9 +629,12 @@ void GameInitializer::createGameSharedUnsynchronized(
   else {
     int xSize = allowedBSizes[bSizeIdx].first;
     int ySize = allowedBSizes[bSizeIdx].second;
-    board = Board(xSize,ySize);
+    board = Board(xSize,ySize,rules);
+    board.setStartPos(rand);
+
     pla = P_BLACK;
     hist.clear(board,pla,rules,0);
+    hist.setInitialTurnNumber(rules.getNumOfStartPosStones());
 
     extraBlackAndKomi = PlayUtils::chooseExtraBlackAndKomi(
       komiMean, komiStdev, komiAllowIntegerProb,
@@ -751,12 +795,12 @@ pair<int,int> MatchPairer::getMatchupPairUnsynchronized() {
 
 //----------------------------------------------------------------------------------------------------------
 
-static void failIllegalMove(Search* bot, Logger& logger, Board board, Loc loc) {
+static void failIllegalMove(const Search* bot, Logger& logger, const Board& board, Loc loc) {
   ostringstream sout;
   sout << "Bot returned null location or illegal move!?!" << "\n";
   sout << board << "\n";
   sout << bot->getRootBoard() << "\n";
-  sout << "Pla: " << PlayerIO::playerToString(bot->getRootPla()) << "\n";
+  sout << "Pla: " << PlayerIO::playerToString(bot->getRootPla(),board.isDots()) << "\n";
   sout << "Loc: " << Location::toString(loc,bot->getRootBoard()) << "\n";
   logger.write(sout.str());
   bot->getRootBoard().checkConsistency();
@@ -787,7 +831,7 @@ static void logSearch(Search* bot, Logger& logger, Loc loc, OtherGameProperties 
 
 static Loc chooseRandomForkingMove(const NNOutput* nnOutput, const Board& board, const BoardHistory& hist, Player pla, Rand& gameRand, Loc banMove) {
   double r = gameRand.nextDouble();
-  bool allowPass = true;
+  bool allowPass = !hist.rules.isDots || hist.winOrEffectiveDrawByGrounding(board, pla);
   //70% of the time, do a random temperature 1 policy move
   if(r < 0.70)
     return PlayUtils::chooseRandomPolicyMove(nnOutput, board, hist, pla, gameRand, 1.0, allowPass, banMove);
@@ -1307,7 +1351,7 @@ FinishedGameData* Play::runGame(
   std::function<NNEvaluator*()> checkForNewNNEval,
   std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove
 ) {
-  FinishedGameData* gameData = new FinishedGameData();
+  FinishedGameData* gameData = new FinishedGameData(startHist.rules);
 
   Board board(startBoard);
   BoardHistory hist(startHist);
@@ -1316,7 +1360,7 @@ FinishedGameData* Play::runGame(
   assert(!(playSettings.forSelfPlay && !clearBotBeforeSearch));
 
   if(extraBlackAndKomi.makeGameFairForEmptyBoard) {
-    Board b(startBoard.x_size,startBoard.y_size);
+    Board b(startBoard.x_size, startBoard.y_size, startBoard.rules);
     Player makeFairPla = P_BLACK;
     if(playSettings.flipKomiProbWhenNoCompensate != 0.0 && gameRand.nextBool(playSettings.flipKomiProbWhenNoCompensate))
       makeFairPla = P_WHITE;
@@ -1506,8 +1550,10 @@ FinishedGameData* Play::runGame(
   for(int i = 0; i<maxMovesPerGame; i++) {
     if(doEndGameIfAllPassAlive)
       hist.endGameIfAllPassAlive(board);
+    hist.endGameIfNoLegalMoves(board);
     if(hist.isGameFinished)
       break;
+
     if(shouldPause != nullptr)
       shouldPause->waitUntilFalse();
     if(shouldStop != nullptr && shouldStop())
@@ -1723,9 +1769,11 @@ FinishedGameData* Play::runGame(
     assert(gameData->finalFullArea == NULL);
     assert(gameData->finalOwnership == NULL);
     assert(gameData->finalSekiAreas == NULL);
-    gameData->finalFullArea = new Color[Board::MAX_ARR_SIZE];
     gameData->finalOwnership = new Color[Board::MAX_ARR_SIZE];
-    gameData->finalSekiAreas = new bool[Board::MAX_ARR_SIZE];
+    if (!hist.rules.isDots) {
+      gameData->finalFullArea = new Color[Board::MAX_ARR_SIZE];
+      gameData->finalSekiAreas = new bool[Board::MAX_ARR_SIZE];
+    }
 
     if(hist.isGameFinished && hist.isNoResult) {
       finalValueTargets.win = 0.0f;
@@ -1735,9 +1783,11 @@ FinishedGameData* Play::runGame(
 
       //Fill with empty so that we use "nobody owns anything" as the training target.
       //Although in practice actually the training normally weights by having a result or not, so it doesn't matter what we fill.
-      std::fill(gameData->finalFullArea,gameData->finalFullArea+Board::MAX_ARR_SIZE,C_EMPTY);
-      std::fill(gameData->finalOwnership,gameData->finalOwnership+Board::MAX_ARR_SIZE,C_EMPTY);
-      std::fill(gameData->finalSekiAreas,gameData->finalSekiAreas+Board::MAX_ARR_SIZE,false);
+      std::fill_n(gameData->finalOwnership, Board::MAX_ARR_SIZE,C_EMPTY);
+      if (!hist.rules.isDots) {
+        std::fill_n(gameData->finalFullArea, Board::MAX_ARR_SIZE,C_EMPTY);
+        std::fill_n(gameData->finalSekiAreas, Board::MAX_ARR_SIZE,false);
+      }
     }
     else {
       //Relying on this to be idempotent, so that we can get the final territory map
@@ -1752,7 +1802,7 @@ FinishedGameData* Play::runGame(
       finalValueTargets.lead = finalValueTargets.score;
 
       //Fill full and seki areas
-      {
+      if (!hist.rules.isDots) {
         board.calculateArea(gameData->finalFullArea, true, true, true, hist.rules.multiStoneSuicideLegal);
 
         Color* independentLifeArea = new Color[Board::MAX_ARR_SIZE];
@@ -2163,10 +2213,11 @@ void Play::maybeForkGame(
     ASSERT_UNREACHABLE;
   }
 
-  Board board;
+  const Rules& rules = finishedGameData->startHist.rules;
+  Board board(rules);
   Player pla;
-  BoardHistory hist;
-  replayGameUpToMove(finishedGameData, moveIdx, finishedGameData->startHist.rules, board, hist, pla);
+  BoardHistory hist(rules);
+  replayGameUpToMove(finishedGameData, moveIdx, rules, board, hist, pla);
   //Just in case if somehow the game is over now, don't actually do anything
   if(hist.isGameFinished)
     return;
@@ -2251,9 +2302,9 @@ void Play::maybeSekiForkGame(
       Rules rules = finishedGameData->startHist.rules;
       rules = gameInit->randomizeScoringAndTaxRules(rules,gameRand);
 
-      Board board;
+      Board board(rules);
       Player pla;
-      BoardHistory hist;
+      BoardHistory hist(rules);
       replayGameUpToMove(finishedGameData, moveIdx, rules, board, hist, pla);
       //Just in case if somehow the game is over now, don't actually do anything
       if(hist.isGameFinished)
@@ -2283,12 +2334,13 @@ void Play::maybeHintForkGame(
   if(!hintFork)
     return;
 
-  Board board;
+  const Rules& rules = finishedGameData->startHist.rules;
+  Board board(rules);
   Player pla;
-  BoardHistory hist;
+  BoardHistory hist(rules);
   testAssert(finishedGameData->startHist.moveHistory.size() < 0x1FFFffff);
   int moveIdxToReplayTo = (int)finishedGameData->startHist.moveHistory.size();
-  replayGameUpToMove(finishedGameData, moveIdxToReplayTo, finishedGameData->startHist.rules, board, hist, pla);
+  replayGameUpToMove(finishedGameData, moveIdxToReplayTo, rules, board, hist, pla);
   //Just in case if somehow the game is over now, don't actually do anything
   if(hist.isGameFinished)
     return;
@@ -2372,9 +2424,10 @@ FinishedGameData* GameRunner::runGame(
     }
   }
 
-  Board board;
+  const Rules& rules = Rules::getDefault(gameInit->isDotsGame());
+  Board board(rules);
   Player pla;
-  BoardHistory hist;
+  BoardHistory hist(rules);
   ExtraBlackAndKomi extraBlackAndKomi;
   OtherGameProperties otherGameProps;
   if(playSettings.forSelfPlay) {
@@ -2407,20 +2460,25 @@ FinishedGameData* GameRunner::runGame(
     clearBotBeforeSearchThisGame = true;
   }
 
-  //In 2% of games, don't autoterminate the game upon all pass alive, to just provide a tiny bit of training data on positions that occur
-  //as both players must wrap things up manually, because within the search we don't autoterminate games, meaning that the NN will get
-  //called on positions that occur after the game would have been autoterminated.
-  bool doEndGameIfAllPassAlive = playSettings.forSelfPlay ? gameRand.nextBool(0.98) : true;
+  bool doEndGameIfAllPassAlive;
+  if (rules.isDots) {
+    doEndGameIfAllPassAlive = false;
+  } else {
+    //In 2% of games, don't autoterminate the game upon all pass alive, to just provide a tiny bit of training data on positions that occur
+    //as both players must wrap things up manually, because within the search we don't autoterminate games, meaning that the NN will get
+    //called on positions that occur after the game would have been autoterminated.
+    doEndGameIfAllPassAlive = playSettings.forSelfPlay ? gameRand.nextBool(0.98) : true;
+  }
 
   Search* botB;
   Search* botW;
   if(botSpecB.botIdx == botSpecW.botIdx) {
-    botB = new Search(botSpecB.baseParams, botSpecB.nnEval, &logger, seed);
+    botB = new Search(botSpecB.baseParams, botSpecB.nnEval, &logger, seed, nullptr, hist.rules);
     botW = botB;
   }
   else {
-    botB = new Search(botSpecB.baseParams, botSpecB.nnEval, &logger, seed + "@B");
-    botW = new Search(botSpecW.baseParams, botSpecW.nnEval, &logger, seed + "@W");
+    botB = new Search(botSpecB.baseParams, botSpecB.nnEval, &logger, seed + "@B", nullptr, hist.rules);
+    botW = new Search(botSpecW.baseParams, botSpecW.nnEval, &logger, seed + "@W", nullptr, hist.rules);
   }
   if(afterInitialization != nullptr) {
     if(botSpecB.botIdx == botSpecW.botIdx) {
@@ -2469,7 +2527,7 @@ FinishedGameData* GameRunner::runGame(
   assert(finishedGameData != NULL);
 
   Play::maybeForkGame(finishedGameData, forkData, playSettings, gameRand, botB);
-  if(!usedSekiForkHackPosition) {
+  if(!hist.rules.isDots && !usedSekiForkHackPosition) {
     Play::maybeSekiForkGame(finishedGameData, forkData, playSettings, gameInit, gameRand);
   }
   Play::maybeHintForkGame(finishedGameData, forkData, otherGameProps);

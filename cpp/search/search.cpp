@@ -65,71 +65,73 @@ SearchThread::~SearchThread() {
 
 static const double VALUE_WEIGHT_DEGREES_OF_FREEDOM = 3.0;
 
-Search::Search(SearchParams params, NNEvaluator* nnEval, Logger* lg, const string& rSeed)
-  :Search(params,nnEval,NULL,lg,rSeed)
-{}
-Search::Search(SearchParams params, NNEvaluator* nnEval, NNEvaluator* humanEval, Logger* lg, const string& rSeed)
-  :rootPla(P_BLACK),
-   rootBoard(),
-   rootHistory(),
-   rootGraphHash(),
-   rootHintLoc(Board::NULL_LOC),
-   avoidMoveUntilByLocBlack(),avoidMoveUntilByLocWhite(),avoidMoveUntilRescaleRoot(false),
-   rootSymmetries(),
-   rootPruneOnlySymmetries(),
-   rootSafeArea(NULL),
-   recentScoreCenter(0.0),
-   mirroringPla(C_EMPTY),
-   mirrorAdvantage(0.0),
-   mirrorCenterSymmetryError(1e10),
-   alwaysIncludeOwnerMap(false),
-   searchParams(params),numSearchesBegun(0),searchNodeAge(0),
-   plaThatSearchIsFor(C_EMPTY),plaThatSearchIsForLastSearch(C_EMPTY),
-   lastSearchNumPlayouts(0),
-   effectiveSearchTimeCarriedOver(0.0),
-   randSeed(rSeed),
-   rootKoHashTable(NULL),
-   valueWeightDistribution(NULL),
-   patternBonusTable(NULL),
-   externalPatternBonusTable(nullptr),
-   evalCache(nullptr),
-   nonSearchRand(rSeed + string("$nonSearchRand")),
-   logger(lg),
-   nnEvaluator(nnEval),
-   humanEvaluator(humanEval),
-   nnXLen(),
-   nnYLen(),
-   policySize(),
-   rootNode(NULL),
-   nodeTable(NULL),
-   mutexPool(NULL),
-   subtreeValueBiasTable(NULL),
-   numThreadsSpawned(0),
-   threads(NULL),
-   threadTasks(NULL),
-   threadTasksRemaining(NULL),
-   oldNNOutputsToCleanUpMutex(),
-   oldNNOutputsToCleanUp()
-{
+Search::Search(const SearchParams &params, NNEvaluator* nnEval, Logger* lg, const string& newRandSeed, NNEvaluator* humanEval, const Rules& rules)
+  : rootPla(P_BLACK),
+    rootBoard(rules),
+    rootHistory(rules),
+    rootGraphHash(),
+    rootHintLoc(Board::NULL_LOC),
+    avoidMoveUntilByLocBlack(), avoidMoveUntilByLocWhite(), avoidMoveUntilRescaleRoot(false),
+    rootSymmetries(),
+    rootPruneOnlySymmetries(),
+    rootSafeArea(NULL),
+    recentScoreCenter(0.0),
+    mirroringPla(C_EMPTY),
+    mirrorAdvantage(0.0),
+    mirrorCenterSymmetryError(1e10),
+    alwaysIncludeOwnerMap(false),
+    searchParams(params), numSearchesBegun(0), searchNodeAge(0),
+    plaThatSearchIsFor(C_EMPTY), plaThatSearchIsForLastSearch(C_EMPTY),
+    lastSearchNumPlayouts(0),
+    effectiveSearchTimeCarriedOver(0.0),
+    randSeed(newRandSeed),
+    rootKoHashTable(NULL),
+    valueWeightDistribution(NULL),
+    normToTApproxZ(0),
+    patternBonusTable(NULL),
+    externalPatternBonusTable(nullptr),
+    evalCache(nullptr),
+    nonSearchRand(newRandSeed + string("$nonSearchRand")),
+    logger(lg),
+    nnEvaluator(nnEval),
+    humanEvaluator(humanEval),
+    nnXLen(),
+    nnYLen(),
+    policySize(),
+    rootNode(NULL),
+    nodeTable(NULL),
+    mutexPool(NULL),
+    subtreeValueBiasTable(NULL),
+    numThreadsSpawned(0),
+    threads(NULL),
+    threadTasks(NULL),
+    threadTasksRemaining(NULL),
+    oldNNOutputsToCleanUpMutex(),
+    oldNNOutputsToCleanUp() {
   assert(logger != NULL);
   nnXLen = nnEval->getNNXLen();
   nnYLen = nnEval->getNNYLen();
-  assert(nnXLen > 0 && nnXLen <= NNPos::MAX_BOARD_LEN);
-  assert(nnYLen > 0 && nnYLen <= NNPos::MAX_BOARD_LEN);
-  policySize = NNPos::getPolicySize(nnXLen,nnYLen);
+  assert(nnXLen > 0 && nnXLen <= NNPos::MAX_BOARD_LEN_X);
+  assert(nnYLen > 0 && nnYLen <= NNPos::MAX_BOARD_LEN_Y);
+  policySize = NNPos::getPolicySize(nnXLen, nnYLen);
 
-  if(humanEvaluator != NULL) {
-    if(humanEvaluator->getNNXLen() != nnXLen || humanEvaluator->getNNYLen() != nnYLen)
+  if (humanEvaluator != NULL) {
+    if (humanEvaluator->getNNXLen() != nnXLen || humanEvaluator->getNNYLen() != nnYLen)
       throw StringError("Search::init - humanEval has different nnXLen or nnYLen");
   }
 
-  rootKoHashTable = new KoHashTable();
+  assert(rootHistory.rules.isDots == rootBoard.isDots());
+  rootHistory.clear(rootBoard, rootPla, rules, 0);
+  if (!rules.isDots) {
+    rootKoHashTable = new KoHashTable();
+    rootKoHashTable->recompute(rootHistory);
+  }
 
   rootSafeArea = new Color[Board::MAX_ARR_SIZE];
 
   valueWeightDistribution = new DistributionTable(
-    [](double z) { return FancyMath::tdistpdf(z,VALUE_WEIGHT_DEGREES_OF_FREEDOM); },
-    [](double z) { return FancyMath::tdistcdf(z,VALUE_WEIGHT_DEGREES_OF_FREEDOM); },
+    [](double z) { return FancyMath::tdistpdf(z, VALUE_WEIGHT_DEGREES_OF_FREEDOM); },
+    [](double z) { return FancyMath::tdistcdf(z, VALUE_WEIGHT_DEGREES_OF_FREEDOM); },
     -50.0,
     50.0,
     2000
@@ -138,9 +140,6 @@ Search::Search(SearchParams params, NNEvaluator* nnEval, NNEvaluator* humanEval,
   rootNode = NULL;
   nodeTable = new SearchNodeTable(params.nodeTableShardsPowerOfTwo);
   mutexPool = new MutexPool(nodeTable->mutexPool->getNumMutexes());
-
-  rootHistory.clear(rootBoard,rootPla,Rules(),0);
-  rootKoHashTable->recompute(rootHistory);
 }
 
 Search::~Search() {
@@ -181,7 +180,10 @@ void Search::setPosition(Player pla, const Board& board, const BoardHistory& his
   plaThatSearchIsFor = C_EMPTY;
   rootBoard = board;
   rootHistory = history;
-  rootKoHashTable->recompute(rootHistory);
+  assert(rootHistory.rules.isDots == rootBoard.isDots());
+  if (!rootHistory.rules.isDots) {
+    rootKoHashTable->recompute(rootHistory);
+  }
   avoidMoveUntilByLocBlack.clear();
   avoidMoveUntilByLocWhite.clear();
 }
@@ -197,7 +199,9 @@ void Search::setPlayerAndClearHistory(Player pla) {
   rootHistory.clear(rootBoard,rootPla,rules,rootHistory.encorePhase);
   rootHistory.setAssumeMultipleStartingBlackMovesAreHandicap(assumeMultipleStartingBlackMovesAreHandicap);
 
-  rootKoHashTable->recompute(rootHistory);
+  if (!rootHistory.rules.isDots) {
+    rootKoHashTable->recompute(rootHistory);
+  }
 
   //If changing the player alone, don't clear these, leave the user's setting - the user may have tried
   //to adjust the player or will be calling runWholeSearchAndGetMove with a different player and will
@@ -336,7 +340,9 @@ bool Search::makeMove(Loc moveLoc, Player movePla, bool preventEncore) {
   //Compute these first so we can know if we need to set forceNonTerminal below.
   rootHistory.makeBoardMoveAssumeLegal(rootBoard,moveLoc,rootPla,rootKoHashTable,preventEncore);
   rootPla = getOpp(rootPla);
-  rootKoHashTable->recompute(rootHistory);
+  if (!rootHistory.rules.isDots) {
+    rootKoHashTable->recompute(rootHistory);
+  }
 
   if(rootNode != NULL) {
     SearchNode* child = NULL;

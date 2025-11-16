@@ -1,0 +1,408 @@
+#include <chrono>
+
+#include "../tests/tests.h"
+#include "testdotsutils.h"
+
+#include "../game/graphhash.h"
+#include "../program/playutils.h"
+
+using namespace std;
+using namespace std::chrono;
+using namespace TestCommon;
+
+static void writeToSgfAndCheckStartPosFromSgfProp(const int startPos, const bool startPosIsRandom, const Board& board) {
+  std::ostringstream sgfStringStream;
+  const BoardHistory boardHistory(board, P_BLACK, board.rules, 0);
+  WriteSgf::writeSgf(sgfStringStream, "black", "white", boardHistory, {});
+  const string sgfString = sgfStringStream.str();
+  cout << ";  Sgf: " << sgfString << endl;
+
+  const auto deserializedSgf = Sgf::parse(sgfString);
+  const Rules newRules = deserializedSgf->getRulesOrFail();
+  testAssert(startPos == newRules.startPos);
+  testAssert(startPosIsRandom == newRules.startPosIsRandom);
+}
+
+static void checkStartPos(const string& description, const int startPos, const bool startPosIsRandom, const int x_size, const int y_size, const string& expectedBoard = "", const vector<XYMove>& extraMoves = {}) {
+  cout << "  " << description << " (" << to_string(x_size) << "," << to_string(y_size) << ")";
+
+  auto board = Board(x_size, y_size, Rules(startPos, startPosIsRandom, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots));
+  board.setStartPos(DOTS_RANDOM);
+  playXYMovesAssumeLegal(board, extraMoves);
+
+  std::ostringstream oss;
+  Board::printBoard(oss, board, Board::NULL_LOC, nullptr, false);
+
+  if (!expectedBoard.empty()) {
+    expect(description.c_str(), oss, expectedBoard);
+  }
+
+  writeToSgfAndCheckStartPosFromSgfProp(startPos, startPosIsRandom, board);
+}
+
+static void checkRecognition(const vector<XYMove>& xyMoves, const int x_size, const int y_size,
+  const int expectedStartPos,
+  const vector<XYMove>& expectedStartMoves,
+  const bool expectedRandomized,
+  const vector<XYMove>& expectedRemainingMoves) {
+
+  auto moves = vector<Move>();
+  moves.reserve(xyMoves.size());
+  for (const auto xyMove : xyMoves) {
+    moves.push_back(xyMove.toMove(x_size));
+  }
+
+  vector<Move> actualStartPosMoves;
+  bool actualRandomized;
+  vector<Move> actualRemainingMoves;
+
+  testAssert(expectedStartPos == Rules::recognizeStartPos(moves, x_size, y_size, actualStartPosMoves, actualRandomized, &actualRemainingMoves));
+
+  testAssert(expectedStartMoves.size() == actualStartPosMoves.size());
+  for (size_t i = 0; i < expectedStartMoves.size(); ++i) {
+    testAssert(movesEqual(expectedStartMoves[i].toMove(x_size), actualStartPosMoves[i]));
+  }
+
+  testAssert(expectedRandomized == actualRandomized);
+
+  testAssert(expectedRemainingMoves.size() == actualRemainingMoves.size());
+  for (size_t i = 0; i < expectedRemainingMoves.size(); ++i) {
+    testAssert(movesEqual(expectedRemainingMoves[i].toMove(x_size), actualRemainingMoves[i]));
+  }
+}
+
+static void checkStartPosRecognition(const string& description, const int expectedStartPos, const bool startPosIsRandom, const string& inputBoard) {
+  const Board board = parseDotsField(inputBoard, startPosIsRandom, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, {});
+
+  cout << "  " << description << " (" << to_string(board.x_size) << "," << to_string(board.y_size) << ")";
+
+  writeToSgfAndCheckStartPosFromSgfProp(expectedStartPos, startPosIsRandom, board);
+}
+
+static void checkGenerationAndRecognition(const int startPos, const int startPosIsRandom) {
+  const auto generatedMoves = Rules::generateStartPos(startPos, startPosIsRandom ? &DOTS_RANDOM : nullptr, 39, 32);
+  vector<Move> actualStartPosMoves;
+  bool actualRandomized;
+  testAssert(startPos == Rules::recognizeStartPos(generatedMoves, 39, 32, actualStartPosMoves, actualRandomized));
+  // We can't reliably check in case of randomization is not detected because random generator can
+  // generate static poses in rare cases.
+  if (actualRandomized) {
+    testAssert(startPosIsRandom);
+  }
+}
+
+void Tests::runDotsStartPosTests() {
+  cout << "Running dots start pos tests" << endl;
+
+  Rand rand("runDotsStartPosTests");
+
+  checkStartPos("Cross on minimal size", Rules::START_POS_CROSS, false, 2, 2, R"(
+   1  2
+ 2 X  O
+ 1 O  X
+)");
+
+  checkStartPos("Extra dots with cross (for instance, a handicap game)", Rules::START_POS_CROSS, false, 4, 4, R"(
+   1  2  3  4
+ 4 .  .  .  .
+ 3 .  X  O  .
+ 2 .  O  X  .
+ 1 .  .  X  .
+)", {XYMove(2, 3, P_BLACK)});
+
+  checkStartPosRecognition("Empty start pos with three extra moves", Rules::START_POS_EMPTY, false, R"(
+....
+.xo.
+.o..
+....
+)");
+
+  checkStartPosRecognition("Reversed cross should be recognized as random", Rules::START_POS_CROSS, true, R"(
+....
+.ox.
+.xo.
+....
+)");
+
+  checkStartPos("Cross on odd size", Rules::START_POS_CROSS, false, 3, 3, R"(
+   1  2  3
+ 3 .  X  O
+ 2 .  O  X
+ 1 .  .  .
+)");
+
+  checkStartPos("Cross on standard size", Rules::START_POS_CROSS, false, 39, 32, R"(
+   1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39
+32 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+31 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+30 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+29 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+28 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+27 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+26 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+25 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+24 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+23 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+22 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+21 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+20 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+19 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+18 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+17 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  X  O  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+16 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  O  X  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+15 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+14 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+13 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+12 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+11 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+10 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 9 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 8 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 7 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 6 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 5 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 4 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 3 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 2 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 1 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+)");
+
+  checkStartPos("Double cross on minimal size", Rules::START_POS_CROSS_2, false, 4, 2, R"(
+   1  2  3  4
+ 2 X  O  O  X
+ 1 O  X  X  O
+)");
+
+  checkStartPos("Double cross on odd size", Rules::START_POS_CROSS_2, false, 5, 3, R"(
+   1  2  3  4  5
+ 3 .  X  O  O  X
+ 2 .  O  X  X  O
+ 1 .  .  .  .  .
+)");
+
+  checkStartPos("Double cross", Rules::START_POS_CROSS_2, false, 6, 4, R"(
+   1  2  3  4  5  6
+ 4 .  .  .  .  .  .
+ 3 .  X  O  O  X  .
+ 2 .  O  X  X  O  .
+ 1 .  .  .  .  .  .
+)");
+
+  checkStartPos("Double cross", Rules::START_POS_CROSS_2, false, 7, 4, R"(
+   1  2  3  4  5  6  7
+ 4 .  .  .  .  .  .  .
+ 3 .  .  X  O  O  X  .
+ 2 .  .  O  X  X  O  .
+ 1 .  .  .  .  .  .  .
+)");
+
+  checkStartPos("Double rand cross on triple cross", Rules::START_POS_CROSS_2, false, 10, 4, R"(
+   1  2  3  4  5  6  7  8  9  10
+ 4 .  .  .  .  .  .  .  .  .  .
+ 3 .  .  .  X  O  O  X  .  X  O
+ 2 .  .  .  O  X  X  O  .  O  X
+ 1 .  .  .  .  .  .  .  .  .  .
+)", {XYMove(8, 1, P_BLACK), XYMove(9, 1, P_WHITE), XYMove(9, 2, P_BLACK), XYMove(8, 2, P_WHITE)});
+
+  const vector expectedRemainingMovesForDoubleCross = {
+    XYMove(8, 1, P_BLACK),
+    XYMove(9, 1, P_WHITE),
+    XYMove(9, 2, P_BLACK),
+    XYMove(8, 2, P_WHITE)
+  };
+
+  // Double cross exactly matches static double cross (not randomized)
+  checkRecognition({
+    XYMove(3, 1, P_BLACK),
+    XYMove(4, 1, P_WHITE),
+    XYMove(4, 2, P_BLACK),
+    XYMove(3, 2, P_WHITE),
+
+    XYMove(5, 1, P_WHITE),
+    XYMove(6, 1, P_BLACK),
+    XYMove(6, 2, P_WHITE),
+    XYMove(5, 2, P_BLACK),
+
+    XYMove(8, 1, P_BLACK),
+    XYMove(9, 1, P_WHITE),
+    XYMove(9, 2, P_BLACK),
+    XYMove(8, 2, P_WHITE)
+  }, 10, 4, Rules::START_POS_CROSS_2, {
+    XYMove(3, 1, P_BLACK),
+    XYMove(4, 1, P_WHITE),
+    XYMove(4, 2, P_BLACK),
+    XYMove(3, 2, P_WHITE),
+
+    XYMove(6, 1, P_BLACK),
+    XYMove(6, 2, P_WHITE),
+    XYMove(5, 2, P_BLACK),
+    XYMove(5, 1, P_WHITE),
+  }, false, expectedRemainingMovesForDoubleCross
+);
+
+  // Double cross partially matches static double cross (randomized)
+  checkRecognition({
+    XYMove(2, 1, P_BLACK),
+    XYMove(3, 1, P_WHITE),
+    XYMove(3, 2, P_BLACK),
+    XYMove(2, 2, P_WHITE),
+
+    XYMove(5, 1, P_WHITE),
+    XYMove(6, 1, P_BLACK),
+    XYMove(6, 2, P_WHITE),
+    XYMove(5, 2, P_BLACK),
+
+    XYMove(8, 1, P_BLACK),
+    XYMove(9, 1, P_WHITE),
+    XYMove(9, 2, P_BLACK),
+    XYMove(8, 2, P_WHITE)
+}, 10, 4, Rules::START_POS_CROSS_2,
+{
+    XYMove(6, 1, P_BLACK),
+    XYMove(6, 2, P_WHITE),
+    XYMove(5, 2, P_BLACK),
+    XYMove(5, 1, P_WHITE),
+
+    XYMove(2, 1, P_BLACK),
+    XYMove(3, 1, P_WHITE),
+    XYMove(3, 2, P_BLACK),
+    XYMove(2, 2, P_WHITE),
+}, true, expectedRemainingMovesForDoubleCross);
+
+  // Double cross do not match static cross completely (randomized)
+  checkRecognition({
+    XYMove(2, 1, P_BLACK),
+    XYMove(3, 1, P_WHITE),
+    XYMove(3, 2, P_BLACK),
+    XYMove(2, 2, P_WHITE),
+
+    XYMove(4, 1, P_WHITE),
+    XYMove(5, 1, P_BLACK),
+    XYMove(5, 2, P_WHITE),
+    XYMove(4, 2, P_BLACK),
+
+    XYMove(8, 1, P_BLACK),
+    XYMove(9, 1, P_WHITE),
+    XYMove(9, 2, P_BLACK),
+    XYMove(8, 2, P_WHITE)
+  }, 10, 4, Rules::START_POS_CROSS_2, {
+    XYMove(2, 1, P_BLACK),
+    XYMove(3, 1, P_WHITE),
+    XYMove(3, 2, P_BLACK),
+    XYMove(2, 2, P_WHITE),
+
+    XYMove(5, 1, P_BLACK),
+    XYMove(5, 2, P_WHITE),
+    XYMove(4, 2, P_BLACK),
+    XYMove(4, 1, P_WHITE)
+  }, true, expectedRemainingMovesForDoubleCross);
+
+    checkStartPos("Double cross on standard size", Rules::START_POS_CROSS_2, false, 39, 32, R"(
+   1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39
+32 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+31 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+30 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+29 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+28 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+27 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+26 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+25 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+24 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+23 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+22 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+21 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+20 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+19 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+18 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+17 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  X  O  O  X  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+16 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  O  X  X  O  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+15 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+14 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+13 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+12 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+11 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+10 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 9 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 8 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 7 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 6 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 5 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 4 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 3 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 2 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 1 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+)");
+
+  checkStartPos("Quadruple cross", Rules::START_POS_CROSS_4, false, 5, 5, R"(
+   1  2  3  4  5
+ 5 X  O  .  X  O
+ 4 O  X  .  O  X
+ 3 .  .  .  .  .
+ 2 X  O  .  X  O
+ 1 O  X  .  O  X
+)");
+
+  checkStartPos("Quadruple cross", Rules::START_POS_CROSS_4, false, 7, 7, R"(
+   1  2  3  4  5  6  7
+ 7 .  .  .  .  .  .  .
+ 6 .  X  O  .  X  O  .
+ 5 .  O  X  .  O  X  .
+ 4 .  .  .  .  .  .  .
+ 3 .  X  O  .  X  O  .
+ 2 .  O  X  .  O  X  .
+ 1 .  .  .  .  .  .  .
+)");
+
+  checkStartPos("Quadruple cross", Rules::START_POS_CROSS_4, false, 8, 8, R"(
+   1  2  3  4  5  6  7  8
+ 8 .  .  .  .  .  .  .  .
+ 7 .  X  O  .  .  X  O  .
+ 6 .  O  X  .  .  O  X  .
+ 5 .  .  .  .  .  .  .  .
+ 4 .  .  .  .  .  .  .  .
+ 3 .  X  O  .  .  X  O  .
+ 2 .  O  X  .  .  O  X  .
+ 1 .  .  .  .  .  .  .  .
+)");
+
+  checkStartPos("Quadruple cross on standard size", Rules::START_POS_CROSS_4, false, 39, 32, R"(
+   1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39
+32 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+31 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+30 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+29 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+28 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+27 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+26 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+25 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+24 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+23 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+22 .  .  .  .  .  .  .  .  .  .  .  X  O  .  .  .  .  .  .  .  .  .  .  .  .  .  X  O  .  .  .  .  .  .  .  .  .  .  .
+21 .  .  .  .  .  .  .  .  .  .  .  O  X  .  .  .  .  .  .  .  .  .  .  .  .  .  O  X  .  .  .  .  .  .  .  .  .  .  .
+20 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+19 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+18 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+17 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+16 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+15 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+14 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+13 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+12 .  .  .  .  .  .  .  .  .  .  .  X  O  .  .  .  .  .  .  .  .  .  .  .  .  .  X  O  .  .  .  .  .  .  .  .  .  .  .
+11 .  .  .  .  .  .  .  .  .  .  .  O  X  .  .  .  .  .  .  .  .  .  .  .  .  .  O  X  .  .  .  .  .  .  .  .  .  .  .
+10 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 9 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 8 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 7 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 6 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 5 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 4 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 3 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 2 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+ 1 .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .
+)");
+
+  checkStartPos("Random quadruple cross on standard size", Rules::START_POS_CROSS_4, true, 39, 32);
+
+  checkGenerationAndRecognition(Rules::START_POS_CROSS_4, false);
+  checkGenerationAndRecognition(Rules::START_POS_CROSS_4, true);
+}

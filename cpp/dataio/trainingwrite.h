@@ -57,7 +57,7 @@ struct SidePosition {
   Player playoutDoublingAdvantagePla;
   double playoutDoublingAdvantage;
 
-  SidePosition();
+  explicit SidePosition(const Rules& rules);
   SidePosition(const Board& board, const BoardHistory& hist, Player pla, int numNeuralNetChangesSoFar);
   ~SidePosition();
 };
@@ -128,7 +128,7 @@ struct FinishedGameData {
   static constexpr int MODE_HINTFORK = 6;
   static constexpr int MODE_ASYM = 7;
 
-  FinishedGameData();
+  explicit FinishedGameData(const Rules& rules);
   ~FinishedGameData();
 
   void printDebug(std::ostream& out) const;
@@ -173,7 +173,7 @@ struct TrainingWriteBuffers {
   //C20: Actual final score, from the perspective of the player to move, adjusted for draw utility, zero if C27 is zero.
   //C21: Lead in points, number of points to make the game fair, zero if C29 is zero.
   //C22: Expected arrival time of WL variance.
-  //C23: Unused
+  //C23: 1.0 if Dots game
   //C24: 1.0 minus weight assigned to td value targets
 
   //C25 Weight multiplier for row as a whole
@@ -311,9 +311,7 @@ struct TrainingWriteBuffers {
 
 class TrainingDataWriter {
  public:
-  TrainingDataWriter(const std::string& outputDir, int inputsVersion, int maxRowsPerFile, double firstFileMinRandProp, int dataXLen, int dataYLen, const std::string& randSeed);
-  TrainingDataWriter(std::ostream* debugOut, int inputsVersion, int maxRowsPerFile, double firstFileMinRandProp, int dataXLen, int dataYLen, int onlyWriteEvery, const std::string& randSeed);
-  TrainingDataWriter(const std::string& outputDir, std::ostream* debugOut, int inputsVersion, int maxRowsPerFile, double firstFileMinRandProp, int dataXLen, int dataYLen, int onlyWriteEvery, const std::string& randSeed);
+  TrainingDataWriter(const std::string& newOutputDir, std::ostream* newDebugOut, int newInputsVersion, int maxRowsPerFile, double firstFileMinRandProp, int dataXLen, int dataYLen, const std::string& randSeed, int onlyWriteEvery = 1, bool dotsGame = false);
   ~TrainingDataWriter();
 
   void writeGame(const FinishedGameData& data);

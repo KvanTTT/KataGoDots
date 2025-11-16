@@ -38,16 +38,16 @@ struct BoardHistory {
   bool whiteHasMoved;
   int overrideNumHandicapStones;
 
-  static const int NUM_RECENT_BOARDS = 6;
-  Board recentBoards[NUM_RECENT_BOARDS];
+  static constexpr int NUM_RECENT_BOARDS = 6;
+  std::vector<Board> recentBoards;
   int currentRecentBoardIdx;
   Player presumedNextMovePla;
 
   //Did this board location ever have a stone there before, or was it ever played?
   //(Also includes locations of suicides)
-  bool wasEverOccupiedOrPlayed[Board::MAX_ARR_SIZE];
+  std::vector<bool> wasEverOccupiedOrPlayed;
   //Locations where the next player is not allowed to play due to superko
-  bool superKoBanned[Board::MAX_ARR_SIZE];
+  std::vector<bool> superKoBanned;
 
   //Number of consecutive passes made that count for ending the game or phase
   int consecutiveEndingPasses;
@@ -68,7 +68,7 @@ struct BoardHistory {
   int numConsecValidTurnsThisGame;
 
   //Ko-recapture-block locations for territory scoring in encore
-  bool koRecapBlocked[Board::MAX_ARR_SIZE];
+  std::vector<bool> koRecapBlocked;
   Hash128 koRecapBlockHash; //Hash contribution from ko-recap-block locations in encore.
 
   //Used to implement once-only rules for ko captures in encore
@@ -76,7 +76,7 @@ struct BoardHistory {
   std::vector<EncoreKoCapture> koCapturesInEncore;
 
   //State of the grid as of the start of encore phase 2 for territory scoring
-  Color secondEncoreStartColors[Board::MAX_ARR_SIZE];
+  std::vector<Color> secondEncoreStartColors;
 
   //Amount that should be added to komi
   float whiteBonusScore;
@@ -100,9 +100,13 @@ struct BoardHistory {
   bool isNoResult;
   //True if this game is supposed to be ended but it was by resignation rather than an actual end position
   bool isResignation;
+  //True if this game is supposed to be ended early
+  bool isPassAliveFinished;
 
   BoardHistory();
+  explicit BoardHistory(const Rules& newRules);
   ~BoardHistory();
+  BoardHistory(const Board& board);
 
   BoardHistory(const Board& board, Player pla, const Rules& rules, int encorePhase);
 
@@ -158,8 +162,7 @@ struct BoardHistory {
   //even if the move violates superko or encore ko recapture prohibitions, or is past when the game is ended.
   //This allows for robustness when this code is being used for analysis or with external data sources.
   //preventEncore artifically prevents any move from entering or advancing the encore phase when using territory scoring.
-  void makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player movePla, const KoHashTable* rootKoHashTable);
-  void makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player movePla, const KoHashTable* rootKoHashTable, bool preventEncore);
+  void makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player movePla, const KoHashTable* rootKoHashTable, bool preventEncore = false);
   //Make a move with legality checking, but be mostly tolerant and allow moves that can still be handled but that may not technically
   //be legal. This is intended for reading moves from SGFs and such where maybe we're getting moves that were played in a different
   //ruleset than ours. Returns true if successful, false if was illegal even unter tolerant rules.
@@ -168,11 +171,17 @@ struct BoardHistory {
   bool isLegalTolerant(const Board& board, Loc moveLoc, Player movePla) const;
 
   //Slightly expensive, check if the entire game is all pass-alive-territory, and if so, declare the game finished
+  // For Dots game it's Grounding alive
   void endGameIfAllPassAlive(const Board& board);
+  void endGameIfNoLegalMoves(const Board& board);
   //Score the board as-is. If the game is already finished, and is NOT a no-result, then this should be idempotent.
   void endAndScoreGameNow(const Board& board);
+  // Effective draw is when there are no ungrounded dots on the field (disregarding Komi)
+  // We can consider grounding in this case because the further game typically doesn't make sense.
+  bool winOrEffectiveDrawByGrounding(const Board& board, Player pla, bool considerDraw = true) const;
+  // Return > 0 if white wins by grounding, < 0 if black wins by grounding, 0 if there are no ungrounded dots and Nan otherwise
+  float whiteScoreIfGroundingAlive(const Board& board) const;
   void endAndScoreGameNow(const Board& board, Color area[Board::MAX_ARR_SIZE]);
-  void getAreaNow(const Board& board, Color area[Board::MAX_ARR_SIZE]) const;
 
   void setWinnerByResignation(Player pla);
 
@@ -200,6 +209,7 @@ struct BoardHistory {
 private:
   bool koHashOccursInHistory(Hash128 koHash, const KoHashTable* rootKoHashTable) const;
   void setKoRecapBlocked(Loc loc, bool b);
+  int countDotsScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]) const;
   int countAreaScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]) const;
   int countTerritoryAreaScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]) const;
   void setFinalScoreAndWinner(float score);
