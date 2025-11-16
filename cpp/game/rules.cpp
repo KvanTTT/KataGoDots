@@ -48,9 +48,9 @@ Rules::Rules(const bool initIsDots) : Rules(
 }
 
 Rules::Rules(
-  bool isDots,
+  const bool newIsDots,
   int startPosRule,
-  bool startPosIsRandom,
+  const bool newStartPosIsRandom,
   int kRule,
   int sRule,
   int tRule,
@@ -59,14 +59,14 @@ Rules::Rules(
   int whbRule,
   bool pOk,
   float km,
-  bool dotsCaptureEmptyBases,
-  bool dotsFreeCapturedDots
+  const bool newDotsCaptureEmptyBases,
+  const bool newDotsFreeCapturedDots
 )
-  : isDots(isDots),
+  : isDots(newIsDots),
     startPos(startPosRule),
-    startPosIsRandom(startPosIsRandom),
-    dotsCaptureEmptyBases(dotsCaptureEmptyBases),
-    dotsFreeCapturedDots(dotsFreeCapturedDots),
+    startPosIsRandom(newStartPosIsRandom),
+    dotsCaptureEmptyBases(newDotsCaptureEmptyBases),
+    dotsFreeCapturedDots(newDotsFreeCapturedDots),
     koRule(kRule),
     scoringRule(sRule),
     taxRule(tRule),
@@ -727,15 +727,15 @@ string Rules::toStringNoSgfDefinedPropertiesMaybeNice() const {
   return toString(false);
 }
 
-double nextRandomOffset(Rand& rand) {
+static double nextRandomOffset(Rand& rand) {
   return rand.nextDouble(4, 7);
 }
 
-int nextRandomOffsetX(Rand& rand, int x_size) {
+static int nextRandomOffsetX(Rand& rand, int x_size) {
   return static_cast<int>(round(nextRandomOffset(rand) / 39.0 * x_size));
 }
 
-int nextRandomOffsetY(Rand& rand, int y_size) {
+static int nextRandomOffsetY(Rand& rand, int y_size) {
   return static_cast<int>(round(nextRandomOffset(rand) / 32.0 * y_size));
 }
 

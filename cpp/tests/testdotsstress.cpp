@@ -7,7 +7,7 @@ using namespace std;
 using namespace std::chrono;
 using namespace TestCommon;
 
-string moveRecordsToSgf(const Board& initialBoard, const vector<Board::MoveRecord>& moveRecords) {
+static string moveRecordsToSgf(const Board& initialBoard, const vector<Board::MoveRecord>& moveRecords) {
   Board boardCopy(initialBoard);
   BoardHistory boardHistory(boardCopy, P_BLACK, boardCopy.rules, 0);
   for (const Board::MoveRecord& moveRecord : moveRecords) {
@@ -22,7 +22,7 @@ string moveRecordsToSgf(const Board& initialBoard, const vector<Board::MoveRecor
  * Calculates the grounding and result captures without using the grounding flag and incremental calculations.
  * It's used for testing to verify incremental grounding algorithms.
  */
-void validateGrounding(
+static void validateGrounding(
   const Board& boardBeforeGrounding,
   const Board& boardAfterGrounding,
   const Player pla,
@@ -121,7 +121,7 @@ void validateGrounding(
   }
 }
 
-void validateStatesAndCaptures(const Board& board, const vector<Board::MoveRecord>& moveRecords) {
+static void validateStatesAndCaptures(const Board& board, const vector<Board::MoveRecord>& moveRecords) {
   int expectedNumBlackCaptures = 0;
   int expectedNumWhiteCaptures = 0;
   int expectedPlacedDotsCount = -board.rules.getNumOfStartPosStones();
@@ -160,7 +160,7 @@ void validateStatesAndCaptures(const Board& board, const vector<Board::MoveRecor
   assert(expectedNumWhiteCaptures == board.numWhiteCaptures);
 }
 
-void runDotsStressTestsInternal(
+static void runDotsStressTestsInternal(
   int x_size,
   int y_size,
   int gamesCount,
@@ -231,7 +231,7 @@ void runDotsStressTestsInternal(
 
     Loc lastLoc = Board::NULL_LOC;
 
-    int tryGroundingAfterMove = (groundingStartCoef + rand.nextDouble() * (groundingEndCoef - groundingStartCoef)) * numLegalMoves;
+    int tryGroundingAfterMove = static_cast<int>((groundingStartCoef + static_cast<float>(rand.nextDouble()) * (groundingEndCoef - groundingStartCoef)) *  static_cast<float>(numLegalMoves));
     Player pla = P_BLACK;
     int currentGameMovesCount = 0;
     for(short randomMove : randomMoves) {

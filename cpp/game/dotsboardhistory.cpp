@@ -20,8 +20,8 @@ bool BoardHistory::winOrEffectiveDrawByGrounding(const Board& board, const Playe
 
   const float whiteScore = whiteScoreIfGroundingAlive(board);
   return considerDraw && Global::isZero(whiteScore) ||
-    pla == P_WHITE && whiteScore > Global::FLOAT_EPS ||
-      pla == P_BLACK && whiteScore < -Global::FLOAT_EPS;
+    (pla == P_WHITE && whiteScore > Global::FLOAT_EPS) ||
+      (pla == P_BLACK && whiteScore < -Global::FLOAT_EPS);
 }
 
 float BoardHistory::whiteScoreIfGroundingAlive(const Board& board) const {

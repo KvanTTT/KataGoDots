@@ -953,7 +953,7 @@ void TrainingWriteBuffers::writeToTextOstream(ostream& out) {
 
 //-------------------------------------------------------------------------------------
 
-TrainingDataWriter::TrainingDataWriter(const string& outputDir, ostream* debugOut,
+TrainingDataWriter::TrainingDataWriter(const string& newOutputDir, ostream* newDebugOut,
   const int inputsVersion,
   const int maxRowsPerFile,
   const double firstFileMinRandProp,
@@ -962,7 +962,7 @@ TrainingDataWriter::TrainingDataWriter(const string& outputDir, ostream* debugOu
   const string& randSeed,
   const int onlyWriteEvery,
   const bool dotsGame)
-  :outputDir(outputDir),inputsVersion(inputsVersion),rand(randSeed),writeBuffers(nullptr),debugOut(debugOut),debugOnlyWriteEvery(onlyWriteEvery),rowCount(0)
+  :outputDir(newOutputDir),inputsVersion(inputsVersion),rand(randSeed),writeBuffers(nullptr),debugOut(newDebugOut),debugOnlyWriteEvery(onlyWriteEvery),rowCount(0)
 {
   //Note that this inputsVersion is for data writing, it might be different than the inputsVersion used
   // to feed into a model during selfplay

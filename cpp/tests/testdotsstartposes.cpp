@@ -10,7 +10,7 @@ using namespace std;
 using namespace std::chrono;
 using namespace TestCommon;
 
-void writeToSgfAndCheckStartPosFromSgfProp(const int startPos, const bool startPosIsRandom, const Board& board) {
+static void writeToSgfAndCheckStartPosFromSgfProp(const int startPos, const bool startPosIsRandom, const Board& board) {
   std::ostringstream sgfStringStream;
   const BoardHistory boardHistory(board, P_BLACK, board.rules, 0);
   WriteSgf::writeSgf(sgfStringStream, "black", "white", boardHistory, {});
@@ -40,7 +40,7 @@ void checkStartPos(const string& description, const int startPos, const bool sta
   writeToSgfAndCheckStartPosFromSgfProp(startPos, startPosIsRandom, board);
 }
 
-void checkRecognition(const vector<XYMove>& xyMoves, const int x_size, const int y_size,
+static void checkRecognition(const vector<XYMove>& xyMoves, const int x_size, const int y_size,
   const int expectedStartPos,
   const vector<XYMove>& expectedStartMoves,
   const bool expectedRandomized,

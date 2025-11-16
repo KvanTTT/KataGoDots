@@ -12,6 +12,8 @@ struct Rules {
   const static Rules DEFAULT_DOTS;
   const static Rules DEFAULT_GO;
 
+  bool isDots;
+
   static constexpr int START_POS_EMPTY = 0;
   static constexpr int START_POS_CROSS = 1;
   static constexpr int START_POS_CROSS_2 = 2;
@@ -45,8 +47,6 @@ struct Rules {
   //Min and max acceptable komi in various places involving user input validation
   static constexpr float MIN_USER_KOMI = -150.0f;
   static constexpr float MAX_USER_KOMI = 150.0f;
-
-  bool isDots;
 
   bool dotsCaptureEmptyBases;
   bool dotsFreeCapturedDots; // TODO: Implement later
@@ -154,9 +154,9 @@ struct Rules {
 private:
   // General constructor
   Rules(
-    bool isDots,
+    bool newIsDots,
     int startPosRule,
-    bool startPosIsRandom,
+    bool newStartPosIsRandom,
     int kRule,
     int sRule,
     int tRule,
@@ -165,8 +165,8 @@ private:
     int whbRule,
     bool pOk,
     float km,
-    bool dotsCaptureEmptyBases,
-    bool dotsFreeCapturedDots
+    bool newDotsCaptureEmptyBases,
+    bool newDotsFreeCapturedDots
   );
 
   static inline std::map<int, std::string> startPosIdToName;
