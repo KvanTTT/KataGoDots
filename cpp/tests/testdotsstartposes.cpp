@@ -23,7 +23,7 @@ static void writeToSgfAndCheckStartPosFromSgfProp(const int startPos, const bool
   testAssert(startPosIsRandom == newRules.startPosIsRandom);
 }
 
-void checkStartPos(const string& description, const int startPos, const bool startPosIsRandom, const int x_size, const int y_size, const string& expectedBoard = "", const vector<XYMove>& extraMoves = {}) {
+static void checkStartPos(const string& description, const int startPos, const bool startPosIsRandom, const int x_size, const int y_size, const string& expectedBoard = "", const vector<XYMove>& extraMoves = {}) {
   cout << "  " << description << " (" << to_string(x_size) << "," << to_string(y_size) << ")";
 
   auto board = Board(x_size, y_size, Rules(startPos, startPosIsRandom, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots));
@@ -71,7 +71,7 @@ static void checkRecognition(const vector<XYMove>& xyMoves, const int x_size, co
   }
 }
 
-void checkStartPosRecognition(const string& description, const int expectedStartPos, const bool startPosIsRandom, const string& inputBoard) {
+static void checkStartPosRecognition(const string& description, const int expectedStartPos, const bool startPosIsRandom, const string& inputBoard) {
   const Board board = parseDotsField(inputBoard, startPosIsRandom, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, {});
 
   cout << "  " << description << " (" << to_string(board.x_size) << "," << to_string(board.y_size) << ")";
@@ -79,7 +79,7 @@ void checkStartPosRecognition(const string& description, const int expectedStart
   writeToSgfAndCheckStartPosFromSgfProp(expectedStartPos, startPosIsRandom, board);
 }
 
-void checkGenerationAndRecognition(const int startPos, const int startPosIsRandom) {
+static void checkGenerationAndRecognition(const int startPos, const int startPosIsRandom) {
   const auto generatedMoves = Rules::generateStartPos(startPos, startPosIsRandom ? &DOTS_RANDOM : nullptr, 39, 32);
   vector<Move> actualStartPosMoves;
   bool actualRandomized;

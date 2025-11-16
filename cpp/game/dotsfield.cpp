@@ -168,8 +168,8 @@ void Board::clearVisited(const vector<Loc>& locations) const {
 }
 
 int Board::calculateOwnershipAndWhiteScore(Color* result, const Color groundingPlayer) const {
-  int whiteCaptures = 0;
-  int blackCaptures = 0;
+  [[maybe_unused]] int whiteCaptures = 0;
+  [[maybe_unused]] int blackCaptures = 0;
 
   for (int y = 0; y < y_size; y++) {
     for (int x = 0; x < x_size; x++) {

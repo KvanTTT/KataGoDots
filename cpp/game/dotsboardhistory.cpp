@@ -19,7 +19,7 @@ bool BoardHistory::winOrEffectiveDrawByGrounding(const Board& board, const Playe
   assert(rules.isDots);
 
   const float whiteScore = whiteScoreIfGroundingAlive(board);
-  return considerDraw && Global::isZero(whiteScore) ||
+  return (considerDraw && Global::isZero(whiteScore)) ||
     (pla == P_WHITE && whiteScore > Global::FLOAT_EPS) ||
       (pla == P_BLACK && whiteScore < -Global::FLOAT_EPS);
 }

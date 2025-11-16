@@ -954,7 +954,7 @@ void TrainingWriteBuffers::writeToTextOstream(ostream& out) {
 //-------------------------------------------------------------------------------------
 
 TrainingDataWriter::TrainingDataWriter(const string& newOutputDir, ostream* newDebugOut,
-  const int inputsVersion,
+  const int newInputsVersion,
   const int maxRowsPerFile,
   const double firstFileMinRandProp,
   const int dataXLen,
@@ -962,16 +962,16 @@ TrainingDataWriter::TrainingDataWriter(const string& newOutputDir, ostream* newD
   const string& randSeed,
   const int onlyWriteEvery,
   const bool dotsGame)
-  :outputDir(newOutputDir),inputsVersion(inputsVersion),rand(randSeed),writeBuffers(nullptr),debugOut(newDebugOut),debugOnlyWriteEvery(onlyWriteEvery),rowCount(0)
+  :outputDir(newOutputDir),inputsVersion(newInputsVersion),rand(randSeed),writeBuffers(nullptr),debugOut(newDebugOut),debugOnlyWriteEvery(onlyWriteEvery),rowCount(0)
 {
   //Note that this inputsVersion is for data writing, it might be different than the inputsVersion used
   // to feed into a model during selfplay
-  const int numBinaryChannels = NNInputs::getNumberOfSpatialFeatures(inputsVersion, dotsGame);
-  const int numGlobalChannels = NNInputs::getNumberOfGlobalFeatures(inputsVersion, dotsGame);
+  const int numBinaryChannels = NNInputs::getNumberOfSpatialFeatures(newInputsVersion, dotsGame);
+  const int numGlobalChannels = NNInputs::getNumberOfGlobalFeatures(newInputsVersion, dotsGame);
 
   constexpr bool hasMetadataInput = false;
   writeBuffers = new TrainingWriteBuffers(
-    inputsVersion,
+    newInputsVersion,
     maxRowsPerFile,
     numBinaryChannels,
     numGlobalChannels,

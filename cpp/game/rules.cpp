@@ -15,8 +15,8 @@ const Rules Rules::DEFAULT_GO = Rules(false);
 
 Rules::Rules() : Rules(false) {}
 
-Rules::Rules(const int startPos, const bool startPosIsRandom, const bool suicide, const bool dotsCaptureEmptyBases, const bool dotsFreeCapturedDots) :
-  Rules(true, startPos, startPosIsRandom, 0, 0, 0, suicide, false, 0, false, 0.0f, dotsCaptureEmptyBases, dotsFreeCapturedDots) {}
+Rules::Rules(const int newStartPos, const bool newStartPosIsRandom, const bool newSuicide, const bool newDotsCaptureEmptyBases, const bool newDotsFreeCapturedDots) :
+  Rules(true, newStartPos, newStartPosIsRandom, 0, 0, 0, newSuicide, false, 0, false, 0.0f, newDotsCaptureEmptyBases, newDotsFreeCapturedDots) {}
 
 Rules::Rules(
   int kRule,
@@ -63,18 +63,21 @@ Rules::Rules(
   const bool newDotsFreeCapturedDots
 )
   : isDots(newIsDots),
+
     startPos(startPosRule),
     startPosIsRandom(newStartPosIsRandom),
-    dotsCaptureEmptyBases(newDotsCaptureEmptyBases),
-    dotsFreeCapturedDots(newDotsFreeCapturedDots),
+    komi(km),
+    multiStoneSuicideLegal(suic),
+    taxRule(tRule),
+    whiteHandicapBonusRule(whbRule),
+
     koRule(kRule),
     scoringRule(sRule),
-    taxRule(tRule),
-    multiStoneSuicideLegal(suic),
     hasButton(button),
-    whiteHandicapBonusRule(whbRule),
     friendlyPassOk(pOk),
-    komi(km)
+
+    dotsCaptureEmptyBases(newDotsCaptureEmptyBases),
+    dotsFreeCapturedDots(newDotsFreeCapturedDots)
 {
   initializeIfNeeded();
 }
@@ -955,7 +958,7 @@ int Rules::recognizeStartPos(
 
     if (remainingMoves != nullptr) {
         for (const auto recognizedMove : startPosMoves) {
-        bool remainingMoveIsRemoved = false;
+        [[maybe_unused]] bool remainingMoveIsRemoved = false;
         for(auto it = remainingMoves->begin(); it != remainingMoves->end(); ++it) {
           if (movesEqual(*it, recognizedMove)) {
             remainingMoves->erase(it);

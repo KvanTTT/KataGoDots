@@ -131,7 +131,7 @@ static void validateStatesAndCaptures(const Board& board, const vector<Board::Mo
       const State state = board.getState(Location::getLoc(x, y, board.x_size));
       const Color activeColor = getActiveColor(state);
       const Color placedDotColor = getPlacedDotColor(state);
-      const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
+      [[maybe_unused]] const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
 
       if (placedDotColor != C_EMPTY) {
         expectedPlacedDotsCount++;
@@ -155,9 +155,9 @@ static void validateStatesAndCaptures(const Board& board, const vector<Board::Mo
   }
 
   const int actualPlacedDotsCount = moveRecords.size() - (moveRecords.back().loc == Board::PASS_LOC ? 1 : 0);
-  assert(expectedPlacedDotsCount == actualPlacedDotsCount);
-  assert(expectedNumBlackCaptures == board.numBlackCaptures);
-  assert(expectedNumWhiteCaptures == board.numWhiteCaptures);
+  testAssert(expectedPlacedDotsCount == actualPlacedDotsCount);
+  testAssert(expectedNumBlackCaptures == board.numBlackCaptures);
+  testAssert(expectedNumWhiteCaptures == board.numWhiteCaptures);
 }
 
 static void runDotsStressTestsInternal(
