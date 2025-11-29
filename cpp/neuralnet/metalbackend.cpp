@@ -975,14 +975,16 @@ void MetalProcess::getMetalOutput(
  * @param numBatchEltsFilled The number of batch elements filled in the input buffer.
  * @param inputBufs An array of pointers to NNResultBuf objects containing the neural network input data.
  * @param outputs A vector of NNOutput pointers to store the computed output.
+ * @param dotsGame Whether this is a Dots game (affects number of features).
  */
 void NeuralNet::getOutput(
   ComputeHandle* gpuHandle,
   InputBuffers* inputBuffers,
   int numBatchEltsFilled,
   NNResultBuf** inputBufs,
-  vector<NNOutput*>& outputs) {
-
+  const vector<NNOutput*>& outputs,
+  bool dotsGame) {
+  (void)dotsGame;
   MetalProcess::getMetalOutput(gpuHandle, inputBuffers, numBatchEltsFilled, inputBufs, outputs);
 }
 
