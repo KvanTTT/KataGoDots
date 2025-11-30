@@ -160,6 +160,7 @@ set<string> Rules::startPosStrings() {
   initializeIfNeeded();
   return {
     startPosIdToName[START_POS_EMPTY],
+    startPosIdToName[START_POS_SINGLE],
     startPosIdToName[START_POS_CROSS],
     startPosIdToName[START_POS_CROSS_2],
     startPosIdToName[START_POS_CROSS_4],
@@ -170,6 +171,7 @@ int Rules::getNumOfStartPosStones() const {
   switch (startPos) {
     case START_POS_EMPTY:
       return 0;
+    case START_POS_SINGLE: return 1;
     case START_POS_CROSS: return 4;
     case START_POS_CROSS_2: return 8;
     case START_POS_CROSS_4: return 16;
@@ -747,6 +749,11 @@ std::vector<Move> Rules::generateStartPos(const int startPos, Rand* rand, const 
   switch (startPos) {
     case START_POS_EMPTY:
       break;
+    case START_POS_SINGLE:
+      if (x_size >= 1 && y_size >= 1) {
+        moves.emplace_back(Location::getLoc(x_size / 2, y_size / 2, x_size), P_BLACK);
+      }
+      break;
     case START_POS_CROSS:
       if (x_size >= 2 && y_size >= 2) {
         // Obey notago implementation for odd height
@@ -923,23 +930,30 @@ int Rules::recognizeStartPos(
     vector<Move> refinedStartPosMoves;
 
     // TODO: generalize (currently it works only for crosses)
-    for(int startPosInd = 0; startPosInd < startPosMoves.size(); startPosInd += 4) {
-      if (startPosInd + 3 >= startPosMoves.size()) continue;
-      for (int staticStartPosInd = 0; staticStartPosInd < staticStartPosMoves.size(); staticStartPosInd += 4) {
-        if (staticStartPosInd + 3 >= staticStartPosMoves.size()) continue;
+    if (startPosMovesSize == 1) {
+      if (movesEqual(startPosMoves[0], staticStartPosMoves[0])) {
+        refinedStartPosMoves.emplace_back(startPosMoves[0]);
+        staticStartPosMoves.erase(staticStartPosMoves.begin());
+      }
+    } else {
+      for(int startPosInd = 0; startPosInd < startPosMoves.size(); startPosInd += 4) {
+        if (startPosInd + 3 >= startPosMoves.size()) continue;
+        for (int staticStartPosInd = 0; staticStartPosInd < staticStartPosMoves.size(); staticStartPosInd += 4) {
+          if (staticStartPosInd + 3 >= staticStartPosMoves.size()) continue;
 
-        if (!movesEqual(startPosMoves[startPosInd], staticStartPosMoves[staticStartPosInd])) continue;
-        if (!movesEqual(startPosMoves[startPosInd + 1], staticStartPosMoves[staticStartPosInd + 1])) continue;
-        if (!movesEqual(startPosMoves[startPosInd + 2], staticStartPosMoves[staticStartPosInd + 2])) continue;
-        if (!movesEqual(startPosMoves[startPosInd + 3], staticStartPosMoves[staticStartPosInd + 3])) continue;
+          if (!movesEqual(startPosMoves[startPosInd], staticStartPosMoves[staticStartPosInd])) continue;
+          if (!movesEqual(startPosMoves[startPosInd + 1], staticStartPosMoves[staticStartPosInd + 1])) continue;
+          if (!movesEqual(startPosMoves[startPosInd + 2], staticStartPosMoves[staticStartPosInd + 2])) continue;
+          if (!movesEqual(startPosMoves[startPosInd + 3], staticStartPosMoves[staticStartPosInd + 3])) continue;
 
-        refinedStartPosMoves.emplace_back(startPosMoves[startPosInd]);
-        refinedStartPosMoves.emplace_back(startPosMoves[startPosInd + 1]);
-        refinedStartPosMoves.emplace_back(startPosMoves[startPosInd + 2]);
-        refinedStartPosMoves.emplace_back(startPosMoves[startPosInd + 3]);
+          refinedStartPosMoves.emplace_back(startPosMoves[startPosInd]);
+          refinedStartPosMoves.emplace_back(startPosMoves[startPosInd + 1]);
+          refinedStartPosMoves.emplace_back(startPosMoves[startPosInd + 2]);
+          refinedStartPosMoves.emplace_back(startPosMoves[startPosInd + 3]);
 
-        staticStartPosMoves.erase(staticStartPosMoves.begin() + staticStartPosInd, staticStartPosMoves.begin() + staticStartPosInd + 4);
-        break;
+          staticStartPosMoves.erase(staticStartPosMoves.begin() + staticStartPosInd, staticStartPosMoves.begin() + staticStartPosInd + 4);
+          break;
+        }
       }
     }
 
@@ -975,7 +989,12 @@ int Rules::recognizeStartPos(
   };
 
   if (const auto recognizedCrossesMovesSize = startPosMoves.size(); recognizedCrossesMovesSize < 4) {
-    finishRecognition(START_POS_EMPTY);
+    if (placementMoves.size() == 1) {
+      startPosMoves.emplace_back(placementMoves[0]);
+      finishRecognition(START_POS_SINGLE);
+    } else {
+      finishRecognition(START_POS_EMPTY);
+    }
   } else if (recognizedCrossesMovesSize < 8) {
     finishRecognition(START_POS_CROSS);
   } else if (recognizedCrossesMovesSize < 16) {

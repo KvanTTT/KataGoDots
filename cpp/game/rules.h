@@ -15,9 +15,10 @@ struct Rules {
   bool isDots;
 
   static constexpr int START_POS_EMPTY = 0;
-  static constexpr int START_POS_CROSS = 1;
-  static constexpr int START_POS_CROSS_2 = 2;
-  static constexpr int START_POS_CROSS_4 = 3;
+  static constexpr int START_POS_SINGLE = 1;
+  static constexpr int START_POS_CROSS = 2;
+  static constexpr int START_POS_CROSS_2 = 3;
+  static constexpr int START_POS_CROSS_4 = 4;
   int startPos;
 
   // Enables random shuffling of start pos. Currently, it works only for CROSS_4
@@ -177,10 +178,12 @@ private:
   static void initializeIfNeeded() {
     if (startPosIdToName.empty()) {
       startPosIdToName[START_POS_EMPTY] = "EMPTY";
+      startPosIdToName[START_POS_SINGLE] = "SINGLE";
       startPosIdToName[START_POS_CROSS] = "CROSS";
       startPosIdToName[START_POS_CROSS_2] = "CROSS_2";
       startPosIdToName[START_POS_CROSS_4] = "CROSS_4";
       startPosNameToId["EMPTY"] = START_POS_EMPTY;
+      startPosNameToId["SINGLE"] = START_POS_SINGLE;
       startPosNameToId["CROSS"] = START_POS_CROSS;
       startPosNameToId["CROSS_2"] = START_POS_CROSS_2;
       startPosNameToId["CROSS_4"] = START_POS_CROSS_4;
