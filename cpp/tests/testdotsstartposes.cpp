@@ -96,6 +96,33 @@ void Tests::runDotsStartPosTests() {
 
   Rand rand("runDotsStartPosTests");
 
+  checkStartPos("Single on odd size", Rules::START_POS_SINGLE, false, 3, 3, R"(
+   1  2  3
+ 3 .  .  .
+ 2 .  X  .
+ 1 .  .  .
+)");
+
+  checkStartPos("Single on even size", Rules::START_POS_SINGLE, false, 4, 4, R"(
+   1  2  3  4
+ 4 .  .  .  .
+ 3 .  .  .  .
+ 2 .  .  X  .
+ 1 .  .  .  .
+)");
+
+  checkStartPosRecognition("Single first player", Rules::START_POS_SINGLE, false, R"(
+...
+.x.
+...
+)");
+
+  checkStartPosRecognition("Single second player", Rules::START_POS_SINGLE, true, R"(
+...
+.o.
+...
+)");
+
   checkStartPos("Cross on minimal size", Rules::START_POS_CROSS, false, 2, 2, R"(
    1  2
  2 X  O
