@@ -28,6 +28,7 @@ namespace Tests {
   void runDotsOwnershipTests();
   void runDotsSymmetryTests();
   void runDotsCapturingTests();
+  void runDotsAcceptableKomiRange();
 
   void runBoardUndoTest();
   void runBoardHandicapTest();
