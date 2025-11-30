@@ -147,7 +147,7 @@ struct Board
   static constexpr Loc NULL_LOC = 0;
   // Location used to indicate a pass or grounding (Dots game) move is desired.
   static constexpr Loc PASS_LOC = 1;
-  // Location used to indicate resigning move.
+  // Location used to indicate a resigning move.
   static constexpr Loc RESIGN_LOC = 2;
 
   //Zobrist Hashing------------------------------
@@ -301,6 +301,7 @@ struct Board
   int numPlaStonesOnBoard(Player pla) const;
   std::vector<Move>
   getCurrentMoves(int& startBoardNumBlackStones, int& startBoardNumWhiteStones, bool includeStartLocs) const;
+  std::pair<float, float> getAcceptableKomiRange(bool allowDraw, int extraBlack = 0) const;
 
   //Get a hash that combines the position of the board with simple ko prohibition and a player to move.
   Hash128 getSitHashWithSimpleKo(Player pla) const;

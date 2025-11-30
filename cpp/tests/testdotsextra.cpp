@@ -462,3 +462,70 @@ ox.ox.
 )"
 );
 }
+
+static Board initializeBoard(const int startPos, const vector<XYMove>& extraMoves = {}) {
+  auto board = Board(
+    Board::DEFAULT_LEN_X_DOTS,
+    Board::DEFAULT_LEN_Y_DOTS,
+    Rules(
+      startPos,
+      false,
+      Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
+      Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
+      Rules::DEFAULT_DOTS.dotsFreeCapturedDots
+    )
+  );
+  board.setStartPos(DOTS_RANDOM);
+  for (auto& extraMove : extraMoves) {
+    board.playMoveAssumeLegal(Location::getLoc(extraMove.x, extraMove.y, board.x_size), extraMove.player);
+  }
+  return board;
+}
+
+void Tests::runDotsAcceptableKomiRange() {
+  cout << "Running acceptable komi ranges tests" << endl;
+
+  const Board& singleStartPosBoard = initializeBoard(Rules::START_POS_SINGLE);
+  auto [lowerSingleDraw, upperSingleDraw] = singleStartPosBoard.getAcceptableKomiRange(true);
+  testAssert(lowerSingleDraw == -1.0f);
+  testAssert(upperSingleDraw == 0.0f);
+
+  auto [lowerSingleNoDraw, upperSingleNoDraw] = singleStartPosBoard.getAcceptableKomiRange(false);
+  testAssert(lowerSingleNoDraw == -0.5f);
+  testAssert(upperSingleNoDraw == -0.5f);
+
+  const Board& crossStartPosBoard = initializeBoard(Rules::START_POS_CROSS);
+  auto [lowerCrossDraw, upperCrossDraw] = crossStartPosBoard.getAcceptableKomiRange(true);
+  testAssert(lowerCrossDraw == -2.0f);
+  testAssert(upperCrossDraw == +2.0f);
+
+  auto [lowerCrossNoDraw, upperCrossNoDraw] = crossStartPosBoard.getAcceptableKomiRange(false);
+  testAssert(lowerCrossNoDraw == -1.5f);
+  testAssert(upperCrossNoDraw == 1.5f);
+
+  const Board& cross4StartPosBoard = initializeBoard(Rules::START_POS_CROSS_4);
+  auto [lowerCross4Draw, upperCross4Draw] = cross4StartPosBoard.getAcceptableKomiRange(true);
+  testAssert(lowerCross4Draw == -8.0f);
+  testAssert(upperCross4Draw == +8.0f);
+
+  auto [lowerCross4NoDraw, upperCross4NoDraw] = cross4StartPosBoard.getAcceptableKomiRange(false);
+  testAssert(lowerCross4NoDraw == -7.5f);
+  testAssert(upperCross4NoDraw == 7.5f);
+
+  const Board& crossStartPosWithExtraMovesBoard = initializeBoard(Rules::START_POS_CROSS, {XYMove(20, 15, P_BLACK)});
+  auto [lowerCrossExtraMovesDraw, upperCrossExtraMovesDraw] = crossStartPosWithExtraMovesBoard.getAcceptableKomiRange(true);
+  testAssert(lowerCrossExtraMovesDraw == -3.0f);
+  testAssert(upperCrossExtraMovesDraw == +2.0f);
+
+  auto [lowerCrossExtraBlackDraw, upperCrossExtraBlackDraw] = crossStartPosBoard.getAcceptableKomiRange(true, 1);
+  testAssert(lowerCrossExtraBlackDraw == -3.0f);
+  testAssert(upperCrossExtraBlackDraw == +2.0f);
+
+  auto [lowerCrossExtraMovesNoDraw, upperCrossExtraMovesNoDraw] = crossStartPosWithExtraMovesBoard.getAcceptableKomiRange(false);
+  testAssert(lowerCrossExtraMovesNoDraw == -2.5f);
+  testAssert(upperCrossExtraMovesNoDraw == +1.5f);
+
+  auto [lowerCrossExtraBlackNoDraw, upperCrossExtraBlackNoDraw] = crossStartPosBoard.getAcceptableKomiRange(false, 1);
+  testAssert(lowerCrossExtraBlackNoDraw == -2.5f);
+  testAssert(upperCrossExtraBlackNoDraw == +1.5f);
+}

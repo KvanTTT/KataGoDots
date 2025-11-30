@@ -58,6 +58,7 @@ int MainCmds::runtests(const vector<string>& args) {
   Tests::runDotsSymmetryTests();
   Tests::runDotsOwnershipTests();
   Tests::runDotsCapturingTests();
+  Tests::runDotsAcceptableKomiRange();
 
   Tests::runBoardIOTests();
   Tests::runBoardBasicTests();

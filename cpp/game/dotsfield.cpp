@@ -949,3 +949,10 @@ void Board::calculateOneMoveCaptureAndBasePositionsForDots(vector<Color>& captur
     }
   }
 }
+
+std::pair<float, float> Board::getAcceptableKomiRange(const bool allowDraw, const int extraBlack) const {
+  assert(rules.isDots);
+  auto lowerBound = static_cast<float>(-whiteScoreIfBlackGrounds) - extraBlack + (allowDraw ? 0.0f : 0.5f);
+  auto upperBound = static_cast<float>(blackScoreIfWhiteGrounds) + (allowDraw ? 0.0f : -0.5f);
+  return {lowerBound, upperBound};
+}
