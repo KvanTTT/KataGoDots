@@ -54,7 +54,7 @@ mkdir -p "$BASEDIR"/gatekeepersgf
 # you have strong hardware or are later into a run you may want to reduce the overhead by scaling
 # these numbers up and doing more games and training per cycle, exporting models less frequently, etc.
 
-NUM_GAMES_PER_CYCLE=400 # Every cycle, play this many games
+NUM_GAMES_PER_CYCLE=600 # Every cycle, play this many games
 NUM_THREADS_FOR_SHUFFLING=16
 NUM_TRAIN_SAMPLES_PER_EPOCH=50000  # Training will proceed in chunks of this many rows, subject to MAX_TRAIN_PER_DATA.
 MAX_TRAIN_PER_DATA=8 # On average, train only this many times on each data row. Larger numbers may cause overfitting.

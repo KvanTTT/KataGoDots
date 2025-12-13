@@ -618,12 +618,10 @@ float BoardHistory::currentSelfKomi(Player pla, double drawEquivalentWinsForWhit
 
   if(pla == P_WHITE)
     return whiteKomiAdjusted;
-  else if(pla == P_BLACK)
+  if(pla == P_BLACK)
     return -whiteKomiAdjusted;
-  else {
-    assert(false);
-    return 0.0f;
-  }
+  assert(false);
+  return 0.0f;
 }
 
 int BoardHistory::countAreaScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]) const {

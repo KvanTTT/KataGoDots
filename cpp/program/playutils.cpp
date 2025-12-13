@@ -7,18 +7,64 @@
 
 using namespace std;
 
-static int getDefaultMaxExtraBlack(double sqrtBoardArea) {
-  if(sqrtBoardArea <= 10.00001)
+static int getDefaultMaxExtraBlack(double sqrtBoardArea, bool dotsGame) {
+  if (!dotsGame) {
+    if(sqrtBoardArea <= 10.00001)
+      return 0;
+    if(sqrtBoardArea <= 14.00001)
+      return 1;
+    if(sqrtBoardArea <= 16.00001)
+      return 2;
+    if(sqrtBoardArea <= 17.00001)
+      return 3;
+    if(sqrtBoardArea <= 18.00001)
+      return 4;
+    return 5;
+  }
+
+  // TODO: fine tune it
+  if(sqrtBoardArea <= 20.00001)
     return 0;
-  if(sqrtBoardArea <= 14.00001)
+  if(sqrtBoardArea <= 30.00001)
     return 1;
-  if(sqrtBoardArea <= 16.00001)
-    return 2;
-  if(sqrtBoardArea <= 17.00001)
-    return 3;
-  if(sqrtBoardArea <= 18.00001)
-    return 4;
-  return 5;
+  return 2;
+}
+
+ExtraBlackAndKomi PlayUtils::chooseExtraBlackAndKomiForDots(
+  const Board& board,
+  float komiRatio,
+  double komiStdevRaio,
+  bool allowDraw,
+  double handicapProb,
+  int numExtraBlackFixed,
+  Rand& rand
+  ) {
+  double sqrtBoardArea = sqrt(board.x_size * board.y_size);
+
+  const int defaultMaxExtraBlack = getDefaultMaxExtraBlack(sqrtBoardArea, true);
+
+  int extraBlack = 0;
+  if((numExtraBlackFixed > 0 || defaultMaxExtraBlack > 0) && rand.nextBool(handicapProb)) {
+    if(numExtraBlackFixed > 0)
+      extraBlack = numExtraBlackFixed;
+    else
+      extraBlack += 1 + rand.nextUInt(defaultMaxExtraBlack);
+  }
+
+  auto [lowerBound, upperBound] = board.getAcceptableKomiRange(allowDraw);
+  lowerBound -= static_cast<float>(extraBlack);
+
+  ExtraBlackAndKomi ret;
+  ret.extraBlack = extraBlack;
+  ret.komiMean = lowerBound + komiRatio * (upperBound - lowerBound);
+  ret.komiStdev = stdevToUse;
+  //These are set later
+  ret.makeGameFair = false;
+  ret.makeGameFairForEmptyBoard = false;
+  ret.interpZero = false;
+  //This is recorded for application later, since other things may adjust the komi in between.
+  ret.allowInteger = allowInteger;
+  return ret;
 }
 
 ExtraBlackAndKomi PlayUtils::chooseExtraBlackAndKomi(
@@ -94,14 +140,14 @@ void PlayUtils::setKomiWithoutNoise(const ExtraBlackAndKomi& extraBlackAndKomi, 
 void PlayUtils::setKomiWithNoise(const ExtraBlackAndKomi& extraBlackAndKomi, BoardHistory& hist, Rand& rand) {
   float komi = extraBlackAndKomi.komiMean;
   if(extraBlackAndKomi.komiStdev > 0)
-    komi += extraBlackAndKomi.komiStdev * (float)rand.nextGaussianTruncated(3.0);
+    komi += extraBlackAndKomi.komiStdev * static_cast<float>(rand.nextGaussianTruncated(3.0));
   if(extraBlackAndKomi.interpZero)
-    komi = komi * (float)rand.nextDouble();
+    komi = komi * static_cast<float>(rand.nextDouble());
   komi = roundKomiWithLinearProb(komi,rand);
   komi = roundAndClipKomi(komi, hist.getRecentBoard(0));
   assert(Rules::komiIsIntOrHalfInt(komi));
-  if(!extraBlackAndKomi.allowInteger && komi == (int)komi)
-    komi += rand.nextBool(0.5) ? (-0.5f) : (0.5f);
+  if(!extraBlackAndKomi.allowInteger && Global::isEqual(komi, std::trunc(komi)))
+    komi += rand.nextBool(0.5) ? -0.5f : 0.5f;
   hist.setKomi(komi);
 }
 
@@ -359,12 +405,21 @@ double PlayUtils::getHackedLCBForWinrate(const Search* search, const AnalysisDat
 
 float PlayUtils::roundAndClipKomi(double unrounded, const Board& board) {
   //Just in case, make sure komi is reasonable
-  float range = NNPos::KOMI_CLIP_RADIUS + board.x_size * board.y_size;
-  if(unrounded < -range)
-    unrounded = -range;
-  if(unrounded > range)
-    unrounded = range;
-  return (float)(0.5 * round(2.0 * unrounded));
+  float lowerBound, upperBound;
+  if (!board.rules.isDots) {
+    upperBound = NNPos::KOMI_CLIP_RADIUS + static_cast<float>(board.x_size * board.y_size);
+    lowerBound = -upperBound;
+  } else {
+    auto [lowerBoundDots, upperBoundDots] = board.getAcceptableKomiRange(true);
+    lowerBound = lowerBoundDots;
+    upperBound = upperBoundDots;
+  }
+
+  if(unrounded < lowerBound)
+    unrounded = lowerBound;
+  if(unrounded > upperBound)
+    unrounded = upperBound;
+  return static_cast<float>(0.5 * round(2.0 * unrounded));
 }
 
 static SearchParams getNoiselessParams(SearchParams oldParams, int64_t numVisits) {
@@ -626,7 +681,7 @@ float PlayUtils::computeLead(
   }
 
   auto evalWinLoss = [&](double newKomi) {
-    double winLoss = evalKomi(scoreWLCache,botB,botW,board,hist,pla,numVisits,otherGameProps,PlayUtils::roundAndClipKomi(newKomi,board)).second;
+    double winLoss = evalKomi(scoreWLCache,botB,botW,board,hist,pla,numVisits,otherGameProps,roundAndClipKomi(newKomi,board)).second;
     // cout << "Delta " << delta << " wr " << winLoss << endl;
     return winLoss;
   };

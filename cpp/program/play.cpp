@@ -673,16 +673,9 @@ void GameInitializer::createGameSharedUnsynchronized(
     makeGameFairProb = std::max(makeGameFairProb,playSettings.minAsymmetricCompensateKomiProb);
   }
 
-  if(komiAuto) {
-    if(makeGameFairProb > 0.0)
-      extraBlackAndKomi.makeGameFair = rand.nextBool(makeGameFairProb);
-    extraBlackAndKomi.makeGameFairForEmptyBoard = !extraBlackAndKomi.makeGameFair;
-  }
-  else {
-    if(makeGameFairProb > 0.0)
-      extraBlackAndKomi.makeGameFair = rand.nextBool(makeGameFairProb);
-    extraBlackAndKomi.makeGameFairForEmptyBoard = false;
-  }
+  if(makeGameFairProb > 0.0)
+    extraBlackAndKomi.makeGameFair = rand.nextBool(makeGameFairProb);
+  extraBlackAndKomi.makeGameFairForEmptyBoard = komiAuto ? !extraBlackAndKomi.makeGameFair : false;
 }
 
 //----------------------------------------------------------------------------------------------------------
