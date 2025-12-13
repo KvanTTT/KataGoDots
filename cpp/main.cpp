@@ -170,7 +170,7 @@ static int handleSubcommand(const string& subcommand, const vector<string>& args
   else if(subcommand == "sandbox")
     return MainCmds::sandbox();
   else if(subcommand == "version") {
-    cout << Version::getKataGoVersionFullInfo() << std::flush;
+    cout << Version::getAppFullInfo() << std::flush;
     return 0;
   }
   else {
@@ -197,7 +197,7 @@ int main(int argc, const char* const* argv) {
   }
 
 #if defined(OS_IS_WINDOWS)
-  //On windows, uncaught exceptions reaching toplevel don't normally get printed out,
+  //On Windows, uncaught exceptions reaching toplevel don't normally get printed out,
   //so explicitly catch everything and print
   int result;
   try {
@@ -217,19 +217,22 @@ int main(int argc, const char* const* argv) {
 #endif
 }
 
-
-string Version::getKataGoVersion() {
-  return string("1.16.4");
+std::string Version::getAppName() {
+  return "KataGoDots";
 }
 
-string Version::getKataGoVersionForHelp() {
-  return string("KataGo v1.16.4");
+string Version::getAppVersion() {
+  return "1.16.4";
 }
 
-string Version::getKataGoVersionFullInfo() {
+string Version::getAppNameWithVersion() {
+  return getAppName() + " " + getAppVersion();
+}
+
+string Version::getAppFullInfo() {
   ostringstream out;
-  out << Version::getKataGoVersionForHelp() << endl;
-  out << "Git revision: " << Version::getGitRevision() << endl;
+  out << getAppNameWithVersion() << endl;
+  out << "Git revision: " << getGitRevision() << endl;
   out << "Compile Time: " << __DATE__ << " " << __TIME__ << endl;
 #if defined(USE_CUDA_BACKEND)
   out << "Using CUDA backend" << endl;
@@ -266,11 +269,11 @@ string Version::getKataGoVersionFullInfo() {
 }
 
 string Version::getGitRevision() {
-  return string(GIT_REVISION);
+  return GIT_REVISION;
 }
 
 string Version::getGitRevisionWithBackend() {
-  string s = string(GIT_REVISION);
+  string s = GIT_REVISION;
 
 #if defined(USE_CUDA_BACKEND)
   s += "-cuda";

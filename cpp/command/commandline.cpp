@@ -163,7 +163,7 @@ class KataHelpOutput : public TCLAP::StdOutput
 
 
 KataGoCommandLine::KataGoCommandLine(const string& message)
-  :TCLAP::CmdLine(message, ' ', Version::getKataGoVersionFullInfo(),true),
+  :TCLAP::CmdLine(message, ' ', Version::getAppFullInfo(),true),
    modelFileArg(NULL),
    humanModelFileArg(NULL),
    configFileArg(NULL),

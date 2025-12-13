@@ -113,9 +113,9 @@ int MainCmds::analysis(const vector<string>& args) {
   const bool logToStderr = logger.isLoggingToStderr();
 
   logger.write("Analysis Engine starting...");
-  logger.write(Version::getKataGoVersionForHelp());
+  logger.write(Version::getAppNameWithVersion());
   if(!logToStderr) {
-    cerr << Version::getKataGoVersionForHelp() << endl;
+    cerr << Version::getAppNameWithVersion() << endl;
   }
 
   const bool logAllRequests = cfg.contains("logAllRequests") ? cfg.getBool("logAllRequests") : false;
@@ -504,7 +504,7 @@ int MainCmds::analysis(const vector<string>& args) {
       if(input.find("action") != input.end() && input["action"].is_string()) {
         string action = input["action"].get<string>();
         if(action == "query_version") {
-          input["version"] = Version::getKataGoVersion();
+          input["version"] = Version::getAppVersion();
           input["git_hash"] = Version::getGitRevision();
           pushToWrite(new string(input.dump()));
         }

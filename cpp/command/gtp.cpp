@@ -1998,10 +1998,10 @@ int MainCmds::gtp(const vector<string>& args) {
     startupPrintMessageToStderr = cfg.getBool("startupPrintMessageToStderr");
 
   logger.write("GTP Engine starting...");
-  logger.write(Version::getKataGoVersionForHelp());
+  logger.write(Version::getAppNameWithVersion());
   //Also check loggingToStderr so that we don't duplicate the message from the log file
   if(startupPrintMessageToStderr && !logger.isLoggingToStderr()) {
-    cerr << Version::getKataGoVersionForHelp() << endl;
+    cerr << Version::getAppNameWithVersion() << endl;
   }
 
   //Defaults to 7.5 komi, gtp will generally override this
@@ -2304,7 +2304,7 @@ int MainCmds::gtp(const vector<string>& args) {
     }
 
     else if(command == "name") {
-      response = "KataGoDots";
+      response = Version::getAppName();
     }
 
     else if(command == "version") {
@@ -2312,7 +2312,7 @@ int MainCmds::gtp(const vector<string>& args) {
         response = overrideVersion;
       else {
         std::vector<string> parts;
-        parts.push_back(Version::getKataGoVersion());
+        parts.push_back(Version::getAppVersion());
         if(engine->nnEval != NULL)
           parts.push_back(engine->nnEval->getAbbrevInternalModelName());
         if(engine->humanEval != NULL)
