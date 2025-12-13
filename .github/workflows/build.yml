@@ -44,8 +44,9 @@ jobs:
         make -j$(nproc)
 
     - name: Run tests
+      working-directory: cpp
       run: |
-        cpp/katago runtests
+        ./katago runtests
 
     - name: Upload artifact
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -87,8 +88,9 @@ jobs:
         run: |
           ninja
       - name: Run tests
+        working-directory: cpp
         run: |
-          cpp/katago runtests
+          ./katago runtests
       - name: Upload artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v4
@@ -141,8 +143,9 @@ jobs:
         Copy-Item "$vcpkgRoot/installed/x64-windows/bin/*.dll" -Destination "Release/" -ErrorAction SilentlyContinue
 
     - name: Run tests
+      working-directory: cpp
       run: |
-        cpp/Release/katago.exe runtests
+        Release/katago.exe runtests
 
     - name: Upload artifact
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
