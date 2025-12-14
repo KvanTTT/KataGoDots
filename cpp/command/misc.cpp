@@ -83,7 +83,7 @@ int MainCmds::sampleinitializations(const vector<string>& args) {
       const string expectedSha256 = "";
       nnEval = Setup::initializeNNEvaluator(
         modelFile,modelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-        Board::MAX_LEN,Board::MAX_LEN,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+        Board::MAX_LEN_X,Board::MAX_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
         Setup::SETUP_FOR_GTP
       );
     }
@@ -191,7 +191,7 @@ int MainCmds::evalrandominits(const vector<string>& args) {
       const string expectedSha256 = "";
       nnEval = Setup::initializeNNEvaluator(
         modelFile,modelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-        Board::MAX_LEN,Board::MAX_LEN,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+        Board::MAX_LEN_X,Board::MAX_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
         Setup::SETUP_FOR_GTP
       );
     }
@@ -287,7 +287,7 @@ int MainCmds::searchentropyanalysis(const vector<string>& args) {
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       modelFile,modelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-      Board::MAX_LEN,Board::MAX_LEN,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      Board::MAX_LEN_X,Board::MAX_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_GTP
     );
   }

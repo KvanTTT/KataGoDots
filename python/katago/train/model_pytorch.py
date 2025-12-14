@@ -1679,7 +1679,7 @@ class Model(torch.nn.Module):
         else:
             self.metadata_encoder = None
 
-        self.bin_input_shape = [22, pos_len_x, pos_len_y]
+        self.bin_input_shape = [22, pos_len_y, pos_len_x]
         self.global_input_shape = [19]
 
         self.blocks = torch.nn.ModuleList()

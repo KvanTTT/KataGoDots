@@ -12,7 +12,7 @@ class Features:
         self.pos_len_y = pos_len_y
         self.version = modelconfigs.get_version(config)
         self.pass_pos = self.pos_len_x * self.pos_len_y
-        self.bin_input_shape = [modelconfigs.get_num_bin_input_features(config), pos_len_x, pos_len_y]
+        self.bin_input_shape = [modelconfigs.get_num_bin_input_features(config), pos_len_y, pos_len_x]
         self.global_input_shape = [modelconfigs.get_num_global_input_features(config)]
 
     def xy_to_tensor_pos(self,x,y):

@@ -40,8 +40,11 @@ def read_npz_training_data(npz_files, batch_size: int, world_size: int, rank: in
         assert len(binaryInputNCHW.shape) == 3
         assert binaryInputNCHW.shape[2] == ((pos_len_x * pos_len_y + 7) // 8) * 8
         binaryInputNCHW = binaryInputNCHW[:,:, :pos_len_x * pos_len_y]
+        
+        # Raw C++ data is (N, C, Y, X), matching Python expectation for (N, C, H, W).
+        # So reshape to (Y, X).
         binaryInputNCHW = np.reshape(binaryInputNCHW, (
-            binaryInputNCHW.shape[0], binaryInputNCHW.shape[1], pos_len_x, pos_len_y
+            binaryInputNCHW.shape[0], binaryInputNCHW.shape[1], pos_len_y, pos_len_x
         )).astype(np.float32)
 
         assert binaryInputNCHW.shape[1] == num_bin_features
@@ -87,7 +90,14 @@ def read_npz_training_data(npz_files, batch_size: int, world_size: int, rank: in
                 )
 
                 if randomize_symmetries:
-                    symm = int(rand.integers(0,8))
+                    if pos_len_x == pos_len_y:
+                        symm = int(rand.integers(0,8))
+                    else:
+                        # For non-square boards, only allow symmetries that preserve the shape (no transpositions/rot90)
+                        # 0: identity, 2: rot180, 5: horizontal flip (mirror across vertical axis), 7: vertical flip (mirror across horizontal axis)
+                        symm_opts = [0, 2, 5, 7]
+                        symm = symm_opts[int(rand.integers(0,4))]
+
                     batch_binaryInputNCHW = apply_symmetry(batch_binaryInputNCHW, symm)
                     batch_policyTargetsNCMove = apply_symmetry_policy(batch_policyTargetsNCMove, symm, pos_len_x, pos_len_y)
                     batch_valueTargetsNCHW = apply_symmetry(batch_valueTargetsNCHW, symm)
@@ -120,10 +130,10 @@ def apply_symmetry_policy(tensor, symm, pos_len_x, pos_len_y):
     """Same as apply_symmetry but also handles the pass index"""
     batch_size = tensor.shape[0]
     channels = tensor.shape[1]
-    tensor_without_pass = tensor[:,:,:-1].view((batch_size, channels, pos_len_x, pos_len_y))
+    tensor_without_pass = tensor[:,:,:-1].view((batch_size, channels, pos_len_y, pos_len_x))
     tensor_transformed = apply_symmetry(tensor_without_pass, symm)
     return torch.cat((
-        tensor_transformed.reshape(batch_size, channels, pos_len_x * pos_len_y),
+        tensor_transformed.reshape(batch_size, channels, pos_len_y * pos_len_x),
         tensor[:,:,-1:]
     ), dim=2)
 
@@ -132,12 +142,11 @@ def apply_symmetry(tensor, symm):
     Apply a symmetry operation to the given tensor.
 
     Args:
-        tensor (torch.Tensor): Tensor to be rotated. (..., W, W)
+        tensor (torch.Tensor): Tensor to be rotated. (..., H, W)
         symm (int):
             0, 1, 2, 3: Rotation by symm * pi / 2 radians.
             4, 5, 6, 7: Mirror symmetry on top of rotation.
     """
-    assert tensor.shape[-1] == tensor.shape[-2]
 
     if symm == 0:
         return tensor
