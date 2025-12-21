@@ -62,15 +62,21 @@ class ConfigParser {
   std::vector<std::string> getStrings(const std::string& key, const std::set<std::string>& possibles = {}, bool nonEmptyTrim = false);
   std::optional<std::string> tryGetString(const std::string& key);
 
-  bool getBoolOrDefault(const std::string& key, bool defaultValue);
-  bool getBool(const std::string& key);
   enabled_t getEnabled(const std::string& key);
 
+  bool getBool(const std::string& key);
   int getInt(const std::string& key, int min = std::numeric_limits<int>::min(), int max = std::numeric_limits<int>::max());
   int64_t getInt64(const std::string& key, int64_t min = std::numeric_limits<int64_t>::min(), int64_t max = std::numeric_limits<int64_t>::max());
   uint64_t getUInt64(const std::string& key, uint64_t min = std::numeric_limits<uint64_t>::min(), uint64_t max = std::numeric_limits<uint64_t>::max());
   float getFloat(const std::string& key, float min = std::numeric_limits<float>::min(), float max = std::numeric_limits<float>::max());
   double getDouble(const std::string& key, double min = std::numeric_limits<double>::min(), double max = std::numeric_limits<double>::max());
+
+  bool getBoolOrDefault(const std::string& key, bool defaultValue);
+  int getIntOrDefault(const std::string& key, int min, int max, int defaultValue);
+  int64_t getInt64OrDefault(const std::string& key, int64_t min, int64_t max, int64_t defaultValue);
+  uint64_t getUInt64OrDefault(const std::string& key, uint64_t min, uint64_t max, uint64_t defaultValue);
+  float getFloatOrDefault(const std::string& key, float min, float max, float defaultValue);
+  double getDoubleOrDefault(const std::string& key, double min, double max, double defaultValue);
 
   std::vector<bool> getBools(const std::string& key);
   std::vector<int> getInts(const std::string& key, int min = std::numeric_limits<int>::min(), int max = std::numeric_limits<int>::max());
@@ -114,6 +120,9 @@ private:
   std::string extractBaseDir(const std::string &fname);
 
   bool parseKeyValue(const std::string& trimmedLine, std::string& key, std::string& value);
+
+  template<typename T>
+  T getOrError(const std::string& key, T min, T max, std::optional<T> defaultValue);
 };
 
 

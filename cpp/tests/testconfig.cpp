@@ -222,7 +222,63 @@ a-x = c-y
 notrailing = newline is okay)%%";
     testAssert(!isCfgFail(s));
   }
+  {
+    string s = R"(
+a = 1 # int
+b = 549755813888 # int64, but not int
+c = 9223372036854775808 # uint64, but not int64
+d = 2.0 # float
+e = 1e300 # double, but not float
+f = true # bool
+)";
+    istringstream in(s);
+    ConfigParser cfg(in);
+    testAssert(1 == cfg.getInt("a"));
+    testAssert(549755813888L == cfg.getInt64("b"));
+    testAssert(9223372036854775808ULL == cfg.getUInt64("c"));
+    testAssert(2.0 == cfg.getFloat("d"));
+    testAssert(1e300 == cfg.getDouble("e"));
+    testAssert(true == cfg.getBool("f"));
+
+    testAssert(128 == cfg.getIntOrDefault("a1", std::numeric_limits<int>::min(), std::numeric_limits<int>::max(), 128));
+    testAssert(128L == cfg.getInt64OrDefault("b1", std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max(), 128L));
+    testAssert(128UL == cfg.getUInt64OrDefault("c1", std::numeric_limits<uint64_t>::min(), std::numeric_limits<uint64_t>::max(), 128UL));
+    testAssert(128.0f == cfg.getFloatOrDefault("d1", std::numeric_limits<float>::min(), std::numeric_limits<float>::max(), 128.0f));
+    testAssert(128.0 == cfg.getDoubleOrDefault("e1", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 128.0));
+    testAssert(false == cfg.getBoolOrDefault("f1", false));
+
+    auto checkFailed = [](ConfigParser& configParser, const std::function<void(ConfigParser& cfg)>& call)  {
+      bool isFailed = false;
+      try {
+        call(configParser);
+      } catch (const IOError& ex) {
+        isFailed = true;
+      }
+      testAssert(isFailed);
+    };
+
+    checkFailed(cfg, [](ConfigParser& config) {
+      config.getInt("missing_key");
+    });
+
+    checkFailed(cfg, [](ConfigParser& config) {
+      config.getInt("a", 100, 200);
+    });
+    checkFailed(cfg, [](ConfigParser& config) {
+      config.getInt64("b", 100, 200);
+    });
+    checkFailed(cfg, [](ConfigParser& config) {
+      config.getUInt64("c", 100, 200);
+    });
+    checkFailed(cfg, [](ConfigParser& config) {
+      config.getFloat("d", 100, 200);
+    });
+    checkFailed(cfg, [](ConfigParser& config) {
+      config.getDouble("e", 100, 200);
+    });
+  }
 }
+
 
 void Tests::runConfigTests(const vector<string>& args) {
 
