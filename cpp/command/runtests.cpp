@@ -27,6 +27,16 @@ using namespace std;
 int MainCmds::runtests(const vector<string>& args) {
   (void)args;
   testAssert(sizeof(size_t) == 8);
+
+  Tests::runInlineConfigTests();
+
+  // Pick an arbitrary file that the test uses
+  if(FileUtils::exists("tests/data/configs/folded/test-parent.cfg"))
+    Tests::runConfigTests({});
+  else {
+    cout << "Not being run out of git repo, skipping config parsing tests" << endl;
+  }
+
   Board::initHash();
   ScoreValue::initTables();
 
@@ -69,15 +79,6 @@ int MainCmds::runtests(const vector<string>& args) {
   Tests::runBoardStressTest();
 
   ScoreValue::freeTables();
-
-  Tests::runInlineConfigTests();
-
-  // Pick an arbitrary file that the test uses
-  if(FileUtils::exists("tests/data/configs/folded/test-parent.cfg"))
-    Tests::runConfigTests({});
-  else {
-    cout << "Not being run out of git repo, skipping config parsing tests" << endl;
-  }
 
   cout << "All tests passed" << endl;
   return 0;
