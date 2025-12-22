@@ -61,7 +61,7 @@ class ConfigParser {
   std::string getStringOrDefault(const std::string& key, const std::string& defaultValue, const std::set<std::string>& possibles = {});
   std::string getString(const std::string& key, const std::set<std::string>& possibles = {});
   std::vector<std::string> getStrings(const std::string& key, const std::set<std::string>& possibles = {}, bool nonEmptyTrim = false);
-  std::optional<std::string> tryGetString(const std::string& key);
+  bool tryGetString(const std::string& key, std::string& value);
 
   enabled_t getEnabled(const std::string& key);
   bool getBool(const std::string& key);
@@ -78,6 +78,14 @@ class ConfigParser {
   uint64_t getUInt64OrDefault(const std::string& key, uint64_t min, uint64_t max, uint64_t defaultValue);
   float getFloatOrDefault(const std::string& key, float min, float max, float defaultValue);
   double getDoubleOrDefault(const std::string& key, double min, double max, double defaultValue);
+
+  bool tryGetInt(const std::string& key, int& value, int min = std::numeric_limits<int>::min(), int max = std::numeric_limits<int>::max());
+  bool tryGetEnabled(const std::string& key, enabled_t& value);
+  bool tryGetBool(const std::string& key, bool& value);
+  bool tryGetInt64(const std::string& key, int64_t& value, int64_t min = std::numeric_limits<int64_t>::min(), int64_t max = std::numeric_limits<int64_t>::max());
+  bool tryGetUInt64(const std::string& key, uint64_t& value, uint64_t min = std::numeric_limits<uint64_t>::min(), uint64_t max = std::numeric_limits<uint64_t>::max());
+  bool tryGetFloat(const std::string& key, float& value, float min = std::numeric_limits<float>::min(), float max = std::numeric_limits<float>::max());
+  bool tryGetDouble(const std::string& key, double& value, double min = std::numeric_limits<double>::min(), double max = std::numeric_limits<double>::max());
 
   std::vector<bool> getBools(const std::string& key);
   std::vector<int> getInts(const std::string& key, int min = std::numeric_limits<int>::min(), int max = std::numeric_limits<int>::max());
@@ -126,6 +134,8 @@ private:
 
   template<typename T>
   T getOrError(const std::string& key, T min, T max, std::optional<T> defaultValue);
+  template<typename T>
+  T parseOrError(const std::string& key, const std::string& str, T min, T max);
 };
 
 

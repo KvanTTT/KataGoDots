@@ -563,16 +563,25 @@ vector<string> ConfigParser::getStrings(const string& key, const set<string>& po
   return values;
 }
 
-std::optional<string> ConfigParser::tryGetString(const string& key) {
+bool ConfigParser::tryGetString(const std::string& key,  std::string& value) {
   const auto iter = keyValues.find(key);
   if(iter == keyValues.end()) {
-    return std::nullopt;
+    return false;
   }
 
   std::lock_guard lock(usedKeysMutex);
   usedKeys.insert(key);
 
-  return iter->second;
+  value = iter->second;
+  return true;
+}
+
+bool ConfigParser::tryGetBool(const std::string& key, bool& value) {
+  if (string str; tryGetString(key, str)) {
+    value = parseOrError<bool>(key, str, false, true);
+    return true;
+  }
+  return false;
 }
 
 bool ConfigParser::getBoolOrDefault(const std::string& key, const bool defaultValue) {
@@ -596,6 +605,14 @@ vector<bool> ConfigParser::getBools(const string& key) {
   return ret;
 }
 
+bool ConfigParser::tryGetEnabled(const std::string& key, enabled_t& value) {
+  if (string str; tryGetString(key, str)) {
+    value = parseOrError<enabled_t>(key, str, enabled_t::False, enabled_t::Auto);
+    return true;
+  }
+  return false;
+}
+
 enabled_t ConfigParser::getEnabledOrDefault(const string& key, const enabled_t defaultValue) {
   return getOrError<enabled_t>(key, enabled_t::False, enabled_t::Auto, defaultValue);
 }
@@ -610,6 +627,14 @@ int ConfigParser::getIntOrDefault(const std::string& key, const int min, const i
 
 int ConfigParser::getInt(const string& key, const int min, const int max) {
   return getOrError<int>(key, min, max, std::nullopt);
+}
+
+bool ConfigParser::tryGetInt(const std::string& key, int& value, const int min, const int max) {
+  if (string str; tryGetString(key, str)) {
+    value = parseOrError<int>(key, str, min, max);
+    return true;
+  }
+  return false;
 }
 
 vector<int> ConfigParser::getInts(const string& key, const int min, const int max) {
@@ -656,6 +681,14 @@ vector<std::pair<int,int>> ConfigParser::getNonNegativeIntDashedPairs(const stri
   return ret;
 }
 
+bool ConfigParser::tryGetInt64(const std::string& key, int64_t& value, const int64_t min, const int64_t max) {
+  if (string str; tryGetString(key, str)) {
+    value = parseOrError<int64_t>(key, str, min, max);
+    return true;
+  }
+  return false;
+}
+
 int64_t ConfigParser::getInt64OrDefault(const std::string& key, const int64_t min, const int64_t max,
   const int64_t defaultValue) {
   return getOrError<int64_t>(key, min, max, defaultValue);
@@ -678,6 +711,14 @@ vector<int64_t> ConfigParser::getInt64s(const string& key, const int64_t min, co
     ret.push_back(x);
   }
   return ret;
+}
+
+bool ConfigParser::tryGetUInt64(const std::string& key, uint64_t& value, const uint64_t min, const uint64_t max) {
+  if (string str; tryGetString(key, str)) {
+    value = parseOrError<uint64_t>(key, str, min, max);
+    return true;
+  }
+  return false;
 }
 
 uint64_t ConfigParser::getUInt64OrDefault(const std::string& key,
@@ -705,12 +746,20 @@ vector<uint64_t> ConfigParser::getUInt64s(const string& key, const uint64_t min,
   return ret;
 }
 
-float ConfigParser::getFloat(const std::string& key, const float min, const float max) {
-  return getOrError<float>(key, min, max, std::nullopt);
+bool ConfigParser::tryGetFloat(const std::string& key, float& value, const float min, const float max) {
+  if (string str; tryGetString(key, str)) {
+    value = parseOrError<float>(key, str, min, max);
+    return true;
+  }
+  return false;
 }
 
 float ConfigParser::getFloatOrDefault(const string& key, const float min, const float max, float defaultValue) {
   return getOrError<float>(key, min, max, defaultValue);
+}
+
+float ConfigParser::getFloat(const std::string& key, const float min, const float max) {
+  return getOrError<float>(key, min, max, std::nullopt);
 }
 
 vector<float> ConfigParser::getFloats(const string& key, const float min, const float max) {
@@ -728,6 +777,14 @@ vector<float> ConfigParser::getFloats(const string& key, const float min, const 
     ret.push_back(x);
   }
   return ret;
+}
+
+bool ConfigParser::tryGetDouble(const std::string& key, double& value, const double min, const double max) {
+  if (string str; tryGetString(key, str)) {
+    value = parseOrError<double>(key, str, min, max);
+    return true;
+  }
+  return false;
 }
 
 double ConfigParser::getDouble(const std::string& key, const double min, const double max) {
@@ -757,28 +814,27 @@ vector<double> ConfigParser::getDoubles(const string& key, const double min, con
 
 template<typename T>
 T ConfigParser::getOrError(const string& key, const T min, const T max, const std::optional<T> defaultValue) {
-  if constexpr (std::is_arithmetic_v<T>) {
-    assert(min <= max);
-  }
-
-  const auto foundValue = tryGetString(key);
-  if(foundValue == std::nullopt) {
+  string foundStr;
+  if (!tryGetString(key, foundStr)) {
     if (defaultValue.has_value()) {
       const auto value = defaultValue.value();
       if constexpr (std::is_arithmetic_v<T>) {
-        assert(value >= min && value <= max);
+        assert(min <= max && value >= min && value <= max);
       }
       return value;
     }
     throw IOError("Could not find key '" + key + "' in config file " + fileName);
   }
 
-  const auto& str = foundValue.value();
-
   if constexpr (std::is_same_v<T, string>) {
-    return str;
+    return foundStr;
   }
 
+  return parseOrError(key, foundStr, min, max);
+}
+
+template<typename T>
+T ConfigParser::parseOrError(const string& key, const string& str, const T min, const T max) {
   T x;
   bool success = false;
   if constexpr (std::is_same_v<T, int>) success = Global::tryStringToInt(str, x);
@@ -793,6 +849,8 @@ T ConfigParser::getOrError(const string& key, const T min, const T max, const st
     throw IOError("Could not parse '" + str + "' for key '" + key + "' in config file " + fileName);
 
   if constexpr (std::is_arithmetic_v<T>) {
+    assert(min <= max);
+
     if constexpr (std::is_floating_point_v<T>) {
       if(std::isnan(x))
         throw IOError("Key '" + key + "' is nan in config file " + fileName);

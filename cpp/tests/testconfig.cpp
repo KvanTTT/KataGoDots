@@ -255,6 +255,46 @@ j = str # string
     testAssert(enabled_t::False == cfg.getEnabledOrDefault("g1", enabled_t::False).x);
     testAssert("default" == cfg.getStringOrDefault("j1", "default"));
 
+    int intValue;
+    testAssert(cfg.tryGetInt("a", intValue));
+    testAssert(1 == intValue);
+    testAssert(!cfg.tryGetInt("a1", intValue));
+
+    int64_t int64Value;
+    testAssert(cfg.tryGetInt64("b", int64Value));
+    testAssert(549755813888L == int64Value);
+    testAssert(!cfg.tryGetInt64("b1", int64Value));
+
+    uint64_t uint64Value;
+    testAssert(cfg.tryGetUInt64("c", uint64Value));
+    testAssert(9223372036854775808ULL == uint64Value);
+    testAssert(!cfg.tryGetUInt64("c1", uint64Value));
+
+    float floatValue;
+    testAssert(cfg.tryGetFloat("d", floatValue));
+    testAssert(2.0f == floatValue);
+    testAssert(!cfg.tryGetFloat("d1", floatValue));
+
+    double doubleValue;
+    testAssert(cfg.tryGetDouble("e", doubleValue));
+    testAssert(1e300 == doubleValue);
+    testAssert(!cfg.tryGetDouble("e1", doubleValue));
+
+    bool boolValue;
+    testAssert(cfg.tryGetBool("f", boolValue));
+    testAssert(true == boolValue);
+    testAssert(!cfg.tryGetBool("f1", boolValue));
+
+    enabled_t enabledValue{};
+    testAssert(cfg.tryGetEnabled("g", enabledValue));
+    testAssert(enabled_t::True == enabledValue.x);
+    testAssert(!cfg.tryGetEnabled("g1", enabledValue));
+
+    string str;
+    testAssert(cfg.tryGetString("j", str));
+    testAssert("str" == str);
+    testAssert(!cfg.tryGetString("j1", str));
+
     auto checkFailed = [](ConfigParser& configParser, const std::function<void(ConfigParser& cfg)>& call)  {
       bool isFailed = false;
       try {
@@ -283,6 +323,9 @@ j = str # string
     });
     checkFailed(cfg, [](ConfigParser& config) {
       config.getDouble("e", 100, 200);
+    });
+    checkFailed(cfg, [](ConfigParser& config) {
+      config.getString("j", {"str1", "str2"});
     });
   }
 }
