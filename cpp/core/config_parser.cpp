@@ -592,12 +592,12 @@ vector<bool> ConfigParser::getBools(const string& key) {
   return ret;
 }
 
+enabled_t ConfigParser::getEnabledOrDefault(const string& key, const enabled_t defaultValue) {
+  return getOrError<enabled_t>(key, enabled_t::False, enabled_t::Auto, defaultValue);
+}
+
 enabled_t ConfigParser::getEnabled(const string& key) {
-  string value = Global::trim(Global::toLower(getString(key)));
-  enabled_t x;
-  if(!enabled_t::tryParse(value,x))
-    throw IOError("Could not parse '" + value + "' as bool or auto for key '" + key + "' in config file " + fileName);
-  return x;
+  return getOrError<enabled_t>(key, enabled_t::False, enabled_t::Auto, std::nullopt);
 }
 
 int ConfigParser::getIntOrDefault(const std::string& key, const int min, const int max, const int defaultValue) {
@@ -753,13 +753,17 @@ vector<double> ConfigParser::getDoubles(const string& key, const double min, con
 
 template<typename T>
 T ConfigParser::getOrError(const string& key, const T min, const T max, const std::optional<T> defaultValue) {
-  assert(min <= max);
+  if constexpr (std::is_arithmetic_v<T>) {
+    assert(min <= max);
+  }
 
   const auto foundValue = tryGetString(key);
   if(foundValue == std::nullopt) {
     if (defaultValue.has_value()) {
       const auto value = defaultValue.value();
-      assert(value >= min && value <= max);
+      if constexpr (std::is_arithmetic_v<T>) {
+        assert(value >= min && value <= max);
+      }
       return value;
     }
     throw IOError("Could not find key '" + key + "' in config file " + fileName);
@@ -775,19 +779,22 @@ T ConfigParser::getOrError(const string& key, const T min, const T max, const st
   else if constexpr (std::is_same_v<T, float>) success = Global::tryStringToFloat(str, x);
   else if constexpr (std::is_same_v<T, double>) success = Global::tryStringToDouble(str, x);
   else if constexpr (std::is_same_v<T, bool>) success = Global::tryStringToBool(str, x);
+  else if constexpr (std::is_same_v<T, enabled_t>) success = enabled_t::tryParse(Global::toLower(str), x);
 
   if(!success)
     throw IOError("Could not parse '" + str + "' for key '" + key + "' in config file " + fileName);
 
-  if constexpr (std::is_floating_point_v<T>) {
-    if(std::isnan(x))
-      throw IOError("Key '" + key + "' is nan in config file " + fileName);
-  }
+  if constexpr (std::is_arithmetic_v<T>) {
+    if constexpr (std::is_floating_point_v<T>) {
+      if(std::isnan(x))
+        throw IOError("Key '" + key + "' is nan in config file " + fileName);
+    }
 
-  if (x < min || x > max) {
-    stringstream ss;
-    ss << "Key '" << key << "' must be in the range " << min << " to " << max << " in config file " << fileName;
-    throw IOError(ss.str());
+    if (x < min || x > max) {
+      stringstream ss;
+      ss << "Key '" << key << "' must be in the range " << min << " to " << max << " in config file " << fileName;
+      throw IOError(ss.str());
+    }
   }
 
   return x;

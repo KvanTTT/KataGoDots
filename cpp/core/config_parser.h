@@ -63,7 +63,6 @@ class ConfigParser {
   std::optional<std::string> tryGetString(const std::string& key);
 
   enabled_t getEnabled(const std::string& key);
-
   bool getBool(const std::string& key);
   int getInt(const std::string& key, int min = std::numeric_limits<int>::min(), int max = std::numeric_limits<int>::max());
   int64_t getInt64(const std::string& key, int64_t min = std::numeric_limits<int64_t>::min(), int64_t max = std::numeric_limits<int64_t>::max());
@@ -71,6 +70,7 @@ class ConfigParser {
   float getFloat(const std::string& key, float min = std::numeric_limits<float>::min(), float max = std::numeric_limits<float>::max());
   double getDouble(const std::string& key, double min = std::numeric_limits<double>::min(), double max = std::numeric_limits<double>::max());
 
+  enabled_t getEnabledOrDefault(const std::string& key, enabled_t defaultValue);
   bool getBoolOrDefault(const std::string& key, bool defaultValue);
   int getIntOrDefault(const std::string& key, int min, int max, int defaultValue);
   int64_t getInt64OrDefault(const std::string& key, int64_t min, int64_t max, int64_t defaultValue);
