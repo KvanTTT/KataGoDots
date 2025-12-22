@@ -359,6 +359,48 @@ vector<SearchParams> Setup::loadParams(
   return loadParams(cfg,setupFor,hasHumanModel,loadSingleConfigOnly);
 }
 
+template<typename T>
+static bool tryGetValueForBot(ConfigParser& cfg, const string& key, T& value, const T& min, const T& max) {
+  bool success = false;
+  if constexpr (std::is_same_v<T, int>) success = cfg.tryGetInt(key, value, min, max);
+  else if constexpr (std::is_same_v<T, int64_t>) success = cfg.tryGetInt64(key, value, min, max);
+  else if constexpr (std::is_same_v<T, uint64_t>) success = cfg.tryGetUInt64(key, value, min, max);
+  else if constexpr (std::is_same_v<T, float>) success = cfg.tryGetFloat(key, value, min, max);
+  else if constexpr (std::is_same_v<T, double>) success = cfg.tryGetDouble(key, value, min, max);
+  else if constexpr (std::is_same_v<T, bool>) success = cfg.tryGetBool(key, value);
+  else if constexpr (std::is_same_v<T, string>) success = cfg.tryGetString(key, value);
+  return success;
+}
+
+template<typename T>
+static T getValueForBot(ConfigParser& cfg, const string& key, const string& idxStr, const T& min, const T& max, const T& defaultValue, const bool reportNoHumanModelIfKeyFound = false) {
+  T value = defaultValue;
+  string keyIdx = key + idxStr;
+  string foundKey;
+  if (tryGetValueForBot(cfg, keyIdx, value, min, max)) {
+    foundKey = keyIdx;
+  } else {
+    // Optimization: don't perform the second check if the key is empty because it doesn't make sense
+    if (!idxStr.empty() && tryGetValueForBot(cfg, key, value, min, max)) {
+      foundKey = key;
+    }
+  }
+  if (!foundKey.empty() && reportNoHumanModelIfKeyFound) {
+    throw ConfigParsingError(
+        "Provided parameter " + foundKey + " but no human model was specified (e.g -human-model b18c384nbt-humanv0.bin.gz)"
+      );
+  }
+  return value;
+}
+
+static string getStringValueForBot(ConfigParser& cfg, const string& key, const string& idxStr, const string& defaultValue) {
+  return getValueForBot<string>(cfg, key, idxStr, "", "", defaultValue);
+}
+
+static bool getBoolValueForBot(ConfigParser& cfg, const string& key, const string& idxStr, const bool& defaultValue, const bool reportNoHumanModelIfKeyFound = false) {
+  return getValueForBot<bool>(cfg, key, idxStr, false, true, defaultValue, reportNoHumanModelIfKeyFound);
+}
+
 vector<SearchParams> Setup::loadParams(
   ConfigParser& cfg,
   setup_for_t setupFor,
@@ -379,473 +421,131 @@ vector<SearchParams> Setup::loadParams(
 
     string idxStr = loadSingleConfigOnly ? "" : Global::intToString(i);
 
-    (void)(cfg.tryGetInt64("maxPlayouts"+idxStr, params.maxPlayouts, 1, static_cast<int64_t>(1) << 50) ||
-           cfg.tryGetInt64("maxPlayouts", params.maxPlayouts, 1, static_cast<int64_t>(1) << 50));
-
-    (void)(cfg.tryGetInt64("maxVisits"+idxStr, params.maxVisits, 1, static_cast<int64_t>(1) << 50) ||
-           cfg.tryGetInt64("maxVisits", params.maxVisits, 1, static_cast<int64_t>(1) << 50));
-
-    (void)(cfg.tryGetDouble("maxTime"+idxStr, params.maxTime, 0.0, 1.0e20) ||
-           cfg.tryGetDouble("maxTime", params.maxTime, 0.0, 1.0e20));
-
-    params.maxPlayoutsPondering = static_cast<int64_t>(1) << 50;
-    (void)(cfg.tryGetInt64("maxPlayoutsPondering"+idxStr, params.maxPlayoutsPondering, 1, static_cast<int64_t>(1) << 50) ||
-           cfg.tryGetInt64("maxPlayoutsPondering", params.maxPlayoutsPondering, 1, static_cast<int64_t>(1) << 50));
-
-    params.maxVisitsPondering = static_cast<int64_t>(1) << 50;
-    (void)(cfg.tryGetInt64("maxVisitsPondering"+idxStr, params.maxVisitsPondering, 1, static_cast<int64_t>(1) << 50) ||
-           cfg.tryGetInt64("maxVisitsPondering", params.maxVisitsPondering, 1, static_cast<int64_t>(1) << 50));
-
-    params.maxTimePondering = 1.0e20;
-    (void)(cfg.tryGetDouble("maxTimePondering"+idxStr, params.maxTimePondering, 0.0, 1.0e20) ||
-           cfg.tryGetDouble("maxTimePondering", params.maxTimePondering, 0.0, 1.0e20));
-
-    params.lagBuffer = 0.0;
-    (void)(cfg.tryGetDouble("lagBuffer"+idxStr, params.lagBuffer, 0.0, 3600.0) ||
-           cfg.tryGetDouble("lagBuffer", params.lagBuffer, 0.0, 3600.0));
-
-    (void)(cfg.tryGetDouble("searchFactorAfterOnePass"+idxStr, params.searchFactorAfterOnePass, 0.0, 1.0) ||
-           cfg.tryGetDouble("searchFactorAfterOnePass", params.searchFactorAfterOnePass, 0.0, 1.0));
-
-    (void)(cfg.tryGetDouble("searchFactorAfterTwoPass"+idxStr, params.searchFactorAfterTwoPass, 0.0, 1.0) ||
-           cfg.tryGetDouble("searchFactorAfterTwoPass", params.searchFactorAfterTwoPass, 0.0, 1.0));
-
-    (void)(cfg.tryGetInt("numSearchThreads"+idxStr, params.numThreads, 1, 4096) ||
-           cfg.tryGetInt("numSearchThreads", params.numThreads, 1, 4096));
-
-    params.minPlayoutsPerThread = setupFor == SETUP_FOR_ANALYSIS || setupFor == SETUP_FOR_GTP ? 8.0 : 0.0;
-    (void)(cfg.tryGetDouble("minPlayoutsPerThread"+idxStr, params.minPlayoutsPerThread, 0.0, 1.0e20) ||
-           cfg.tryGetDouble("minPlayoutsPerThread", params.minPlayoutsPerThread, 0.0, 1.0e20));
-
-    params.winLossUtilityFactor = 1.0;
-    (void)(cfg.tryGetDouble("winLossUtilityFactor"+idxStr, params.winLossUtilityFactor, 0.0, 1.0) ||
-           cfg.tryGetDouble("winLossUtilityFactor", params.winLossUtilityFactor, 0.0, 1.0));
-
-    params.staticScoreUtilityFactor = 0.1;
-    (void)(cfg.tryGetDouble("staticScoreUtilityFactor"+idxStr, params.staticScoreUtilityFactor, 0.0, 1.0) ||
-           cfg.tryGetDouble("staticScoreUtilityFactor", params.staticScoreUtilityFactor, 0.0, 1.0));
-
-    params.dynamicScoreUtilityFactor = 0.3;
-    (void)(cfg.tryGetDouble("dynamicScoreUtilityFactor"+idxStr, params.dynamicScoreUtilityFactor, 0.0, 1.0) ||
-           cfg.tryGetDouble("dynamicScoreUtilityFactor", params.dynamicScoreUtilityFactor, 0.0, 1.0));
-
-    params.noResultUtilityForWhite = 0.0;
-    (void)(cfg.tryGetDouble("noResultUtilityForWhite"+idxStr, params.noResultUtilityForWhite, -1.0, 1.0) ||
-           cfg.tryGetDouble("noResultUtilityForWhite", params.noResultUtilityForWhite, -1.0, 1.0));
-
-    params.drawEquivalentWinsForWhite = 0.5;
-    (void)(cfg.tryGetDouble("drawEquivalentWinsForWhite"+idxStr, params.drawEquivalentWinsForWhite, 0.0, 1.0) ||
-           cfg.tryGetDouble("drawEquivalentWinsForWhite", params.drawEquivalentWinsForWhite, 0.0, 1.0));
-
-    params.dynamicScoreCenterZeroWeight = 0.20;
-    (void)(cfg.tryGetDouble("dynamicScoreCenterZeroWeight"+idxStr, params.dynamicScoreCenterZeroWeight, 0.0, 1.0) ||
-           cfg.tryGetDouble("dynamicScoreCenterZeroWeight", params.dynamicScoreCenterZeroWeight, 0.0, 1.0));
-
-    params.dynamicScoreCenterScale = 0.75;
-    (void)(cfg.tryGetDouble("dynamicScoreCenterScale"+idxStr, params.dynamicScoreCenterScale, 0.2, 5.0) ||
-           cfg.tryGetDouble("dynamicScoreCenterScale", params.dynamicScoreCenterScale, 0.2, 5.0));
-
-    params.cpuctExploration = 1.0;
-    (void)(cfg.tryGetDouble("cpuctExploration"+idxStr, params.cpuctExploration, 0.0, 10.0) ||
-           cfg.tryGetDouble("cpuctExploration", params.cpuctExploration, 0.0, 10.0));
-
-    params.cpuctExplorationLog = 0.45;
-    (void)(cfg.tryGetDouble("cpuctExplorationLog"+idxStr, params.cpuctExplorationLog, 0.0, 10.0) ||
-           cfg.tryGetDouble("cpuctExplorationLog", params.cpuctExplorationLog, 0.0, 10.0));
-
-    params.cpuctExplorationBase = 500.0;
-    (void)(cfg.tryGetDouble("cpuctExplorationBase"+idxStr, params.cpuctExplorationBase, 10.0, 100000.0) ||
-           cfg.tryGetDouble("cpuctExplorationBase", params.cpuctExplorationBase, 10.0, 100000.0));
-
-    params.cpuctUtilityStdevPrior = 0.40;
-    (void)(cfg.tryGetDouble("cpuctUtilityStdevPrior"+idxStr, params.cpuctUtilityStdevPrior, 0.0, 10.0) ||
-           cfg.tryGetDouble("cpuctUtilityStdevPrior", params.cpuctUtilityStdevPrior, 0.0, 10.0));
-
-    params.cpuctUtilityStdevPriorWeight = 2.0;
-    (void)(cfg.tryGetDouble("cpuctUtilityStdevPriorWeight"+idxStr, params.cpuctUtilityStdevPriorWeight, 0.0, 100.0) ||
-           cfg.tryGetDouble("cpuctUtilityStdevPriorWeight", params.cpuctUtilityStdevPriorWeight, 0.0, 100.0));
-
-    params.cpuctUtilityStdevScale = setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER ? 0.85 : 0.0;
-    (void)(cfg.tryGetDouble("cpuctUtilityStdevScale"+idxStr, params.cpuctUtilityStdevScale, 0.0, 1.0) ||
-           cfg.tryGetDouble("cpuctUtilityStdevScale", params.cpuctUtilityStdevScale, 0.0, 1.0));
-
-    params.fpuReductionMax = 0.2;
-    (void)(cfg.tryGetDouble("fpuReductionMax"+idxStr, params.fpuReductionMax, 0.0, 2.0) ||
-           cfg.tryGetDouble("fpuReductionMax", params.fpuReductionMax, 0.0, 2.0));
-
-    params.fpuLossProp = 0.0;
-    (void)(cfg.tryGetDouble("fpuLossProp"+idxStr, params.fpuLossProp, 0.0, 1.0) ||
-           cfg.tryGetDouble("fpuLossProp", params.fpuLossProp, 0.0, 1.0));
-
-    params.fpuParentWeightByVisitedPolicy = setupFor != SETUP_FOR_DISTRIBUTED;
-    (void)(cfg.tryGetBool("fpuParentWeightByVisitedPolicy"+idxStr, params.fpuParentWeightByVisitedPolicy) ||
-           cfg.tryGetBool("fpuParentWeightByVisitedPolicy", params.fpuParentWeightByVisitedPolicy));
+    params.maxPlayouts = getValueForBot<int64_t>(cfg, "maxPlayouts", idxStr, 1, static_cast<int64_t>(1) << 50, params.maxPlayouts);
+    params.maxVisits = getValueForBot<int64_t>(cfg, "maxVisits", idxStr, 1, static_cast<int64_t>(1) << 50, params.maxVisits);
+    params.maxTime = getValueForBot<double>(cfg, "maxTime", idxStr, 0.0, 1.0e20, params.maxTime);
+    params.maxPlayoutsPondering = getValueForBot<int64_t>(cfg, "maxPlayoutsPondering", idxStr, 1, static_cast<int64_t>(1) << 50, static_cast<int64_t>(1) << 50);
+    params.maxVisitsPondering = getValueForBot<int64_t>(cfg, "maxVisitsPondering", idxStr, 1, static_cast<int64_t>(1) << 50, static_cast<int64_t>(1) << 50);
+    params.maxTimePondering = getValueForBot<double>(cfg, "maxTimePondering", idxStr, 0.0, 1.0e20, 1.0e20);
+    params.lagBuffer = getValueForBot<double>(cfg, "lagBuffer", idxStr, 0.0, 3600.0, 0.0);
+    params.searchFactorAfterOnePass = getValueForBot<double>(cfg, "searchFactorAfterOnePass", idxStr, 0.0, 1.0, params.searchFactorAfterOnePass);
+    params.searchFactorAfterTwoPass = getValueForBot<double>(cfg, "searchFactorAfterTwoPass", idxStr, 0.0, 1.0, params.searchFactorAfterTwoPass);
+    params.numThreads = getValueForBot<int>(cfg, "numSearchThreads", idxStr, 1, 4096, params.numThreads);
+    params.minPlayoutsPerThread = getValueForBot<double>(cfg, "minPlayoutsPerThread", idxStr, 0.0, 1.0e20, setupFor == SETUP_FOR_ANALYSIS || setupFor == SETUP_FOR_GTP ? 8.0 : 0.0);
+    params.winLossUtilityFactor = getValueForBot<double>(cfg, "winLossUtilityFactor", idxStr, 0.0, 1.0, 1.0);
+    params.staticScoreUtilityFactor = getValueForBot<double>(cfg, "staticScoreUtilityFactor", idxStr, 0.0, 1.0, 0.1);
+    params.dynamicScoreUtilityFactor = getValueForBot<double>(cfg, "dynamicScoreUtilityFactor", idxStr, 0.0, 1.0, 0.3);
+    params.noResultUtilityForWhite = getValueForBot<double>(cfg, "noResultUtilityForWhite", idxStr, -1.0, 1.0, 0.0);
+    params.drawEquivalentWinsForWhite = getValueForBot<double>(cfg, "drawEquivalentWinsForWhite", idxStr, 0.0, 1.0, 0.5);
+    params.dynamicScoreCenterZeroWeight = getValueForBot<double>(cfg, "dynamicScoreCenterZeroWeight", idxStr, 0.0, 1.0, 0.20);
+    params.dynamicScoreCenterScale = getValueForBot<double>(cfg, "dynamicScoreCenterScale", idxStr, 0.2, 5.0, 0.75);
+    params.cpuctExploration = getValueForBot<double>(cfg, "cpuctExploration", idxStr, 0.0, 10.0, 1.0);
+    params.cpuctExplorationLog = getValueForBot<double>(cfg, "cpuctExplorationLog", idxStr, 0.0, 10.0, 0.45);
+    params.cpuctExplorationBase = getValueForBot<double>(cfg, "cpuctExplorationBase", idxStr, 10.0, 100000.0, 500.0);
+    params.cpuctUtilityStdevPrior = getValueForBot<double>(cfg, "cpuctUtilityStdevPrior", idxStr, 0.0, 10.0, 0.40);
+    params.cpuctUtilityStdevPriorWeight = getValueForBot<double>(cfg, "cpuctUtilityStdevPriorWeight", idxStr, 0.0, 100.0, 2.0);
+    params.cpuctUtilityStdevScale = getValueForBot<double>(cfg, "cpuctUtilityStdevScale", idxStr, 0.0, 1.0, setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER ? 0.85 : 0.0);
+    params.fpuReductionMax = getValueForBot<double>(cfg, "fpuReductionMax", idxStr, 0.0, 2.0, 0.2);
+    params.fpuLossProp = getValueForBot<double>(cfg, "fpuLossProp", idxStr, 0.0, 1.0, 0.0);
+    params.fpuParentWeightByVisitedPolicy = getBoolValueForBot(cfg, "fpuParentWeightByVisitedPolicy", idxStr, setupFor != SETUP_FOR_DISTRIBUTED);
 
     if (params.fpuParentWeightByVisitedPolicy) {
-      params.fpuParentWeightByVisitedPolicyPow = 2.0;
-      (void)(cfg.tryGetDouble("fpuParentWeightByVisitedPolicyPow"+idxStr, params.fpuParentWeightByVisitedPolicyPow, 0.0, 5.0) ||
-             cfg.tryGetDouble("fpuParentWeightByVisitedPolicyPow", params.fpuParentWeightByVisitedPolicyPow, 0.0, 5.0));
+      params.fpuParentWeightByVisitedPolicyPow = getValueForBot<double>(cfg, "fpuParentWeightByVisitedPolicyPow", idxStr, 0.0, 5.0, 2.0);
     }
     else {
-      params.fpuParentWeight = 0.0;
-      (void)(cfg.tryGetDouble("fpuParentWeight"+idxStr, params.fpuParentWeight, 0.0, 1.0) ||
-             cfg.tryGetDouble("fpuParentWeight", params.fpuParentWeight, 0.0, 1.0));
+      params.fpuParentWeight = getValueForBot<double>(cfg, "fpuParentWeight", idxStr, 0.0, 1.0, 0.0);
     }
 
-    params.policyOptimism = setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER ? 1.0 : 0.0;
-    (void)(cfg.tryGetDouble("policyOptimism"+idxStr, params.policyOptimism, 0.0, 1.0) ||
-           cfg.tryGetDouble("policyOptimism", params.policyOptimism, 0.0, 1.0));
-
-    params.valueWeightExponent = 0.25;
-    (void)(cfg.tryGetDouble("valueWeightExponent"+idxStr, params.valueWeightExponent, 0.0, 1.0) ||
-           cfg.tryGetDouble("valueWeightExponent", params.valueWeightExponent, 0.0, 1.0));
-
-    params.useNoisePruning = (setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER);
-    (void)(cfg.tryGetBool("useNoisePruning"+idxStr, params.useNoisePruning) ||
-           cfg.tryGetBool("useNoisePruning", params.useNoisePruning));
-
-    params.noisePruneUtilityScale = 0.15;
-    (void)(cfg.tryGetDouble("noisePruneUtilityScale"+idxStr, params.noisePruneUtilityScale, 0.001, 10.0) ||
-           cfg.tryGetDouble("noisePruneUtilityScale", params.noisePruneUtilityScale, 0.001, 10.0));
-
-    params.noisePruningCap = 1e50;
-    (void)(cfg.tryGetDouble("noisePruningCap"+idxStr, params.noisePruningCap, 0.0, 1e50) ||
-           cfg.tryGetDouble("noisePruningCap", params.noisePruningCap, 0.0, 1e50));
-
-    params.useUncertainty = setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER;
-    (void)(cfg.tryGetBool("useUncertainty"+idxStr, params.useUncertainty) ||
-           cfg.tryGetBool("useUncertainty", params.useUncertainty));
-
-    params.uncertaintyCoeff = 0.25;
-    (void)(cfg.tryGetDouble("uncertaintyCoeff"+idxStr, params.uncertaintyCoeff, 0.0001, 1.0) ||
-           cfg.tryGetDouble("uncertaintyCoeff", params.uncertaintyCoeff, 0.0001, 1.0));
-
-    params.uncertaintyExponent = 1.0;
-    (void)(cfg.tryGetDouble("uncertaintyExponent"+idxStr, params.uncertaintyExponent, 0.0, 2.0) ||
-           cfg.tryGetDouble("uncertaintyExponent", params.uncertaintyExponent, 0.0, 2.0));
-
-    params.uncertaintyMaxWeight = 8.0;
-    (void)(cfg.tryGetDouble("uncertaintyMaxWeight"+idxStr, params.uncertaintyMaxWeight, 1.0, 100.0) ||
-           cfg.tryGetDouble("uncertaintyMaxWeight", params.uncertaintyMaxWeight, 1.0, 100.0));
-
-    params.useGraphSearch = setupFor != SETUP_FOR_DISTRIBUTED;
-    (void)(cfg.tryGetBool("useGraphSearch"+idxStr, params.useGraphSearch) ||
-           cfg.tryGetBool("useGraphSearch", params.useGraphSearch));
-
-    params.graphSearchRepBound = 11;
-    (void)(cfg.tryGetInt("graphSearchRepBound"+idxStr, params.graphSearchRepBound, 3, 50) ||
-           cfg.tryGetInt("graphSearchRepBound", params.graphSearchRepBound, 3, 50));
-
-    params.graphSearchCatchUpLeakProb = 0.0;
-
-    (void)(cfg.tryGetDouble("graphSearchCatchUpLeakProb"+idxStr, params.graphSearchCatchUpLeakProb, 0.0, 1.0) ||
-           cfg.tryGetDouble("graphSearchCatchUpLeakProb", params.graphSearchCatchUpLeakProb, 0.0, 1.0));
-
-    // if(cfg.contains("graphSearchCatchUpProp"+idxStr)) params.graphSearchCatchUpProp = cfg.getDouble("graphSearchCatchUpProp"+idxStr, 0.0, 1.0);
-    // else if(cfg.contains("graphSearchCatchUpProp"))   params.graphSearchCatchUpProp = cfg.getDouble("graphSearchCatchUpProp", 0.0, 1.0);
-    // else                                              params.graphSearchCatchUpProp = 0.0;
-
-    params.rootNoiseEnabled = false;
-    (void)(cfg.tryGetBool("rootNoiseEnabled"+idxStr, params.rootNoiseEnabled) ||
-           cfg.tryGetBool("rootNoiseEnabled", params.rootNoiseEnabled));
-
-    params.rootDirichletNoiseTotalConcentration = 10.83;
-    (void)(cfg.tryGetDouble("rootDirichletNoiseTotalConcentration"+idxStr, params.rootDirichletNoiseTotalConcentration, 0.001, 10000.0) ||
-           cfg.tryGetDouble("rootDirichletNoiseTotalConcentration", params.rootDirichletNoiseTotalConcentration, 0.001, 10000.0));
-
-    params.rootDirichletNoiseWeight = 0.25;
-    (void)(cfg.tryGetDouble("rootDirichletNoiseWeight"+idxStr, params.rootDirichletNoiseWeight, 0.0, 1.0) ||
-           cfg.tryGetDouble("rootDirichletNoiseWeight", params.rootDirichletNoiseWeight, 0.0, 1.0));
-
-    params.rootPolicyTemperature = 1.0;
-    (void)(cfg.tryGetDouble("rootPolicyTemperature"+idxStr, params.rootPolicyTemperature, 0.01, 100.0) ||
-           cfg.tryGetDouble("rootPolicyTemperature", params.rootPolicyTemperature, 0.01, 100.0));
-
-    params.rootPolicyTemperatureEarly = params.rootPolicyTemperature;
-    (void)(cfg.tryGetDouble("rootPolicyTemperatureEarly"+idxStr, params.rootPolicyTemperatureEarly, 0.01, 100.0) ||
-           cfg.tryGetDouble("rootPolicyTemperatureEarly", params.rootPolicyTemperatureEarly, 0.01, 100.0));
-
-    params.rootFpuReductionMax = params.rootNoiseEnabled ? 0.0 : 0.1;
-    (void)(cfg.tryGetDouble("rootFpuReductionMax"+idxStr, params.rootFpuReductionMax, 0.0, 2.0) ||
-           cfg.tryGetDouble("rootFpuReductionMax", params.rootFpuReductionMax, 0.0, 2.0));
-
-    params.rootFpuLossProp = params.fpuLossProp;
-    (void)(cfg.tryGetDouble("rootFpuLossProp"+idxStr, params.rootFpuLossProp, 0.0, 1.0) ||
-           cfg.tryGetDouble("rootFpuLossProp", params.rootFpuLossProp, 0.0, 1.0));
-
-    params.rootNumSymmetriesToSample = 1;
-    (void)(cfg.tryGetInt("rootNumSymmetriesToSample"+idxStr, params.rootNumSymmetriesToSample, 1, SymmetryHelpers::NUM_SYMMETRIES) ||
-           cfg.tryGetInt("rootNumSymmetriesToSample", params.rootNumSymmetriesToSample, 1, SymmetryHelpers::NUM_SYMMETRIES));
-
-    params.rootSymmetryPruning = (setupFor == SETUP_FOR_ANALYSIS || setupFor == SETUP_FOR_GTP);
-    (void)(cfg.tryGetBool("rootSymmetryPruning"+idxStr, params.rootSymmetryPruning) ||
-           cfg.tryGetBool("rootSymmetryPruning", params.rootSymmetryPruning));
-
-    params.rootDesiredPerChildVisitsCoeff = 0.0;
-    (void)(cfg.tryGetDouble("rootDesiredPerChildVisitsCoeff"+idxStr, params.rootDesiredPerChildVisitsCoeff, 0.0, 100.0) ||
-           cfg.tryGetDouble("rootDesiredPerChildVisitsCoeff", params.rootDesiredPerChildVisitsCoeff, 0.0, 100.0));
-
-    params.rootPolicyOptimism = setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER ? std::min(params.policyOptimism, 0.2) : 0.0;
-    (void)(cfg.tryGetDouble("rootPolicyOptimism"+idxStr, params.rootPolicyOptimism, 0.0, 1.0) ||
-           cfg.tryGetDouble("rootPolicyOptimism", params.rootPolicyOptimism, 0.0, 1.0));
-
-    params.chosenMoveTemperature = 0.1;
-    (void)(cfg.tryGetDouble("chosenMoveTemperature"+idxStr, params.chosenMoveTemperature, 0.0, 5.0) ||
-           cfg.tryGetDouble("chosenMoveTemperature", params.chosenMoveTemperature, 0.0, 5.0));
-
-    params.chosenMoveTemperatureEarly = 0.5;
-    (void)(cfg.tryGetDouble("chosenMoveTemperatureEarly"+idxStr, params.chosenMoveTemperatureEarly, 0.0, 5.0) ||
-           cfg.tryGetDouble("chosenMoveTemperatureEarly", params.chosenMoveTemperatureEarly, 0.0, 5.0));
-
-    params.chosenMoveTemperatureHalflife = 19.0;
-    (void)(cfg.tryGetDouble("chosenMoveTemperatureHalflife"+idxStr, params.chosenMoveTemperatureHalflife, 0.1, 100000.0) ||
-           cfg.tryGetDouble("chosenMoveTemperatureHalflife", params.chosenMoveTemperatureHalflife, 0.1, 100000.0));
-
-    params.chosenMoveTemperatureOnlyBelowProb = 1.0;
-    (void)(cfg.tryGetDouble("chosenMoveTemperatureOnlyBelowProb"+idxStr, params.chosenMoveTemperatureOnlyBelowProb, 0.0, 1.0) ||
-           cfg.tryGetDouble("chosenMoveTemperatureOnlyBelowProb", params.chosenMoveTemperatureOnlyBelowProb, 0.0, 1.0));
-
-    params.chosenMoveSubtract = 0.0;
-    (void)(cfg.tryGetDouble("chosenMoveSubtract"+idxStr, params.chosenMoveSubtract, 0.0, 1.0e10) ||
-           cfg.tryGetDouble("chosenMoveSubtract", params.chosenMoveSubtract, 0.0, 1.0e10));
-
-    params.chosenMovePrune = 1.0;
-    (void)(cfg.tryGetDouble("chosenMovePrune"+idxStr, params.chosenMovePrune, 0.0, 1.0e10) ||
-           cfg.tryGetDouble("chosenMovePrune", params.chosenMovePrune, 0.0, 1.0e10));
-
-    params.useLcbForSelection = true;
-    (void)(cfg.tryGetBool("useLcbForSelection"+idxStr, params.useLcbForSelection) ||
-           cfg.tryGetBool("useLcbForSelection", params.useLcbForSelection));
-
-    params.lcbStdevs = 5.0;
-    (void)(cfg.tryGetDouble("lcbStdevs"+idxStr, params.lcbStdevs, 1.0, 12.0) ||
-           cfg.tryGetDouble("lcbStdevs", params.lcbStdevs, 1.0, 12.0));
-
-    params.minVisitPropForLCB = 0.15;
-    (void)(cfg.tryGetDouble("minVisitPropForLCB"+idxStr, params.minVisitPropForLCB, 0.0, 1.0) ||
-           cfg.tryGetDouble("minVisitPropForLCB", params.minVisitPropForLCB, 0.0, 1.0));
-
-    //For distributed and selfplay, we default to buggy LCB for the moment since it has effects on the policy training target.
-    params.useNonBuggyLcb = setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER;
-    (void)(cfg.tryGetBool("useNonBuggyLcb"+idxStr, params.useNonBuggyLcb) ||
-           cfg.tryGetBool("useNonBuggyLcb", params.useNonBuggyLcb));
-
-    params.rootEndingBonusPoints = 0.5;
-    (void)(cfg.tryGetDouble("rootEndingBonusPoints"+idxStr, params.rootEndingBonusPoints, -1.0, 1.0) ||
-           cfg.tryGetDouble("rootEndingBonusPoints", params.rootEndingBonusPoints, -1.0, 1.0));
-
-    params.rootPruneUselessMoves = true;
-    (void)(cfg.tryGetBool("rootPruneUselessMoves"+idxStr, params.rootPruneUselessMoves) ||
-           cfg.tryGetBool("rootPruneUselessMoves", params.rootPruneUselessMoves));
-
-    params.conservativePass = false;
-    (void)(cfg.tryGetBool("conservativePass"+idxStr, params.conservativePass) ||
-           cfg.tryGetBool("conservativePass", params.conservativePass));
-
-    params.fillDameBeforePass = false;
-    (void)(cfg.tryGetBool("fillDameBeforePass"+idxStr, params.fillDameBeforePass) ||
-           cfg.tryGetBool("fillDameBeforePass", params.fillDameBeforePass));
-
-    //Controlled by GTP directly, not used in any other mode
+    params.policyOptimism = getValueForBot<double>(cfg, "policyOptimism", idxStr, 0.0, 1.0, setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER ? 1.0 : 0.0);
+    params.valueWeightExponent = getValueForBot<double>(cfg, "valueWeightExponent", idxStr, 0.0, 1.0, 0.25);
+    params.useNoisePruning = getBoolValueForBot(cfg, "useNoisePruning", idxStr, setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER);
+    params.noisePruneUtilityScale = getValueForBot<double>(cfg, "noisePruneUtilityScale", idxStr, 0.001, 10.0, 0.15);
+    params.noisePruningCap = getValueForBot<double>(cfg, "noisePruningCap", idxStr, 0.0, 1e50, 1e50);
+    params.useUncertainty = getBoolValueForBot(cfg, "useUncertainty", idxStr, setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER);
+    params.uncertaintyCoeff = getValueForBot<double>(cfg, "uncertaintyCoeff", idxStr, 0.0001, 1.0, 0.25);
+    params.uncertaintyExponent = getValueForBot<double>(cfg, "uncertaintyExponent", idxStr, 0.0, 2.0, 1.0);
+    params.uncertaintyMaxWeight = getValueForBot<double>(cfg, "uncertaintyMaxWeight", idxStr, 1.0, 100.0, 8.0);
+    params.useGraphSearch = getBoolValueForBot(cfg, "useGraphSearch", idxStr, setupFor != SETUP_FOR_DISTRIBUTED);
+    params.graphSearchRepBound = getValueForBot<int>(cfg, "graphSearchRepBound", idxStr, 3, 50, 11);
+    params.graphSearchCatchUpLeakProb = getValueForBot<double>(cfg, "graphSearchCatchUpLeakProb", idxStr, 0.0, 1.0, 0.0);
+    params.rootNoiseEnabled = getBoolValueForBot(cfg, "rootNoiseEnabled", idxStr, false);
+    params.rootDirichletNoiseTotalConcentration = getValueForBot<double>(cfg, "rootDirichletNoiseTotalConcentration", idxStr, 0.001, 10000.0, 10.83);
+    params.rootDirichletNoiseWeight = getValueForBot<double>(cfg, "rootDirichletNoiseWeight", idxStr, 0.0, 1.0, 0.25);
+    params.rootPolicyTemperature = getValueForBot<double>(cfg, "rootPolicyTemperature", idxStr, 0.01, 100.0, 1.0);
+    params.rootPolicyTemperatureEarly = getValueForBot<double>(cfg, "rootPolicyTemperatureEarly", idxStr, 0.01, 100.0, params.rootPolicyTemperature);
+    params.rootFpuReductionMax = getValueForBot<double>(cfg, "rootFpuReductionMax", idxStr, 0.0, 2.0, params.rootNoiseEnabled ? 0.0 : 0.1);
+    params.rootFpuLossProp = getValueForBot<double>(cfg, "rootFpuLossProp", idxStr, 0.0, 1.0, params.fpuLossProp);
+    params.rootNumSymmetriesToSample = getValueForBot<int>(cfg, "rootNumSymmetriesToSample", idxStr, 1, SymmetryHelpers::NUM_SYMMETRIES, 1);
+    params.rootSymmetryPruning = getBoolValueForBot(cfg, "rootSymmetryPruning", idxStr, setupFor == SETUP_FOR_ANALYSIS || setupFor == SETUP_FOR_GTP);
+    params.rootDesiredPerChildVisitsCoeff = getValueForBot<double>(cfg, "rootDesiredPerChildVisitsCoeff", idxStr, 0.0, 100.0, 0.0);
+    params.rootPolicyOptimism = getValueForBot<double>(cfg, "rootPolicyOptimism", idxStr, 0.0, 1.0, setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER ? std::min(params.policyOptimism, 0.2) : 0.0);
+    params.chosenMoveTemperature = getValueForBot<double>(cfg, "chosenMoveTemperature", idxStr, 0.0, 5.0, 0.1);
+    params.chosenMoveTemperatureEarly = getValueForBot<double>(cfg, "chosenMoveTemperatureEarly", idxStr, 0.0, 5.0, 0.5);
+    params.chosenMoveTemperatureHalflife = getValueForBot<double>(cfg, "chosenMoveTemperatureHalflife", idxStr, 0.1, 100000.0, 19.0);
+    params.chosenMoveTemperatureOnlyBelowProb = getValueForBot<double>(cfg, "chosenMoveTemperatureOnlyBelowProb", idxStr, 0.0, 1.0, 1.0);
+    params.chosenMoveSubtract = getValueForBot<double>(cfg, "chosenMoveSubtract", idxStr, 0.0, 1.0e10, 0.0);
+    params.chosenMovePrune = getValueForBot<double>(cfg, "chosenMovePrune", idxStr, 0.0, 1.0e10, 1.0);
+    params.useLcbForSelection = getBoolValueForBot(cfg, "useLcbForSelection", idxStr, true);
+    params.lcbStdevs = getValueForBot<double>(cfg, "lcbStdevs", idxStr, 1.0, 12.0, 5.0);
+    params.minVisitPropForLCB = getValueForBot<double>(cfg, "minVisitPropForLCB", idxStr, 0.0, 1.0, 0.15);
+    params.useNonBuggyLcb = getBoolValueForBot(cfg, "useNonBuggyLcb", idxStr, setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER);
+    params.rootEndingBonusPoints = getValueForBot<double>(cfg, "rootEndingBonusPoints", idxStr, -1.0, 1.0, 0.5);
+    params.rootPruneUselessMoves = getBoolValueForBot(cfg, "rootPruneUselessMoves", idxStr,  true);
+    params.conservativePass = getBoolValueForBot(cfg, "conservativePass", idxStr, false);
+    params.fillDameBeforePass = getBoolValueForBot(cfg, "fillDameBeforePass", idxStr, false);
     params.avoidMYTDaggerHackPla = C_EMPTY;
-    params.wideRootNoise = setupFor == SETUP_FOR_ANALYSIS ? DEFAULT_ANALYSIS_WIDE_ROOT_NOISE : 0.00;
-    (void)(cfg.tryGetDouble("wideRootNoise"+idxStr, params.wideRootNoise, 0.0, 5.0) ||
-           cfg.tryGetDouble("wideRootNoise", params.wideRootNoise, 0.0, 5.0));
+    params.wideRootNoise = getValueForBot<double>(cfg, "wideRootNoise", idxStr, 0.0, 5.0, setupFor == SETUP_FOR_ANALYSIS ? DEFAULT_ANALYSIS_WIDE_ROOT_NOISE : 0.00);
+    params.enablePassingHacks = getBoolValueForBot(cfg, "enablePassingHacks", idxStr,  setupFor == SETUP_FOR_GTP || setupFor == SETUP_FOR_ANALYSIS);
+    params.enableMorePassingHacks = getBoolValueForBot(cfg, "enableMorePassingHacks", idxStr,  setupFor == SETUP_FOR_GTP || setupFor == SETUP_FOR_ANALYSIS);
+    params.playoutDoublingAdvantage = getValueForBot<double>(cfg, "playoutDoublingAdvantage", idxStr, -3.0, 3.0, 0.0);
 
-    params.enablePassingHacks = setupFor == SETUP_FOR_GTP || setupFor == SETUP_FOR_ANALYSIS;
-    (void)(cfg.tryGetBool("enablePassingHacks"+idxStr, params.enablePassingHacks) ||
-           cfg.tryGetBool("enablePassingHacks", params.enablePassingHacks));
-
-    params.enableMorePassingHacks = setupFor == SETUP_FOR_GTP || setupFor == SETUP_FOR_ANALYSIS;
-    (void)(cfg.tryGetBool("enableMorePassingHacks"+idxStr, params.enableMorePassingHacks) ||
-           cfg.tryGetBool("enableMorePassingHacks", params.enableMorePassingHacks));
-
-    params.playoutDoublingAdvantage = 0.0;
-    (void)(cfg.tryGetDouble("playoutDoublingAdvantage"+idxStr, params.playoutDoublingAdvantage, -3.0, 3.0) ||
-           cfg.tryGetDouble("playoutDoublingAdvantage", params.playoutDoublingAdvantage, -3.0, 3.0));
-
-    string playoutDoublingAdvantagePlaStr;
-    bool playoutDoublingAdvantagePlaSpecified =
-      cfg.tryGetString("playoutDoublingAdvantagePla"+idxStr, playoutDoublingAdvantagePlaStr) ||
-      cfg.tryGetString("playoutDoublingAdvantagePla", playoutDoublingAdvantagePlaStr);
-
-    params.playoutDoublingAdvantagePla = playoutDoublingAdvantagePlaSpecified
+    string playoutDoublingAdvantagePlaStr = getStringValueForBot(cfg, "playoutDoublingAdvantagePla", idxStr, "");
+    params.playoutDoublingAdvantagePla = !playoutDoublingAdvantagePlaStr.empty()
       ? parsePlayer("playoutDoublingAdvantagePla", playoutDoublingAdvantagePlaStr)
       : C_EMPTY;
 
-    params.avoidRepeatedPatternUtility = 0.0;
-    (void)(cfg.tryGetDouble("avoidRepeatedPatternUtility"+idxStr, params.avoidRepeatedPatternUtility, -3.0, 3.0) ||
-           cfg.tryGetDouble("avoidRepeatedPatternUtility", params.avoidRepeatedPatternUtility, -3.0, 3.0));
-
-    params.nnPolicyTemperature = 1.0f;
-    (void)(cfg.tryGetFloat("nnPolicyTemperature"+idxStr, params.nnPolicyTemperature, 0.01f, 5.0f) ||
-           cfg.tryGetFloat("nnPolicyTemperature", params.nnPolicyTemperature, 0.01f, 5.0f));
-
-    params.antiMirror = false;
-    (void)(cfg.tryGetBool("antiMirror"+idxStr, params.antiMirror) ||
-           cfg.tryGetBool("antiMirror", params.antiMirror));
-
-    params.ignorePreRootHistory = (setupFor == SETUP_FOR_ANALYSIS ? Setup::DEFAULT_ANALYSIS_IGNORE_PRE_ROOT_HISTORY : false);
-    (void)(cfg.tryGetBool("ignorePreRootHistory"+idxStr, params.ignorePreRootHistory) ||
-           cfg.tryGetBool("ignorePreRootHistory", params.ignorePreRootHistory));
-
-    params.ignoreAllHistory = false;
-    (void)(cfg.tryGetBool("ignoreAllHistory"+idxStr, params.ignoreAllHistory) ||
-           cfg.tryGetBool("ignoreAllHistory", params.ignoreAllHistory));
-
-    params.subtreeValueBiasFactor = 0.45;
-    (void)(cfg.tryGetDouble("subtreeValueBiasFactor"+idxStr, params.subtreeValueBiasFactor, 0.0, 1.0) ||
-           cfg.tryGetDouble("subtreeValueBiasFactor", params.subtreeValueBiasFactor, 0.0, 1.0));
-
-    params.subtreeValueBiasFreeProp = 0.8;
-    (void)(cfg.tryGetDouble("subtreeValueBiasFreeProp"+idxStr, params.subtreeValueBiasFreeProp, 0.0, 1.0) ||
-           cfg.tryGetDouble("subtreeValueBiasFreeProp", params.subtreeValueBiasFreeProp, 0.0, 1.0));
-
-    params.subtreeValueBiasWeightExponent = 0.85;
-    (void)(cfg.tryGetDouble("subtreeValueBiasWeightExponent"+idxStr, params.subtreeValueBiasWeightExponent, 0.0, 1.0) ||
-           cfg.tryGetDouble("subtreeValueBiasWeightExponent", params.subtreeValueBiasWeightExponent, 0.0, 1.0));
-
-    params.useEvalCache = false;
-    (void)(cfg.tryGetBool("useEvalCache"+idxStr, params.useEvalCache) ||
-           cfg.tryGetBool("useEvalCache", params.useEvalCache));
-
-    params.evalCacheMinVisits = 100;
-    (void)(cfg.tryGetInt64("evalCacheMinVisits"+idxStr, params.evalCacheMinVisits, 1, static_cast<int64_t>(1) << 50) ||
-           cfg.tryGetInt64("evalCacheMinVisits", params.evalCacheMinVisits, 1, static_cast<int64_t>(1) << 50));
-
-    params.nodeTableShardsPowerOfTwo = 16;
-    (void)(cfg.tryGetInt("nodeTableShardsPowerOfTwo"+idxStr, params.nodeTableShardsPowerOfTwo, 8, 24) ||
-           cfg.tryGetInt("nodeTableShardsPowerOfTwo", params.nodeTableShardsPowerOfTwo, 8, 24));
-
-    params.numVirtualLossesPerThread = 1.0;
-    (void)(cfg.tryGetDouble("numVirtualLossesPerThread"+idxStr, params.numVirtualLossesPerThread, 0.01, 1000.0) ||
-           cfg.tryGetDouble("numVirtualLossesPerThread", params.numVirtualLossesPerThread, 0.01, 1000.0));
-
-    params.treeReuseCarryOverTimeFactor = 0.0;
-    (void)(cfg.tryGetDouble("treeReuseCarryOverTimeFactor"+idxStr, params.treeReuseCarryOverTimeFactor, 0.0, 1.0) ||
-           cfg.tryGetDouble("treeReuseCarryOverTimeFactor", params.treeReuseCarryOverTimeFactor, 0.0, 1.0));
-
-    params.overallocateTimeFactor = 1.0;
-    (void)(cfg.tryGetDouble("overallocateTimeFactor"+idxStr, params.overallocateTimeFactor, 0.01, 100.0) ||
-           cfg.tryGetDouble("overallocateTimeFactor", params.overallocateTimeFactor, 0.01, 100.0));
-
-    params.midgameTimeFactor = 1.0;
-    (void)(cfg.tryGetDouble("midgameTimeFactor"+idxStr, params.midgameTimeFactor, 0.01, 100.0) ||
-           cfg.tryGetDouble("midgameTimeFactor", params.midgameTimeFactor, 0.01, 100.0));
-
-    params.midgameTurnPeakTime = 130.0;
-    (void)(cfg.tryGetDouble("midgameTurnPeakTime"+idxStr, params.midgameTurnPeakTime, 0.0, 1000.0) ||
-           cfg.tryGetDouble("midgameTurnPeakTime", params.midgameTurnPeakTime, 0.0, 1000.0));
-
-    params.endgameTurnTimeDecay = 100.0;
-    (void)(cfg.tryGetDouble("endgameTurnTimeDecay"+idxStr, params.endgameTurnTimeDecay, 0.0, 1000.0) ||
-           cfg.tryGetDouble("endgameTurnTimeDecay", params.endgameTurnTimeDecay, 0.0, 1000.0));
-
-    params.obviousMovesTimeFactor = 1.0;
-    (void)(cfg.tryGetDouble("obviousMovesTimeFactor"+idxStr, params.obviousMovesTimeFactor, 0.01, 1.0) ||
-           cfg.tryGetDouble("obviousMovesTimeFactor", params.obviousMovesTimeFactor, 0.01, 1.0));
-
-    params.obviousMovesPolicyEntropyTolerance = 0.30;
-    (void)(cfg.tryGetDouble("obviousMovesPolicyEntropyTolerance"+idxStr, params.obviousMovesPolicyEntropyTolerance, 0.001, 2.0) ||
-           cfg.tryGetDouble("obviousMovesPolicyEntropyTolerance", params.obviousMovesPolicyEntropyTolerance, 0.001, 2.0));
-
-    params.obviousMovesPolicySurpriseTolerance = 0.15;
-    (void)(cfg.tryGetDouble("obviousMovesPolicySurpriseTolerance"+idxStr, params.obviousMovesPolicySurpriseTolerance, 0.001, 2.0) ||
-           cfg.tryGetDouble("obviousMovesPolicySurpriseTolerance", params.obviousMovesPolicySurpriseTolerance, 0.001, 2.0));
-
-    params.futileVisitsThreshold = 0.0;
-    (void)(cfg.tryGetDouble("futileVisitsThreshold"+idxStr, params.futileVisitsThreshold, 0.01, 1.0) ||
-           cfg.tryGetDouble("futileVisitsThreshold", params.futileVisitsThreshold, 0.01, 1.0));
+    params.avoidRepeatedPatternUtility = getValueForBot<double>(cfg, "avoidRepeatedPatternUtility", idxStr, -3.0, 3.0, 0.0);
+    params.nnPolicyTemperature = getValueForBot<float>(cfg, "nnPolicyTemperature", idxStr, 0.01f, 5.0f, 1.0f);
+    params.antiMirror = getBoolValueForBot(cfg, "antiMirror", idxStr, false);
+    params.ignorePreRootHistory = getBoolValueForBot(cfg, "ignorePreRootHistory", idxStr, setupFor == SETUP_FOR_ANALYSIS ? DEFAULT_ANALYSIS_IGNORE_PRE_ROOT_HISTORY : false);
+    params.ignoreAllHistory = getBoolValueForBot(cfg, "ignoreAllHistory", idxStr, false);
+    params.subtreeValueBiasFactor = getValueForBot<double>(cfg, "subtreeValueBiasFactor", idxStr, 0.0, 1.0, 0.45);
+    params.subtreeValueBiasFreeProp = getValueForBot<double>(cfg, "subtreeValueBiasFreeProp", idxStr, 0.0, 1.0, 0.8);
+    params.subtreeValueBiasWeightExponent = getValueForBot<double>(cfg, "subtreeValueBiasWeightExponent", idxStr, 0.0, 1.0, 0.85);
+    params.useEvalCache = getBoolValueForBot(cfg, "useEvalCache", idxStr, false);
+    params.evalCacheMinVisits = getValueForBot<int64_t>(cfg, "evalCacheMinVisits", idxStr, 1, static_cast<int64_t>(1) << 50, 100);
+    params.nodeTableShardsPowerOfTwo = getValueForBot<int>(cfg, "nodeTableShardsPowerOfTwo", idxStr, 8, 24, 16);
+    params.numVirtualLossesPerThread = getValueForBot<double>(cfg, "numVirtualLossesPerThread", idxStr, 0.01, 1000.0, 1.0);
+    params.treeReuseCarryOverTimeFactor = getValueForBot<double>(cfg, "treeReuseCarryOverTimeFactor", idxStr, 0.0, 1.0, 0.0);
+    params.overallocateTimeFactor = getValueForBot<double>(cfg, "overallocateTimeFactor", idxStr, 0.01, 100.0, 1.0);
+    params.midgameTimeFactor = getValueForBot<double>(cfg, "midgameTimeFactor", idxStr, 0.01, 100.0, 1.0);
+    params.midgameTurnPeakTime = getValueForBot<double>(cfg, "midgameTurnPeakTime", idxStr, 0.0, 1000.0, 130.0);
+    params.endgameTurnTimeDecay = getValueForBot<double>(cfg, "endgameTurnTimeDecay", idxStr, 0.0, 1000.0, 100.0);
+    params.obviousMovesTimeFactor = getValueForBot<double>(cfg, "obviousMovesTimeFactor", idxStr, 0.01, 1.0, 1.0);
+    params.obviousMovesPolicyEntropyTolerance = getValueForBot<double>(cfg, "obviousMovesPolicyEntropyTolerance", idxStr, 0.001, 2.0, 0.30);
+    params.obviousMovesPolicySurpriseTolerance = getValueForBot<double>(cfg, "obviousMovesPolicySurpriseTolerance", idxStr, 0.001, 2.0, 0.15);
+    params.futileVisitsThreshold = getValueForBot<double>(cfg, "futileVisitsThreshold", idxStr, 0.01, 1.0, 0.0);
 
     // This does NOT report an error under throwHumanParsingError like the parameters below that expect a second model
     // because the user might be providing the human model as the MAIN model. In which case humanSLProfile is still a
     // valid param but the others are not.
     if(setupFor != SETUP_FOR_DISTRIBUTED) {
-      string humanSLProfileName;
-      (void)(cfg.tryGetString("humanSLProfile"+idxStr, humanSLProfileName) ||
-             cfg.tryGetString("humanSLProfile", humanSLProfileName));
+      auto humanSLProfileName = getStringValueForBot(cfg, "humanSLProfile", idxStr, "");
       params.humanSLProfile = SGFMetadata::getProfile(humanSLProfileName);
     }
 
-    auto tryGetDoubleAndValidate = [hasHumanModel](ConfigParser& configParser, const string& param, double& value, const double min, const double max) {
-      if (configParser.tryGetDouble(param, value, min, max)) {
-        if(!hasHumanModel) {
-          throw ConfigParsingError(
-            string("Provided parameter ") + param + string(" but no human model was specified (e.g -human-model b18c384nbt-humanv0.bin.gz)")
-          );
-        }
-        return true;
-      }
-      return false;
-    };
-
-    auto tryGetBoolAndValidate = [hasHumanModel](ConfigParser& configParser, const string& param, bool& value) {
-      if (configParser.tryGetBool(param, value)) {
-        if(!hasHumanModel) {
-          throw ConfigParsingError(
-            string("Provided parameter ") + param + string(" but no human model was specified (e.g -human-model b18c384nbt-humanv0.bin.gz)")
-          );
-        }
-        return true;
-      }
-      return false;
-    };
-
-    params.humanSLCpuctExploration = 1.0;
-    (void)(
-      tryGetDoubleAndValidate(cfg, "humanSLCpuctExploration"+idxStr, params.humanSLCpuctExploration, 0.0, 1000.0) ||
-      tryGetDoubleAndValidate(cfg, "humanSLCpuctExploration", params.humanSLCpuctExploration, 0.0, 1000.0));
-
-    params.humanSLCpuctPermanent = 0.0;
-    (void)(
-      tryGetDoubleAndValidate(cfg, "humanSLCpuctPermanent"+idxStr, params.humanSLCpuctPermanent, 0.0, 1000.0) ||
-      tryGetDoubleAndValidate(cfg, "humanSLCpuctPermanent", params.humanSLCpuctPermanent, 0.0, 1000.0));
-
-    params.humanSLRootExploreProbWeightless = 0.0;
-    (void)(
-      tryGetDoubleAndValidate(cfg, "humanSLRootExploreProbWeightless"+idxStr, params.humanSLRootExploreProbWeightless, 0.0, 1.0) ||
-      tryGetDoubleAndValidate(cfg, "humanSLRootExploreProbWeightless", params.humanSLRootExploreProbWeightless, 0.0, 1.0));
-
-    params.humanSLRootExploreProbWeightful = 0.0;
-    (void)(
-      tryGetDoubleAndValidate(cfg, "humanSLRootExploreProbWeightful"+idxStr, params.humanSLRootExploreProbWeightful, 0.0, 1.0) ||
-      tryGetDoubleAndValidate(cfg, "humanSLRootExploreProbWeightful", params.humanSLRootExploreProbWeightful, 0.0, 1.0));
-
-    params.humanSLPlaExploreProbWeightless = 0.0;
-    (void)(
-      tryGetDoubleAndValidate(cfg, "humanSLPlaExploreProbWeightless"+idxStr, params.humanSLPlaExploreProbWeightless, 0.0, 1.0) ||
-      tryGetDoubleAndValidate(cfg, "humanSLPlaExploreProbWeightless", params.humanSLPlaExploreProbWeightless, 0.0, 1.0));
-
-    params.humanSLPlaExploreProbWeightful = 0.0;
-    (void)(
-      tryGetDoubleAndValidate(cfg, "humanSLPlaExploreProbWeightful"+idxStr, params.humanSLPlaExploreProbWeightful, 0.0, 1.0) ||
-      tryGetDoubleAndValidate(cfg, "humanSLPlaExploreProbWeightful", params.humanSLPlaExploreProbWeightful, 0.0, 1.0));
-
-    params.humanSLOppExploreProbWeightless = 0.0;
-    (void)(
-      tryGetDoubleAndValidate(cfg, "humanSLOppExploreProbWeightless"+idxStr, params.humanSLOppExploreProbWeightless, 0.0, 1.0) ||
-      tryGetDoubleAndValidate(cfg, "humanSLOppExploreProbWeightless", params.humanSLOppExploreProbWeightless, 0.0, 1.0));
-
-    params.humanSLOppExploreProbWeightful = 0.0;
-    (void)(
-      tryGetDoubleAndValidate(cfg, "humanSLOppExploreProbWeightful"+idxStr, params.humanSLOppExploreProbWeightful, 0.0, 1.0) ||
-      tryGetDoubleAndValidate(cfg, "humanSLOppExploreProbWeightful", params.humanSLOppExploreProbWeightful, 0.0, 1.0));
-
-    params.humanSLChosenMoveProp = 0.0;
-    (void)(
-      tryGetDoubleAndValidate(cfg, "humanSLChosenMoveProp"+idxStr, params.humanSLChosenMoveProp, 0.0, 1.0) ||
-      tryGetDoubleAndValidate(cfg, "humanSLChosenMoveProp", params.humanSLChosenMoveProp, 0.0, 1.0));
-
-
-    params.humanSLChosenMoveIgnorePass = false;
-    (void)(
-      tryGetBoolAndValidate(cfg, "humanSLChosenMoveIgnorePass"+idxStr, params.humanSLChosenMoveIgnorePass) ||
-      tryGetBoolAndValidate(cfg, "humanSLChosenMoveIgnorePass", params.humanSLChosenMoveIgnorePass));
-
-    params.humanSLChosenMovePiklLambda = 1000000000.0;
-    (void)(
-      tryGetDoubleAndValidate(cfg, "humanSLChosenMovePiklLambda"+idxStr, params.humanSLChosenMovePiklLambda, 0.0, 1000000000.0) ||
-      tryGetDoubleAndValidate(cfg, "humanSLChosenMovePiklLambda", params.humanSLChosenMovePiklLambda, 0.0, 1000000000.0));
+    bool reportNoHumanModelIfKeyFound = !hasHumanModel;
+    params.humanSLCpuctExploration = getValueForBot<double>(cfg, "humanSLCpuctExploration", idxStr, 0.0, 1000.0, 1.0, reportNoHumanModelIfKeyFound);
+    params.humanSLCpuctPermanent = getValueForBot<double>(cfg, "humanSLCpuctPermanent", idxStr, 0.0, 1000.0, 0.0, reportNoHumanModelIfKeyFound);
+    params.humanSLRootExploreProbWeightless = getValueForBot<double>(cfg, "humanSLRootExploreProbWeightless", idxStr, 0.0, 1.0, 0.0, reportNoHumanModelIfKeyFound);
+    params.humanSLRootExploreProbWeightful = getValueForBot<double>(cfg, "humanSLRootExploreProbWeightful", idxStr, 0.0, 1.0, 0.0, reportNoHumanModelIfKeyFound);
+    params.humanSLPlaExploreProbWeightless = getValueForBot<double>(cfg, "humanSLPlaExploreProbWeightless", idxStr, 0.0, 1.0, 0.0, reportNoHumanModelIfKeyFound);
+    params.humanSLPlaExploreProbWeightful = getValueForBot<double>(cfg, "humanSLPlaExploreProbWeightful", idxStr, 0.0, 1.0, 0.0, reportNoHumanModelIfKeyFound);
+    params.humanSLOppExploreProbWeightless = getValueForBot<double>(cfg, "humanSLOppExploreProbWeightless", idxStr, 0.0, 1.0, 0.0, reportNoHumanModelIfKeyFound);
+    params.humanSLOppExploreProbWeightful = getValueForBot<double>(cfg, "humanSLOppExploreProbWeightful", idxStr, 0.0, 1.0, 0.0, reportNoHumanModelIfKeyFound);
+    params.humanSLChosenMoveProp = getValueForBot<double>(cfg, "humanSLChosenMoveProp", idxStr, 0.0, 1.0, 0.0, reportNoHumanModelIfKeyFound);
+    params.humanSLChosenMoveIgnorePass = getBoolValueForBot(cfg, "humanSLChosenMoveIgnorePass", idxStr, false, reportNoHumanModelIfKeyFound);
+    params.humanSLChosenMovePiklLambda = getValueForBot<double>(cfg, "humanSLChosenMovePiklLambda", idxStr, 0.0, 1000000000.0, 1000000000.0, reportNoHumanModelIfKeyFound);
 
     //On distributed, tolerate reading mutexPoolSize since older version configs use it.
     if(setupFor == SETUP_FOR_DISTRIBUTED)
