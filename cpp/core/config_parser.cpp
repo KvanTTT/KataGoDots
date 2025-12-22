@@ -521,23 +521,39 @@ std::string ConfigParser::firstFoundOrEmpty(const std::vector<std::string>& poss
 }
 
 std::string ConfigParser::getStringOrDefault(const std::string& key, const std::string& defaultValue, const std::set<std::string>& possibles) {
-  const auto str = getOrError<string>(key, "", "", defaultValue);
-  validateAgainstPossibles(key, possibles, str);
-  return str;
+  string value;
+  if (!tryGetString(key, value, possibles)) {
+    value = defaultValue;
+  }
+  return value;
 }
 
 string ConfigParser::getString(const string& key, const set<string>& possibles) {
-  const auto str = getOrError<string>(key, "", "", std::nullopt);
-  validateAgainstPossibles(key, possibles, str);
-  return str;
+  string value;
+  if (!tryGetString(key, value, possibles)) {
+    throw IOError("Could not find key '" + key + "' in config file " + fileName);
+  }
+  return value;
 }
 
-void ConfigParser::validateAgainstPossibles(const string& key, const set<string>& possibles, const string& str) const {
+bool ConfigParser::tryGetString(const std::string& key, std::string& value, const std::set<std::string>& possibles) {
+  const auto iter = keyValues.find(key);
+  if(iter == keyValues.end()) {
+    return false;
+  }
+
+  std::lock_guard lock(usedKeysMutex);
+  usedKeys.insert(key);
+
+  value = iter->second;
+
   if(!possibles.empty()) {
-    if(possibles.find(str) == possibles.end())
+    if(possibles.find(value) == possibles.end())
       throw IOError(
         "Key '" + key + "' must be one of (" + Global::concat(possibles, "|") + ") in config file " + fileName);
   }
+
+  return true;
 }
 
 vector<string> ConfigParser::getStrings(const string& key, const set<string>& possibles, const bool nonEmptyTrim) {
@@ -561,19 +577,6 @@ vector<string> ConfigParser::getStrings(const string& key, const set<string>& po
   }
 
   return values;
-}
-
-bool ConfigParser::tryGetString(const std::string& key,  std::string& value) {
-  const auto iter = keyValues.find(key);
-  if(iter == keyValues.end()) {
-    return false;
-  }
-
-  std::lock_guard lock(usedKeysMutex);
-  usedKeys.insert(key);
-
-  value = iter->second;
-  return true;
 }
 
 bool ConfigParser::tryGetBool(const std::string& key, bool& value) {
@@ -824,10 +827,6 @@ T ConfigParser::getOrError(const string& key, const T min, const T max, const st
       return value;
     }
     throw IOError("Could not find key '" + key + "' in config file " + fileName);
-  }
-
-  if constexpr (std::is_same_v<T, string>) {
-    return foundStr;
   }
 
   return parseOrError(key, foundStr, min, max);
