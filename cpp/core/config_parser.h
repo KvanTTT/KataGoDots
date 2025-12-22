@@ -58,6 +58,7 @@ class ConfigParser {
   std::string firstFoundOrFail(const std::vector<std::string>& possibleKeys) const;
   std::string firstFoundOrEmpty(const std::vector<std::string>& possibleKeys) const;
 
+  std::string getStringOrDefault(const std::string& key, const std::string& defaultValue, const std::set<std::string>& possibles = {});
   std::string getString(const std::string& key, const std::set<std::string>& possibles = {});
   std::vector<std::string> getStrings(const std::string& key, const std::set<std::string>& possibles = {}, bool nonEmptyTrim = false);
   std::optional<std::string> tryGetString(const std::string& key);
@@ -120,6 +121,8 @@ private:
   std::string extractBaseDir(const std::string &fname);
 
   bool parseKeyValue(const std::string& trimmedLine, std::string& key, std::string& value);
+
+  void validateAgainstPossibles(const std::string& key, const std::set<std::string>& possibles, const std::string& str) const;
 
   template<typename T>
   T getOrError(const std::string& key, T min, T max, std::optional<T> defaultValue);

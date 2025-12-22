@@ -232,6 +232,7 @@ e = 1e300 # double, but not float
 f = true # bool
 g = True # enabled_t
 i = auto # enabled_t
+j = str # string
 )";
     istringstream in(s);
     ConfigParser cfg(in);
@@ -243,6 +244,7 @@ i = auto # enabled_t
     testAssert(true == cfg.getBool("f"));
     testAssert(enabled_t::True == cfg.getEnabled("g").x);
     testAssert(enabled_t::Auto == cfg.getEnabled("i").x);
+    testAssert("str" == cfg.getString("j"));
 
     testAssert(128 == cfg.getIntOrDefault("a1", std::numeric_limits<int>::min(), std::numeric_limits<int>::max(), 128));
     testAssert(128L == cfg.getInt64OrDefault("b1", std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max(), 128L));
@@ -251,6 +253,7 @@ i = auto # enabled_t
     testAssert(128.0 == cfg.getDoubleOrDefault("e1", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 128.0));
     testAssert(false == cfg.getBoolOrDefault("f1", false));
     testAssert(enabled_t::False == cfg.getEnabledOrDefault("g1", enabled_t::False).x);
+    testAssert("default" == cfg.getStringOrDefault("j1", "default"));
 
     auto checkFailed = [](ConfigParser& configParser, const std::function<void(ConfigParser& cfg)>& call)  {
       bool isFailed = false;

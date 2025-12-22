@@ -520,20 +520,24 @@ std::string ConfigParser::firstFoundOrEmpty(const std::vector<std::string>& poss
   return {};
 }
 
+std::string ConfigParser::getStringOrDefault(const std::string& key, const std::string& defaultValue, const std::set<std::string>& possibles) {
+  const auto str = getOrError<string>(key, "", "", defaultValue);
+  validateAgainstPossibles(key, possibles, str);
+  return str;
+}
+
 string ConfigParser::getString(const string& key, const set<string>& possibles) {
-  const auto str = tryGetString(key);
+  const auto str = getOrError<string>(key, "", "", std::nullopt);
+  validateAgainstPossibles(key, possibles, str);
+  return str;
+}
 
-  if (str == std::nullopt)
-    throw IOError("Could not find key '" + key + "' in config file " + fileName);
-
-  auto value = str.value();
-
-  if (!possibles.empty()) {
-    if(possibles.find(value) == possibles.end())
-      throw IOError("Key '" + key + "' must be one of (" + Global::concat(possibles,"|") + ") in config file " + fileName);
+void ConfigParser::validateAgainstPossibles(const string& key, const set<string>& possibles, const string& str) const {
+  if(!possibles.empty()) {
+    if(possibles.find(str) == possibles.end())
+      throw IOError(
+        "Key '" + key + "' must be one of (" + Global::concat(possibles, "|") + ") in config file " + fileName);
   }
-
-  return value;
 }
 
 vector<string> ConfigParser::getStrings(const string& key, const set<string>& possibles, const bool nonEmptyTrim) {
@@ -770,6 +774,10 @@ T ConfigParser::getOrError(const string& key, const T min, const T max, const st
   }
 
   const auto& str = foundValue.value();
+
+  if constexpr (std::is_same_v<T, string>) {
+    return str;
+  }
 
   T x;
   bool success = false;
