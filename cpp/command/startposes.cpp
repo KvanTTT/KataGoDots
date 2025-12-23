@@ -2197,10 +2197,9 @@ int MainCmds::viewstartposes(const vector<string>& args) {
     logger.write("Loaded neural net");
 
     string searchRandSeed;
-    if(cfg.contains("searchRandSeed"))
-      searchRandSeed = cfg.getString("searchRandSeed");
-    else
+    if (!cfg.tryGetString("searchRandSeed", searchRandSeed)) {
       searchRandSeed = Global::uint64ToString(rand.nextUInt64());
+    }
 
     bot = new AsyncBot(params, nnEval, &logger, searchRandSeed);
   }

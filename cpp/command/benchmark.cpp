@@ -193,13 +193,16 @@ int MainCmds::benchmark(const vector<string>& args) {
 
   Setup::initializeSession(cfg);
 
-  if(cfg.contains("nnMaxBatchSize")) {
+  if(string nnMaxBatchSize; cfg.tryGetString("nnMaxBatchSize", nnMaxBatchSize)) {
+    auto warningPrefix = "WARNING: Your nnMaxBatchSize is hardcoded to " + nnMaxBatchSize + ", ignoring it and assuming it is ";
+    string warningSuffix;
     if(fixedBatchSize != -1)
-      cout << "WARNING: Your nnMaxBatchSize is hardcoded to " + cfg.getString("nnMaxBatchSize") + ", ignoring it and assuming it is " + Global::intToString(fixedBatchSize) + ", for this benchmark." << endl;
+      warningSuffix = Global::intToString(fixedBatchSize) + ", for this benchmark.";
     else if(useHalfBatchSize)
-      cout << "WARNING: Your nnMaxBatchSize is hardcoded to " + cfg.getString("nnMaxBatchSize") + ", ignoring it and assuming it is = threads/2, for this benchmark." << endl;
+      warningSuffix = "= threads/2, for this benchmark.";
     else
-      cout << "WARNING: Your nnMaxBatchSize is hardcoded to " + cfg.getString("nnMaxBatchSize") + ", ignoring it and assuming it is >= threads, for this benchmark." << endl;
+      warningSuffix = ">= threads, for this benchmark.";
+    cout << warningPrefix << warningSuffix << endl;
   }
 
   NNEvaluator* nnEval = NULL;
@@ -283,11 +286,11 @@ int MainCmds::benchmark(const vector<string>& args) {
     PlayUtils::BenchmarkResults::printEloComparison(results,secondsPerGameMove);
 
     cout << "If you care about performance, you may want to edit numSearchThreads in " << cfg.getFileName() << " based on the above results!" << endl;
-    if(cfg.contains("nnMaxBatchSize"))
-      cout << "WARNING: Your nnMaxBatchSize is hardcoded to " + cfg.getString("nnMaxBatchSize") + ", recommend deleting it and using the default (which this benchmark assumes)" << endl;
+    if(string nnMaxBatchSize; cfg.tryGetString("nnMaxBatchSize", nnMaxBatchSize))
+      cout << "WARNING: Your nnMaxBatchSize is hardcoded to " + nnMaxBatchSize + ", recommend deleting it and using the default (which this benchmark assumes)" << endl;
 #ifdef USE_EIGEN_BACKEND
-    if(cfg.contains("numEigenThreadsPerModel")) {
-      cout << "Note: Your numEigenThreadsPerModel is hardcoded to " + cfg.getString("numEigenThreadsPerModel") + ", this benchmark ignores it assumes that it is always set equal to the smaller of the number of search threads and the number of CPU cores on your computer when computing its performance stats." << endl;
+    if(string numEigenThreadsPerModel; cfg.tryGetString("numEigenThreadsPerModel", numEigenThreadsPerModel)) {
+      cout << "Note: Your numEigenThreadsPerModel is hardcoded to " + numEigenThreadsPerModel + ", this benchmark ignores it assumes that it is always set equal to the smaller of the number of search threads and the number of CPU cores on your computer when computing its performance stats." << endl;
     }
 #endif
 

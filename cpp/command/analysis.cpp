@@ -95,16 +95,21 @@ int MainCmds::analysis(const vector<string>& args) {
   }
   cfg.applyAlias("numSearchThreadsPerAnalysisThread", "numSearchThreads");
 
-  if(cfg.contains("numAnalysisThreads") && numAnalysisThreadsCmdlineSpecified)
-    throw StringError("When specifying numAnalysisThreads in the config (" + cfg.getFileName() + "), it is redundant and disallowed to also specify it via -analysis-threads");
+  constexpr int numAnalysisThreadsMin = 1;
+  constexpr int numAnalysisThreadsMax = 16384;
 
-  const int numAnalysisThreads = numAnalysisThreadsCmdlineSpecified ? numAnalysisThreadsCmdline : cfg.getInt("numAnalysisThreads",1,16384);
-  if(numAnalysisThreads <= 0 || numAnalysisThreads > 16384)
-    throw StringError("Invalid value for numAnalysisThreads: " + Global::intToString(numAnalysisThreads));
+  int numAnalysisThreads;
+  bool numAnalysisThreadsIsSpecified = cfg.tryGetInt("numAnalysisThreads", numAnalysisThreads, numAnalysisThreadsMin, numAnalysisThreadsMax);
+  if (numAnalysisThreadsCmdlineSpecified) {
+    if (numAnalysisThreadsCmdline < numAnalysisThreadsMin || numAnalysisThreadsCmdline > numAnalysisThreadsMax)
+      throw StringError("Invalid value for numAnalysisThreadsCmdline: " + Global::intToString(numAnalysisThreadsCmdline));
+    if (numAnalysisThreadsIsSpecified) {
+      throw StringError("When specifying numAnalysisThreads in the config (" + cfg.getFileName() + "), it is redundant and disallowed to also specify it via -analysis-threads");
+    }
+    numAnalysisThreads = numAnalysisThreadsCmdline;
+  }
 
-  const bool forDeterministicTesting =
-    cfg.contains("forDeterministicTesting") ? cfg.getBool("forDeterministicTesting") : false;
-  if(forDeterministicTesting)
+  if (cfg.getBoolOrDefault("forDeterministicTesting", false))
     seedRand.init("forDeterministicTesting");
 
   const bool logToStdoutDefault = false;
@@ -118,12 +123,12 @@ int MainCmds::analysis(const vector<string>& args) {
     cerr << Version::getAppNameWithVersion() << endl;
   }
 
-  const bool logAllRequests = cfg.contains("logAllRequests") ? cfg.getBool("logAllRequests") : false;
-  const bool logAllResponses = cfg.contains("logAllResponses") ? cfg.getBool("logAllResponses") : false;
-  const bool logErrorsAndWarnings = cfg.contains("logErrorsAndWarnings") ? cfg.getBool("logErrorsAndWarnings") : true;
-  const bool logSearchInfo = cfg.contains("logSearchInfo") ? cfg.getBool("logSearchInfo") : false;
+  const bool logAllRequests = cfg.getBoolOrDefault("logAllRequests", false);
+  const bool logAllResponses = cfg.getBoolOrDefault("logAllResponses", false);
+  const bool logErrorsAndWarnings = cfg.getBoolOrDefault("logErrorsAndWarnings", true);
+  const bool logSearchInfo = cfg.getBoolOrDefault("logSearchInfo", false);
 
-  const bool warnUnusedFields = cfg.contains("warnUnusedFields") ? cfg.getBool("warnUnusedFields") : true;
+  const bool warnUnusedFields = cfg.getBoolOrDefault("warnUnusedFields", true);
 
   auto loadParams = [&humanModelFile](ConfigParser& config, SearchParams& params, Player& perspective, Player defaultPerspective) {
     bool hasHumanModel = humanModelFile != "";
@@ -145,10 +150,10 @@ int MainCmds::analysis(const vector<string>& args) {
     patternBonusTable = std::move(tables[0]);
   }
 
-  const int analysisPVLen = cfg.contains("analysisPVLen") ? cfg.getInt("analysisPVLen",1,100) : 15;
+  const int analysisPVLen = cfg.getIntOrDefault("analysisPVLen", 1, 100, 15);
   const bool assumeMultipleStartingBlackMovesAreHandicap =
-    cfg.contains("assumeMultipleStartingBlackMovesAreHandicap") ? cfg.getBool("assumeMultipleStartingBlackMovesAreHandicap") : true;
-  const bool preventEncore = cfg.contains("preventCleanupPhase") ? cfg.getBool("preventCleanupPhase") : true;
+    cfg.getBoolOrDefault("assumeMultipleStartingBlackMovesAreHandicap", true);
+  const bool preventEncore = cfg.getBoolOrDefault("preventCleanupPhase", true);
 
   NNEvaluator* nnEval = NULL;
   NNEvaluator* humanEval = NULL;

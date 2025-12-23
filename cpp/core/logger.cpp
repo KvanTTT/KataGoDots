@@ -27,32 +27,40 @@ Logger::Logger(
 {
   if(cfg) {
     // Also avoid logging if cfg specifies it
-    if(logConfigContents && !(cfg->contains("logConfigContents") && !cfg->getBool("logConfigContents"))) {
+    if(logConfigContents && cfg->getBoolOrDefault("logConfigContents", true)) {
       header = "Running with following config:\n" + cfg->getAllKeyVals();
     }
-    if(cfg->contains("logToStdout"))
-      logToStdout = cfg->getBool("logToStdout");
 
-    if(cfg->contains("logToStderr"))
-      logToStderr = cfg->getBool("logToStderr");
+    logToStdout = cfg->getBoolOrDefault("logToStdout", logToStdout);
+    logToStderr = cfg->getBoolOrDefault("logToStderr", logToStderr);
+    logTime = cfg->getBoolOrDefault("logTimeStamp", logTime);
 
-    if(cfg->contains("logTimeStamp"))
-      logTime = cfg->getBool("logTimeStamp");
+    string logFile;
+    string logDir;
+    string logDirDated;
 
-    if((int)cfg->contains("logFile") + (int)cfg->contains("logDir") + (int)cfg->contains("logDirDated") > 1)
+    bool logFileSpecified = cfg->tryGetString("logFile", logFile);
+    bool logDirSpecified = cfg->tryGetString("logDir", logDir);
+    bool logDirDatedSpecified = cfg->tryGetString("logDirDated", logDirDated);
+    
+    if (logFileSpecified + logDirSpecified + logDirDatedSpecified > 1)
       throw StringError("Cannot specify more than one of logFile and logDir and logDirDated in config");
-    else if(cfg->contains("logFile"))
-      addFile(cfg->getString("logFile"), false);
-    else if(cfg->contains("logDir")) {
-      MakeDir::make(cfg->getString("logDir"));
+    
+    if (logFileSpecified) {
+      addFile(logFile, false);
+    } else if (logDirSpecified || logDirDatedSpecified) {
+      string dir = logDirSpecified ? logDir : logDirDated;
+      MakeDir::make(dir);
       Rand rand;
-      addFile(cfg->getString("logDir") + "/" + DateTime::getCompactDateTimeString() + "-" + Global::uint32ToHexString(rand.nextUInt()) + ".log", false);
-    }
-    else if(cfg->contains("logDirDated")) {
-      MakeDir::make(cfg->getString("logDirDated"));
-      Rand rand;
-      MakeDir::make(cfg->getString("logDirDated") + "/" + DateTime::getCompactDateTimeString());
-      addFile(cfg->getString("logDirDated") + "/" + DateTime::getCompactDateTimeString() + "/" + Global::uint32ToHexString(rand.nextUInt()) + ".log", false);
+      string separator;
+      string prefix = dir + "/" + DateTime::getCompactDateTimeString();
+      if (logDirDatedSpecified) {
+        MakeDir::make(prefix);
+        separator = "/";
+      } else {
+        separator = "-";
+      }
+      addFile(prefix + separator + Global::uint32ToHexString(rand.nextUInt()) + ".log", false);
     }
   }
 

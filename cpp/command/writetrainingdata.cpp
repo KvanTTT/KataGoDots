@@ -681,8 +681,8 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
   const int numTotalThreads = numWorkerThreads * numSearchThreads;
 
   const int dataBoardLen = cfg.getInt("dataBoardLen",3,Board::MAX_LEN);
-  const int dataBoardLenX = cfg.contains(DATA_LEN_X_KEY) ? cfg.getInt(DATA_LEN_X_KEY,3,Board::MAX_LEN_X) : dataBoardLen;
-  const int dataBoardLenY = cfg.contains(DATA_LEN_Y_KEY) ? cfg.getInt(DATA_LEN_Y_KEY,3,Board::MAX_LEN_Y) : dataBoardLen;
+  const int dataBoardLenX = cfg.getIntOrDefault(DATA_LEN_X_KEY, 3, Board::MAX_LEN_X, dataBoardLen);
+  const int dataBoardLenY = cfg.getIntOrDefault(DATA_LEN_Y_KEY, 3, Board::MAX_LEN_Y, dataBoardLen);
   const int maxApproxRowsPerTrainFile = cfg.getInt("maxApproxRowsPerTrainFile",1,100000000);
 
   const std::vector<std::pair<int,int>> allowedBoardSizes =

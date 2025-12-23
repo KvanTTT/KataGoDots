@@ -259,10 +259,9 @@ int MainCmds::evalsgf(const vector<string>& args) {
   }
 
   string searchRandSeed;
-  if(cfg.contains("searchRandSeed"))
-    searchRandSeed = cfg.getString("searchRandSeed");
-  else
+  if (!cfg.tryGetString("searchRandSeed", searchRandSeed)) {
     searchRandSeed = Global::uint64ToString(seedRand.nextUInt64());
+  }
 
   NNEvaluator* nnEval = NULL;
   NNEvaluator* humanEval = NULL;

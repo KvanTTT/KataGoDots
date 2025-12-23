@@ -476,7 +476,7 @@ struct GTPEngine {
     int nnXLen = boardXSize;
     int nnYLen = boardYSize;
 
-    if(cfg.contains("gtpForceMaxNNSize") && cfg.getBool("gtpForceMaxNNSize")) {
+    if(cfg.getBoolOrDefault("gtpForceMaxNNSize", false)) {
       defaultRequireExactNNLen = false;
       nnXLen = Board::MAX_LEN_X;
       nnYLen = Board::MAX_LEN_Y;
@@ -554,10 +554,9 @@ struct GTPEngine {
         cerr << ("Initializing board with boardXSize " + Global::intToString(boardXSize) + " boardYSize " + Global::intToString(boardYSize)) << endl;
 
       string searchRandSeed;
-      if(cfg.contains("searchRandSeed"))
-        searchRandSeed = cfg.getString("searchRandSeed");
-      else
+      if (!cfg.tryGetString("searchRandSeed", searchRandSeed)) {
         searchRandSeed = Global::uint64ToString(seedRand.nextUInt64());
+      }
 
       bot = new AsyncBot(genmoveParams, nnEval, humanEval, &logger, searchRandSeed, currentRules);
       bot->setCopyOfExternalPatternBonusTable(patternBonusTable);
@@ -1991,11 +1990,9 @@ int MainCmds::gtp(const vector<string>& args) {
 
   const bool logAllGTPCommunication = cfg.getBool("logAllGTPCommunication");
   const bool logSearchInfo = cfg.getBool("logSearchInfo");
-  const bool logSearchInfoForChosenMove = cfg.contains("logSearchInfoForChosenMove") ? cfg.getBool("logSearchInfoForChosenMove") : false;
+  const bool logSearchInfoForChosenMove = cfg.getBoolOrDefault("logSearchInfoForChosenMove", false);
 
-  bool startupPrintMessageToStderr = true;
-  if(cfg.contains("startupPrintMessageToStderr"))
-    startupPrintMessageToStderr = cfg.getBool("startupPrintMessageToStderr");
+  bool startupPrintMessageToStderr = cfg.getBoolOrDefault("startupPrintMessageToStderr", true);
 
   logger.write("GTP Engine starting...");
   logger.write(Version::getAppNameWithVersion());
@@ -2013,9 +2010,8 @@ int MainCmds::gtp(const vector<string>& args) {
   }
   bool isForcingKomi = false;
   float forcedKomi = 0;
-  if(cfg.contains("ignoreGTPAndForceKomi")) {
+  if (cfg.tryGetFloat("ignoreGTPAndForceKomi", forcedKomi, Rules::MIN_USER_KOMI, Rules::MAX_USER_KOMI)) {
     isForcingKomi = true;
-    forcedKomi = cfg.getFloat("ignoreGTPAndForceKomi", Rules::MIN_USER_KOMI, Rules::MAX_USER_KOMI);
     initialRules.komi = forcedKomi;
   }
 
@@ -2030,11 +2026,12 @@ int MainCmds::gtp(const vector<string>& args) {
       params.fillDameBeforePass = true;
 
     const double analysisWideRootNoise =
-      config.contains("analysisWideRootNoise") ? config.getDouble("analysisWideRootNoise",0.0,5.0) : Setup::DEFAULT_ANALYSIS_WIDE_ROOT_NOISE;
-    const double analysisIgnorePreRootHistory =
-      config.contains("analysisIgnorePreRootHistory") ? config.getBool("analysisIgnorePreRootHistory") : Setup::DEFAULT_ANALYSIS_IGNORE_PRE_ROOT_HISTORY;
-    const bool genmoveAntiMirror =
-      config.contains("genmoveAntiMirror") ? config.getBool("genmoveAntiMirror") : config.contains("antiMirror") ? config.getBool("antiMirror") : true;
+      config.getDoubleOrDefault("analysisWideRootNoise", 0.0, 5.0, Setup::DEFAULT_ANALYSIS_WIDE_ROOT_NOISE);
+    const bool analysisIgnorePreRootHistory =
+      config.getBoolOrDefault("analysisIgnorePreRootHistory", Setup::DEFAULT_ANALYSIS_IGNORE_PRE_ROOT_HISTORY);
+    bool genmoveAntiMirror = true;
+    (void)(config.tryGetBool("genmoveAntiMirror", genmoveAntiMirror) ||
+           config.tryGetBool("antiMirror", genmoveAntiMirror));
 
     genmoveOut = params;
     analysisOut = params;
@@ -2049,46 +2046,43 @@ int MainCmds::gtp(const vector<string>& args) {
   loadParams(cfg,initialGenmoveParams,initialAnalysisParams);
   logger.write("Using " + Global::intToString(initialGenmoveParams.numThreads) + " CPU thread(s) for search");
 
-  bool ponderingEnabled = cfg.contains("ponderingEnabled") ? cfg.getBool("ponderingEnabled") : false;
+  bool ponderingEnabled = cfg.getBoolOrDefault("ponderingEnabled", false);
 
-  const enabled_t cleanupBeforePass = cfg.contains("cleanupBeforePass") ? cfg.getEnabled("cleanupBeforePass") : enabled_t::Auto;
-  const enabled_t friendlyPass = cfg.contains("friendlyPass") ? cfg.getEnabled("friendlyPass") : enabled_t::Auto;
+  const enabled_t cleanupBeforePass = cfg.getEnabledOrDefault("cleanupBeforePass", enabled_t::Auto);
+  const enabled_t friendlyPass = cfg.getEnabledOrDefault("friendlyPass", enabled_t::Auto);
   if(cleanupBeforePass == enabled_t::True && friendlyPass == enabled_t::True)
     throw StringError("Cannot specify both cleanupBeforePass = true and friendlyPass = true at the same time");
 
-  bool allowResignation = cfg.contains("allowResignation") ? cfg.getBool("allowResignation") : false;
-  const double resignThreshold = cfg.contains("allowResignation") ? cfg.getDouble("resignThreshold",-1.0,0.0) : -1.0; //Threshold on [-1,1], regardless of winLossUtilityFactor
-  const int resignConsecTurns = cfg.contains("resignConsecTurns") ? cfg.getInt("resignConsecTurns",1,100) : 3;
-  const double resignMinScoreDifference = cfg.contains("resignMinScoreDifference") ? cfg.getDouble("resignMinScoreDifference",0.0,1000.0) : -1e10;
-  const double resignMinMovesPerBoardArea = cfg.contains("resignMinMovesPerBoardArea") ? cfg.getDouble("resignMinMovesPerBoardArea",0.0,1.0) : 0.0;
+  bool allowResignation = cfg.getBoolOrDefault("allowResignation", false);
+  const double resignThreshold = allowResignation ? cfg.getDouble("resignThreshold",-1.0,0.0) : -1.0; //Threshold on [-1,1], regardless of winLossUtilityFactor
+  const int resignConsecTurns = cfg.getIntOrDefault("resignConsecTurns", 1, 100, 3);
+  const double resignMinScoreDifference = cfg.getDoubleOrDefault("resignMinScoreDifference", 0.0, 1000.0, -1e10);
+  const double resignMinMovesPerBoardArea = cfg.getDoubleOrDefault("resignMinMovesPerBoardArea", 0.0, 1.0, 0.0);
 
   Setup::initializeSession(cfg);
 
-  const double searchFactorWhenWinning = cfg.contains("searchFactorWhenWinning") ? cfg.getDouble("searchFactorWhenWinning",0.01,1.0) : 1.0;
-  const double searchFactorWhenWinningThreshold = cfg.contains("searchFactorWhenWinningThreshold") ? cfg.getDouble("searchFactorWhenWinningThreshold",0.0,1.0) : 1.0;
-  const bool ogsChatToStderr = cfg.contains("ogsChatToStderr") ? cfg.getBool("ogsChatToStderr") : false;
-  const int analysisPVLen = cfg.contains("analysisPVLen") ? cfg.getInt("analysisPVLen",1,1000) : 13;
+  const double searchFactorWhenWinning = cfg.getDoubleOrDefault("searchFactorWhenWinning", 0.01, 1.0, 1.0);
+  const double searchFactorWhenWinningThreshold = cfg.getDoubleOrDefault("searchFactorWhenWinningThreshold", 0.0, 1.0, 1.0);
+  const bool ogsChatToStderr = cfg.getBoolOrDefault("ogsChatToStderr", false);
+  const int analysisPVLen = cfg.getIntOrDefault("analysisPVLen", 1, 1000, 13);
   const bool assumeMultipleStartingBlackMovesAreHandicap =
-    cfg.contains("assumeMultipleStartingBlackMovesAreHandicap") ? cfg.getBool("assumeMultipleStartingBlackMovesAreHandicap") : true;
-  const bool preventEncore = cfg.contains("preventCleanupPhase") ? cfg.getBool("preventCleanupPhase") : true;
+    cfg.getBoolOrDefault("assumeMultipleStartingBlackMovesAreHandicap", true);
+  const bool preventEncore = cfg.getBoolOrDefault("preventCleanupPhase", true);
   const double dynamicPlayoutDoublingAdvantageCapPerOppLead =
-    cfg.contains("dynamicPlayoutDoublingAdvantageCapPerOppLead") ? cfg.getDouble("dynamicPlayoutDoublingAdvantageCapPerOppLead",0.0,0.5) : 0.045;
+    cfg.getDoubleOrDefault("dynamicPlayoutDoublingAdvantageCapPerOppLead", 0.0, 0.5, 0.045);
   bool staticPDATakesPrecedence = cfg.contains("playoutDoublingAdvantage") && !cfg.contains("dynamicPlayoutDoublingAdvantageCapPerOppLead");
   const double normalAvoidRepeatedPatternUtility = initialGenmoveParams.avoidRepeatedPatternUtility;
   const double handicapAvoidRepeatedPatternUtility = cfg.contains("avoidRepeatedPatternUtility") ?
     initialGenmoveParams.avoidRepeatedPatternUtility : 0.005;
-  const double initialDelayMoveScale = cfg.contains("delayMoveScale") ? cfg.getDouble("delayMoveScale",0.0,10000.0) : 0.0;
-  const double initialDelayMoveMax = cfg.contains("delayMoveMax") ? cfg.getDouble("delayMoveMax",0.0,1000000.0) : 1000000.0;
+  const double initialDelayMoveScale = cfg.getDoubleOrDefault("delayMoveScale", 0.0, 10000.0, 0.0);
+  const double initialDelayMoveMax = cfg.getDoubleOrDefault("delayMoveMax", 0.0, 1000000.0, 1000000.0);
 
 
   int defaultBoardXSize = -1;
   int defaultBoardYSize = -1;
   Setup::loadDefaultBoardXYSize(cfg,logger,defaultBoardXSize,defaultBoardYSize);
 
-  const bool forDeterministicTesting =
-    cfg.contains("forDeterministicTesting") ? cfg.getBool("forDeterministicTesting") : false;
-
-  if(forDeterministicTesting)
+  if (cfg.getBoolOrDefault("forDeterministicTesting", false))
     seedRand.init("forDeterministicTesting");
 
   std::unique_ptr<PatternBonusTable> patternBonusTable = nullptr;
@@ -2129,9 +2123,7 @@ int MainCmds::gtp(const vector<string>& args) {
 
   auto maybeSaveAvoidPatterns = [&](bool forceSave) {
     if(engine != NULL && autoAvoidPatterns) {
-      int samplesPerSave = 200;
-      if(cfg.contains("autoAvoidRepeatSaveChunkSize"))
-        samplesPerSave = cfg.getInt("autoAvoidRepeatSaveChunkSize",1,10000);
+      int samplesPerSave = cfg.getIntOrDefault("autoAvoidRepeatSaveChunkSize",1,10000, 200);
 
       if(forceSave || engine->genmoveSamples.size() >= samplesPerSave) {
         bool suc = Setup::saveAutoPatternBonusData(engine->genmoveSamples, cfg, logger, seedRand);
@@ -2582,7 +2574,7 @@ int MainCmds::gtp(const vector<string>& args) {
         else if(pieces[0] == "antiMirror")
           response = Global::boolToString(analysisParams.antiMirror);
         else if(pieces[0] == "humanSLProfile")
-          response = cfg.contains("humanSLProfile") ? cfg.getString("humanSLProfile") : "";
+          response = cfg.getStringOrDefault("humanSLProfile", "");
         else if(pieces[0] == "allowResignation")
           response = Global::boolToString(allowResignation);
         else if(pieces[0] == "ponderingEnabled")
@@ -2635,7 +2627,7 @@ int MainCmds::gtp(const vector<string>& args) {
       params["analysisIgnorePreRootHistory"] = Global::boolToString(analysisParams.ignorePreRootHistory);
       params["genmoveAntiMirror"] = Global::boolToString(genmoveParams.antiMirror);
       params["antiMirror"] = Global::boolToString(analysisParams.antiMirror);
-      params["humanSLProfile"] = cfg.contains("humanSLProfile") ? cfg.getString("humanSLProfile") : "";
+      params["humanSLProfile"] = cfg.getStringOrDefault("humanSLProfile", "");
       params["allowResignation"] = Global::boolToString(allowResignation);
       params["ponderingEnabled"] = Global::boolToString(ponderingEnabled);
       params["delayMoveScale"] = Global::doubleToString(engine->delayMoveScale);
@@ -2719,10 +2711,10 @@ int MainCmds::gtp(const vector<string>& args) {
           SearchParams analysisParams;
           loadParams(cfg,genmoveParams,analysisParams);
 
-          bool desiredAllowResignation = cfg.contains("allowResignation") ? cfg.getBool("allowResignation") : allowResignation;
-          bool desiredPonderingEnabled = cfg.contains("ponderingEnabled") ? cfg.getBool("ponderingEnabled") : ponderingEnabled;
-          double desiredDelayMoveScale = cfg.contains("delayMoveScale") ? cfg.getDouble("delayMoveScale",0.0,10000.0) : engine->delayMoveScale;
-          double desiredDelayMoveMax = cfg.contains("delayMoveMax") ? cfg.getDouble("delayMoveMax",0.0,1000000.0) : engine->delayMoveMax;
+          bool desiredAllowResignation = cfg.getBoolOrDefault("allowResignation", allowResignation);
+          bool desiredPonderingEnabled = cfg.getBoolOrDefault("ponderingEnabled", ponderingEnabled);
+          double desiredDelayMoveScale = cfg.getDoubleOrDefault("delayMoveScale", 0.0, 10000.0, engine->delayMoveScale);
+          double desiredDelayMoveMax = cfg.getDoubleOrDefault("delayMoveMax", 0.0, 1000000.0, engine->delayMoveMax);
 
           SearchParams::failIfParamsDifferOnUnchangeableParameter(initialGenmoveParams,genmoveParams);
           SearchParams::failIfParamsDifferOnUnchangeableParameter(initialAnalysisParams,analysisParams);

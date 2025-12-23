@@ -112,7 +112,7 @@ int MainCmds::match(const vector<string>& args) {
       for(const std::pair<int,int>& pair: pairs) {
         int p0 = pair.first;
         int p1 = pair.second;
-        if(cfg.contains("extraPairsAreOneSidedBW") && cfg.getBool("extraPairsAreOneSidedBW")) {
+        if(cfg.getBoolOrDefault("extraPairsAreOneSidedBW", false)) {
           matchupsPerRound.push_back(std::make_pair(p0,p1));
         }
         else {
@@ -129,17 +129,21 @@ int MainCmds::match(const vector<string>& args) {
   for(int i = 0; i<numBots; i++) {
     string idxStr = Global::intToString(i);
 
-    if(cfg.contains("botName"+idxStr))
-      botNames[i] = cfg.getString("botName"+idxStr);
-    else if(numBots == 1)
-      botNames[i] = cfg.getString("botName");
-    else
-      throw StringError("If more than one bot, must specify botName0, botName1,... individually");
+    string botName;
+    if (!cfg.tryGetString("botName"+idxStr, botName)) {
+      if (numBots == 1) {
+        botName = cfg.getString("botName");
+      } else {
+        throw StringError("If more than one bot, must specify botName0, botName1,... individually");
+      }
+    }
+    botNames[i] = botName;
 
-    if(cfg.contains("nnModelFile"+idxStr))
-      nnModelFilesByBot[i] = cfg.getString("nnModelFile"+idxStr);
-    else
-      nnModelFilesByBot[i] = cfg.getString("nnModelFile");
+    string nnModelFileByBot;
+    if (!cfg.tryGetString("nnModelFile"+idxStr, nnModelFileByBot)) {
+      nnModelFileByBot = cfg.getString("nnModelFile");
+    }
+    nnModelFilesByBot[i] = nnModelFileByBot;
   }
 
   vector<bool> botIsUsed(numBots);
@@ -220,7 +224,7 @@ int MainCmds::match(const vector<string>& args) {
   assert(patternBonusTables.size() == numBots);
 
   //Initialize object for randomly pairing bots
-  int64_t numGamesTotal = cfg.getInt64("numGamesTotal",1,((int64_t)1) << 62);
+  int64_t numGamesTotal = cfg.getInt64("numGamesTotal",1, static_cast<int64_t>(1) << 62);
   MatchPairer* matchPairer = new MatchPairer(cfg,numBots,botNames,nnEvalsByBot,paramss,matchupsPerRound,numGamesTotal);
 
   //Check for unused config keys

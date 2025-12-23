@@ -93,14 +93,11 @@ int MainCmds::selfplay(const vector<string>& args) {
 
   //Width and height of the board to use when writing data, typically 19
   const int dataBoardLen = cfg.getInt("dataBoardLen",3,Board::MAX_LEN);
-  const int dataBoardLenX = cfg.contains(DATA_LEN_X_KEY) ? cfg.getInt(DATA_LEN_X_KEY,3,Board::MAX_LEN_X) : dataBoardLen;
-  const int dataBoardLenY = cfg.contains(DATA_LEN_Y_KEY) ? cfg.getInt(DATA_LEN_Y_KEY,3,Board::MAX_LEN_Y) : dataBoardLen;
+  const int dataBoardLenX = cfg.getIntOrDefault(DATA_LEN_X_KEY, 3, Board::MAX_LEN_X, dataBoardLen);
+  const int dataBoardLenY = cfg.getIntOrDefault(DATA_LEN_Y_KEY, 3, Board::MAX_LEN_Y, dataBoardLen);
 
   const bool dotsGame = cfg.getBoolOrDefault(DOTS_KEY, false);
-  const int inputsVersion =
-    cfg.contains("inputsVersion") ?
-    cfg.getInt("inputsVersion",0,10000) :
-    NNModelVersion::getInputsVersion(NNModelVersion::defaultModelVersion, dotsGame);
+  const int inputsVersion = cfg.getIntOrDefault("inputsVersion", 0, 10000, NNModelVersion::getInputsVersion(NNModelVersion::defaultModelVersion, dotsGame));
   //Max number of games that we will allow to be queued up and not written out
   const int maxDataQueueSize = cfg.getInt("maxDataQueueSize",1,1000000);
   const int maxRowsPerTrainFile = cfg.getInt("maxRowsPerTrainFile",1,100000000);

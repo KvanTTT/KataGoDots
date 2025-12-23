@@ -91,15 +91,11 @@ int MainCmds::testgpuerror(const vector<string>& args) {
 
   const string expectedSha256 = "";
   int maxBatchSize;
-  if(cfg.contains("nnMaxBatchSize")) {
-    maxBatchSize = cfg.getInt("nnMaxBatchSize", 1, 65536);
+  if (cfg.tryGetInt("nnMaxBatchSize", maxBatchSize, 1, 65536)) {
     logger.write("For batch test, using batch size from nnMaxBatchSize in config: " + Global::intToString(maxBatchSize));
-  }
-  else if(cfg.contains("numSearchThreads")) {
-    maxBatchSize = cfg.getInt("numSearchThreads", 1, 65536);
+  } else if (cfg.tryGetInt("numSearchThreads", maxBatchSize, 1, 65536)) {
     logger.write("For batch test, using batch size from numSearchThreads in config: " + Global::intToString(maxBatchSize));
-  }
-  else {
+  } else {
     maxBatchSize = 16;
     logger.write("For batch test, using default batch size 16");
   }
@@ -133,9 +129,9 @@ int MainCmds::testgpuerror(const vector<string>& args) {
     }
   }
 
-  const double policyOptimismForTest = cfg.contains("policyOptimism") ? cfg.getDouble("policyOptimism") : 0.0;
-  const double pdaForTest = cfg.contains("playoutDoublingAdvantage") ? cfg.getDouble("playoutDoublingAdvantage") : 0.0;
-  const double nnPolicyTemperatureForTest = cfg.contains("rootPolicyTemperature") ? cfg.getDouble("rootPolicyTemperature") : 1.0;
+  const double policyOptimismForTest = cfg.getDoubleOrDefault("policyOptimism", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 0.0);
+  const double pdaForTest = cfg.getDoubleOrDefault("playoutDoublingAdvantage", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 0.0);
+  const double nnPolicyTemperatureForTest = cfg.getDoubleOrDefault("rootPolicyTemperature", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 1.0);
   if(policyOptimismForTest != 0.0 || pdaForTest != 0.0 || nnPolicyTemperatureForTest != 1.0) {
     logger.write("Using policyOptimismForTest " + Global::doubleToString(policyOptimismForTest));
     logger.write("Using pdaForTest " + Global::doubleToString(pdaForTest));
