@@ -233,6 +233,11 @@ f = true # bool
 g = True # enabled_t
 i = auto # enabled_t
 j = str # string
+
+aa = 1,2
+bb = 3.0,4.0
+cc = true,false,true
+dd = s1,s2,s3
 )";
     istringstream in(s);
     ConfigParser cfg(in);
@@ -259,41 +264,66 @@ j = str # string
     testAssert(cfg.tryGetInt("a", intValue));
     testAssert(1 == intValue);
     testAssert(!cfg.tryGetInt("a1", intValue));
+    testAssert(1 == intValue); // failure try doesn't change the original value
 
     int64_t int64Value;
     testAssert(cfg.tryGetInt64("b", int64Value));
     testAssert(549755813888L == int64Value);
     testAssert(!cfg.tryGetInt64("b1", int64Value));
+    testAssert(549755813888L == int64Value);
 
     uint64_t uint64Value;
     testAssert(cfg.tryGetUInt64("c", uint64Value));
     testAssert(9223372036854775808ULL == uint64Value);
     testAssert(!cfg.tryGetUInt64("c1", uint64Value));
+    testAssert(9223372036854775808ULL == uint64Value);
 
     float floatValue;
     testAssert(cfg.tryGetFloat("d", floatValue));
     testAssert(2.0f == floatValue);
     testAssert(!cfg.tryGetFloat("d1", floatValue));
+    testAssert(2.0f == floatValue);
 
     double doubleValue;
     testAssert(cfg.tryGetDouble("e", doubleValue));
     testAssert(1e300 == doubleValue);
     testAssert(!cfg.tryGetDouble("e1", doubleValue));
+    testAssert(1e300 == doubleValue);
 
     bool boolValue;
     testAssert(cfg.tryGetBool("f", boolValue));
     testAssert(true == boolValue);
     testAssert(!cfg.tryGetBool("f1", boolValue));
+    testAssert(true == boolValue);
 
     enabled_t enabledValue{};
     testAssert(cfg.tryGetEnabled("g", enabledValue));
     testAssert(enabled_t::True == enabledValue.x);
     testAssert(!cfg.tryGetEnabled("g1", enabledValue));
+    testAssert(enabled_t::True == enabledValue.x);
 
     string str;
     testAssert(cfg.tryGetString("j", str));
     testAssert("str" == str);
     testAssert(!cfg.tryGetString("j1", str));
+    testAssert("str" == str);
+
+    vector ints {1, 2};
+    testAssert(ints == cfg.getInts("aa"));
+    testAssert(!cfg.tryGetInts("aa1", ints));
+    testAssert(ints == cfg.getInts("aa"));
+
+    vector floats {3.0f, 4.0f};
+    testAssert(floats == cfg.getFloats("bb"));
+
+    vector doubles {3.0, 4.0};
+    testAssert(doubles == cfg.getDoubles("bb"));
+
+    vector bools {true,false,true};
+    testAssert(bools == cfg.getBools("cc"));
+
+    vector<string> strs {"s1", "s2", "s3"};
+    testAssert(strs == cfg.getStrings("dd"));
 
     auto checkFailed = [](ConfigParser& configParser, const std::function<void(ConfigParser& cfg)>& call)  {
       bool isFailed = false;
@@ -307,6 +337,9 @@ j = str # string
 
     checkFailed(cfg, [](ConfigParser& config) {
       config.getInt("missing_key");
+    });
+    checkFailed(cfg, [](ConfigParser& config) {
+      config.getInts("missing_key");
     });
 
     checkFailed(cfg, [](ConfigParser& config) {

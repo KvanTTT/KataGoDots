@@ -75,8 +75,7 @@ int MainCmds::match(const vector<string>& args) {
   {
     //Load a filter on what bots we actually want to run. By default, include everything.
     vector<bool> includeBot(numBots);
-    if(cfg.contains("includeBots")) {
-      vector<int> includeBotIdxs = cfg.getInts("includeBots",0,Setup::MAX_BOT_PARAMS_FROM_CFG);
+    if (vector<int> includeBotIdxs; cfg.tryGetInts("includeBots", includeBotIdxs, 0,Setup::MAX_BOT_PARAMS_FROM_CFG)) {
       for(int i = 0; i<numBots; i++) {
         if(contains(includeBotIdxs,i))
           includeBot[i] = true;
@@ -89,8 +88,8 @@ int MainCmds::match(const vector<string>& args) {
     }
 
     std::vector<int> secondaryBotIdxs;
-    if(cfg.contains("secondaryBots"))
-      secondaryBotIdxs = cfg.getInts("secondaryBots",0,Setup::MAX_BOT_PARAMS_FROM_CFG);
+    cfg.tryGetInts("secondaryBots", secondaryBotIdxs, 0,Setup::MAX_BOT_PARAMS_FROM_CFG);
+
     for(int i = 0; i<secondaryBotIdxs.size(); i++)
       assert(secondaryBotIdxs[i] >= 0 && secondaryBotIdxs[i] < numBots);
 

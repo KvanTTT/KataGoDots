@@ -158,8 +158,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
   if(cfg.contains("bSizes") == cfg.contains("bSizesXY"))
     throw IOError("Must specify exactly one of bSizes or bSizesXY");
 
-  if(cfg.contains("bSizes")) {
-    std::vector<int> allowedBEdges = cfg.getInts("bSizes", 2, Board::MAX_LEN);
+  if(std::vector<int> allowedBEdges; cfg.tryGetInts("bSizes", allowedBEdges, 2, Board::MAX_LEN)) {
     std::vector<double> allowedBEdgeRelProbs = cfg.getDoubles("bSizeRelProbs",0.0,1e100);
     double relProbSum = 0.0;
     for(const double p : allowedBEdgeRelProbs)

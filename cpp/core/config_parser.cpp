@@ -531,7 +531,7 @@ std::string ConfigParser::getStringOrDefault(const std::string& key, const std::
 string ConfigParser::getString(const string& key, const set<string>& possibles) {
   string value;
   if (!tryGetString(key, value, possibles)) {
-    throw IOError("Could not find key '" + key + "' in config file " + fileName);
+    throwNotFoundKeyException(key);
   }
   return value;
 }
@@ -547,11 +547,7 @@ bool ConfigParser::tryGetString(const std::string& key, std::string& value, cons
 
   value = iter->second;
 
-  if(!possibles.empty()) {
-    if(possibles.find(value) == possibles.end())
-      throw IOError(
-        "Key '" + key + "' must be one of (" + Global::concat(possibles, "|") + ") in config file " + fileName);
-  }
+  validateValues(key, possibles, {value});
 
   return true;
 }
@@ -569,14 +565,19 @@ vector<string> ConfigParser::getStrings(const string& key, const set<string>& po
     values = trimmedStrings;
   }
 
-  if (!possibles.empty()) {
-    for(const auto& value : values) {
-      if(possibles.find(value) == possibles.end())
-        throw IOError("Key '" + key + "' must be one of (" + Global::concat(possibles,"|") + ") in config file " + fileName);
-    }
-  }
+  validateValues(key, possibles, values);
 
   return values;
+}
+
+void ConfigParser::validateValues(const string& key, const set<string>& possibles, const vector<string>& values) const {
+  if(!possibles.empty()) {
+    for(const auto& value: values) {
+      if(possibles.find(value) == possibles.end())
+        throw IOError(
+          "Key '" + key + "' must be one of (" + Global::concat(possibles, "|") + ") in config file " + fileName);
+    }
+  }
 }
 
 bool ConfigParser::tryGetBool(const std::string& key, bool& value) {
@@ -595,17 +596,14 @@ bool ConfigParser::getBool(const string& key) {
   return getOrError<bool>(key, false, true, std::nullopt);
 }
 
+bool ConfigParser::tryGetBools(const string& key, vector<bool>& values) {
+  return getMultipleOrError(key, values, false, true, false);
+}
+
 vector<bool> ConfigParser::getBools(const string& key) {
-  vector<string> values = getStrings(key);
-  vector<bool> ret;
-  for(size_t i = 0; i<values.size(); i++) {
-    const string& value = values[i];
-    bool x;
-    if(!Global::tryStringToBool(value,x))
-      throw IOError("Could not parse '" + value + "' as bool for key '" + key + "' in config file " + fileName);
-    ret.push_back(x);
-  }
-  return ret;
+  vector<bool> result;
+  getMultipleOrError(key, result, false, true, true);
+  return result;
 }
 
 bool ConfigParser::tryGetEnabled(const std::string& key, enabled_t& value) {
@@ -640,19 +638,14 @@ bool ConfigParser::tryGetInt(const std::string& key, int& value, const int min, 
   return false;
 }
 
+bool ConfigParser::tryGetInts(const string& key, vector<int>& values, const int min, const int max) {
+  return getMultipleOrError(key, values, min, max, false);
+}
+
 vector<int> ConfigParser::getInts(const string& key, const int min, const int max) {
-  vector<string> values = getStrings(key);
-  vector<int> ret;
-  for(size_t i = 0; i<values.size(); i++) {
-    const string& value = values[i];
-    int x;
-    if(!Global::tryStringToInt(value,x))
-      throw IOError("Could not parse '" + value + "' as int for key '" + key + "' in config file " + fileName);
-    if(x < min || x > max)
-      throw IOError("Key '" + key + "' must be in the range " + Global::intToString(min) + " to " + Global::intToString(max) + " in config file " + fileName);
-    ret.push_back(x);
-  }
-  return ret;
+  vector<int> result;
+  getMultipleOrError(key, result, min, max, true);
+  return result;
 }
 
 vector<std::pair<int,int>> ConfigParser::getNonNegativeIntDashedPairs(const string& key, const int min, const int max1, const int max2) {
@@ -701,19 +694,14 @@ int64_t ConfigParser::getInt64(const string& key, const int64_t min, const int64
   return getOrError<int64_t>(key, min, max, std::nullopt);
 }
 
+bool ConfigParser::tryGetInt64s(const string& key, vector<int64_t>& values, const int64_t min, const int64_t max) {
+  return getMultipleOrError(key, values, min, max, false);
+}
+
 vector<int64_t> ConfigParser::getInt64s(const string& key, const int64_t min, const int64_t max) {
-  vector<string> values = getStrings(key);
-  vector<int64_t> ret;
-  for(size_t i = 0; i<values.size(); i++) {
-    const string& value = values[i];
-    int64_t x;
-    if(!Global::tryStringToInt64(value,x))
-      throw IOError("Could not parse '" + value + "' as int64_t for key '" + key + "' in config file " + fileName);
-    if(x < min || x > max)
-      throw IOError("Key '" + key + "' must be in the range " + Global::int64ToString(min) + " to " + Global::int64ToString(max) + " in config file " + fileName);
-    ret.push_back(x);
-  }
-  return ret;
+  vector<int64_t> result;
+  getMultipleOrError(key, result, min, max, true);
+  return result;
 }
 
 bool ConfigParser::tryGetUInt64(const std::string& key, uint64_t& value, const uint64_t min, const uint64_t max) {
@@ -734,19 +722,14 @@ uint64_t ConfigParser::getUInt64(const string& key, const uint64_t min, const ui
   return getOrError<uint64_t>(key, min, max, std::nullopt);
 }
 
+bool ConfigParser::tryGetUInt64s(const string& key, vector<uint64_t>& values, const uint64_t min, const uint64_t max) {
+  return getMultipleOrError(key, values, min, max, false);
+}
+
 vector<uint64_t> ConfigParser::getUInt64s(const string& key, const uint64_t min, const uint64_t max) {
-  vector<string> values = getStrings(key);
-  vector<uint64_t> ret;
-  for(size_t i = 0; i<values.size(); i++) {
-    const string& value = values[i];
-    uint64_t x;
-    if(!Global::tryStringToUInt64(value,x))
-      throw IOError("Could not parse '" + value + "' as uint64_t for key '" + key + "' in config file " + fileName);
-    if(x < min || x > max)
-      throw IOError("Key '" + key + "' must be in the range " + Global::uint64ToString(min) + " to " + Global::uint64ToString(max) + " in config file " + fileName);
-    ret.push_back(x);
-  }
-  return ret;
+  vector<uint64_t> result;
+  getMultipleOrError(key, result, min, max, true);
+  return result;
 }
 
 bool ConfigParser::tryGetFloat(const std::string& key, float& value, const float min, const float max) {
@@ -765,21 +748,14 @@ float ConfigParser::getFloat(const std::string& key, const float min, const floa
   return getOrError<float>(key, min, max, std::nullopt);
 }
 
+bool ConfigParser::tryGetFloats(const string& key, vector<float>& values, const float min, const float max) {
+  return getMultipleOrError(key, values, min, max, false);
+}
+
 vector<float> ConfigParser::getFloats(const string& key, const float min, const float max) {
-  vector<string> values = getStrings(key);
-  vector<float> ret;
-  for(size_t i = 0; i<values.size(); i++) {
-    const string& value = values[i];
-    float x;
-    if(!Global::tryStringToFloat(value,x))
-      throw IOError("Could not parse '" + value + "' as float for key '" + key + "' in config file " + fileName);
-    if(isnan(x))
-      throw IOError("Key '" + key + "' is nan in config file " + fileName);
-    if(x < min || x > max)
-      throw IOError("Key '" + key + "' must be in the range " + Global::floatToString(min) + " to " + Global::floatToString(max) + " in config file " + fileName);
-    ret.push_back(x);
-  }
-  return ret;
+  vector<float> result;
+  getMultipleOrError(key, result, min, max, true);
+  return result;
 }
 
 bool ConfigParser::tryGetDouble(const std::string& key, double& value, const double min, const double max) {
@@ -798,21 +774,34 @@ double ConfigParser::getDoubleOrDefault(const string& key, const double min, con
   return getOrError<double>(key, min, max, defaultValue);
 }
 
+bool ConfigParser::tryGetDoubles(const string& key, vector<double>& values, const double min, const double max) {
+  return getMultipleOrError(key, values, min, max, false);
+}
+
 vector<double> ConfigParser::getDoubles(const string& key, const double min, const double max) {
-  vector<string> values = getStrings(key);
-  vector<double> ret;
-  for(size_t i = 0; i<values.size(); i++) {
-    const string& value = values[i];
-    double x;
-    if(!Global::tryStringToDouble(value,x))
-      throw IOError("Could not parse '" + value + "' as double for key '" + key + "' in config file " + fileName);
-    if(isnan(x))
-      throw IOError("Key '" + key + "' is nan in config file " + fileName);
-    if(x < min || x > max)
-      throw IOError("Key '" + key + "' must be in the range " + Global::doubleToString(min) + " to " + Global::doubleToString(max) + " in config file " + fileName);
-    ret.push_back(x);
+  vector<double> result;
+  getMultipleOrError(key, result, min, max, true);
+  return result;
+}
+
+void ConfigParser::throwNotFoundKeyException(const string& key) const {
+  throw IOError("Could not find key '" + key + "' in config file " + fileName);
+}
+
+template<typename T>
+bool ConfigParser::getMultipleOrError(const string& key, vector<T>& values, const T min, const T max, const bool errorIfNotFound) {
+  string str;
+  if (!tryGetString(key, str)) {
+    if (errorIfNotFound)
+      throwNotFoundKeyException(key);
+    return false;
   }
-  return ret;
+
+  vector<string> strings = Global::split(str,',');
+  for(auto& s : strings) {
+    values.push_back(parseOrError(key, s, min, max));
+  }
+  return true;
 }
 
 template<typename T>
@@ -826,7 +815,7 @@ T ConfigParser::getOrError(const string& key, const T min, const T max, const st
       }
       return value;
     }
-    throw IOError("Could not find key '" + key + "' in config file " + fileName);
+    throwNotFoundKeyException(key);
   }
 
   return parseOrError(key, foundStr, min, max);

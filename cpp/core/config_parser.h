@@ -94,6 +94,13 @@ class ConfigParser {
   std::vector<float> getFloats(const std::string& key, float min = std::numeric_limits<float>::min(), float max = std::numeric_limits<float>::max());
   std::vector<double> getDoubles(const std::string& key, double min = std::numeric_limits<double>::min(), double max = std::numeric_limits<double>::max());
 
+  bool tryGetBools(const std::string& key, std::vector<bool>& values);
+  bool tryGetInts(const std::string& key, std::vector<int>& values, int min = std::numeric_limits<int>::min(), int max = std::numeric_limits<int>::max());
+  bool tryGetInt64s(const std::string& key, std::vector<int64_t>& values, int64_t min = std::numeric_limits<int64_t>::min(), int64_t max = std::numeric_limits<int64_t>::max());
+  bool tryGetUInt64s(const std::string& key, std::vector<uint64_t>& values, uint64_t min = std::numeric_limits<uint64_t>::min(), uint64_t max = std::numeric_limits<uint64_t>::max());
+  bool tryGetFloats(const std::string& key, std::vector<float>& values, float min = std::numeric_limits<float>::min(), float max = std::numeric_limits<float>::max());
+  bool tryGetDoubles(const std::string& key, std::vector<double>& values, double min = std::numeric_limits<double>::min(), double max = std::numeric_limits<double>::max());
+
   std::vector<std::pair<int,int>> getNonNegativeIntDashedPairs(const std::string& key, int min, int max1, int max2);
 
 private:
@@ -130,6 +137,11 @@ private:
 
   bool parseKeyValue(const std::string& trimmedLine, std::string& key, std::string& value);
 
+  void validateValues(const std::string& key, const std::set<std::string>& possibles,
+    const std::vector<std::string>& values) const;
+  void throwNotFoundKeyException(const std::string& key) const;
+  template<typename T>
+  bool getMultipleOrError(const std::string& key, std::vector<T>& values, T min, T max, bool errorIfNotFound);
   template<typename T>
   T getOrError(const std::string& key, T min, T max, std::optional<T> defaultValue);
   template<typename T>
