@@ -27,13 +27,13 @@ Logger::Logger(
 {
   if(cfg) {
     // Also avoid logging if cfg specifies it
-    if(logConfigContents && cfg->getBoolOrDefault("logConfigContents", true)) {
+    if(logConfigContents && cfg->getOrDefaultBool("logConfigContents", true)) {
       header = "Running with following config:\n" + cfg->getAllKeyVals();
     }
 
-    logToStdout = cfg->getBoolOrDefault("logToStdout", logToStdout);
-    logToStderr = cfg->getBoolOrDefault("logToStderr", logToStderr);
-    logTime = cfg->getBoolOrDefault("logTimeStamp", logTime);
+    logToStdout = cfg->getOrDefaultBool("logToStdout", logToStdout);
+    logToStderr = cfg->getOrDefaultBool("logToStderr", logToStderr);
+    logTime = cfg->getOrDefaultBool("logTimeStamp", logTime);
 
     string logFile;
     string logDir;

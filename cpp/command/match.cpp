@@ -111,7 +111,7 @@ int MainCmds::match(const vector<string>& args) {
       for(const std::pair<int,int>& pair: pairs) {
         int p0 = pair.first;
         int p1 = pair.second;
-        if(cfg.getBoolOrDefault("extraPairsAreOneSidedBW", false)) {
+        if(cfg.getOrDefaultBool("extraPairsAreOneSidedBW", false)) {
           matchupsPerRound.push_back(std::make_pair(p0,p1));
         }
         else {

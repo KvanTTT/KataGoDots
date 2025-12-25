@@ -129,9 +129,9 @@ int MainCmds::testgpuerror(const vector<string>& args) {
     }
   }
 
-  const double policyOptimismForTest = cfg.getDoubleOrDefault("policyOptimism", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 0.0);
-  const double pdaForTest = cfg.getDoubleOrDefault("playoutDoublingAdvantage", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 0.0);
-  const double nnPolicyTemperatureForTest = cfg.getDoubleOrDefault("rootPolicyTemperature", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 1.0);
+  const double policyOptimismForTest = cfg.getOrDefaultDouble("policyOptimism", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 0.0);
+  const double pdaForTest = cfg.getOrDefaultDouble("playoutDoublingAdvantage", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 0.0);
+  const double nnPolicyTemperatureForTest = cfg.getOrDefaultDouble("rootPolicyTemperature", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 1.0);
   if(policyOptimismForTest != 0.0 || pdaForTest != 0.0 || nnPolicyTemperatureForTest != 1.0) {
     logger.write("Using policyOptimismForTest " + Global::doubleToString(policyOptimismForTest));
     logger.write("Using pdaForTest " + Global::doubleToString(pdaForTest));

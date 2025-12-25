@@ -108,7 +108,7 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
     bool debugSkipNeuralNetDefault = (nnModelFile == "/dev/null");
     bool debugSkipNeuralNet =
       setupFor == SETUP_FOR_DISTRIBUTED ? debugSkipNeuralNetDefault :
-      cfg.getBoolOrDefault("debugSkipNeuralNet", debugSkipNeuralNetDefault);
+      cfg.getOrDefaultBool("debugSkipNeuralNet", debugSkipNeuralNetDefault);
 
     int nnXLen = std::max(defaultNNXLen,2);
     int nnYLen = std::max(defaultNNYLen,2);
@@ -143,7 +143,7 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
       nnRandomize = true;
       nnRandSeed = Global::uint64ToString(seedRand.nextUInt64());
     } else {
-      nnRandomize = cfg.getBoolOrDefault("nnRandomize", true);
+      nnRandomize = cfg.getOrDefaultBool("nnRandomize", true);
       if (!cfg.tryGetString("nnRandSeed" + idxStr, nnRandSeed) &&
           !cfg.tryGetString("nnRandSeed", nnRandSeed)) {
         nnRandSeed = Global::uint64ToString(seedRand.nextUInt64());
@@ -155,10 +155,10 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
 #ifndef USE_EIGEN_BACKEND
     (void)expectedConcurrentEvals;
     cfg.markAllKeysUsedWithPrefix("numEigenThreadsPerModel");
-    int numNNServerThreadsPerModel = cfg.getIntOrDefault("numNNServerThreadsPerModel", 1, 1024, 1);
+    int numNNServerThreadsPerModel = cfg.getOrDefaultInt("numNNServerThreadsPerModel", 1, 1024, 1);
 #else
     cfg.markAllKeysUsedWithPrefix("numNNServerThreadsPerModel");
-    int numNNServerThreadsPerModel = cfg.getIntOrDefault("numEigenThreadsPerModel", 1, 1024, computeDefaultEigenBackendThreads(expectedConcurrentEvals,logger));
+    int numNNServerThreadsPerModel = cfg.getOrDefaultInt("numEigenThreadsPerModel", 1, 1024, computeDefaultEigenBackendThreads(expectedConcurrentEvals,logger));
 #endif
 
     vector<int> gpuIdxByServerThread;
@@ -188,8 +188,8 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
 
     string homeDataDirOverride = loadHomeDataDirOverride(cfg);
 
-    string openCLTunerFile = cfg.getStringOrDefault("openclTunerFile", "");
-    bool openCLReTunePerBoardSize = cfg.getBoolOrDefault("openclReTunePerBoardSize", false);
+    string openCLTunerFile = cfg.getOrDefaultString("openclTunerFile", "");
+    bool openCLReTunePerBoardSize = cfg.getOrDefaultBool("openclReTunePerBoardSize", false);
 
     enabled_t useFP16Mode = enabled_t::Auto;
     (void)(cfg.tryGetEnabled(backendPrefix+"UseFP16-"+idxStr, useFP16Mode) ||
@@ -242,7 +242,7 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
       nnMaxBatchSize = defaultMaxBatchSize;
     }
     else if (defaultMaxBatchSize > 0) {
-      nnMaxBatchSize = cfg.getIntOrDefault("nnMaxBatchSize", 1, 65536, defaultMaxBatchSize);
+      nnMaxBatchSize = cfg.getOrDefaultInt("nnMaxBatchSize", 1, 65536, defaultMaxBatchSize);
     }
     else {
       nnMaxBatchSize = cfg.getInt("nnMaxBatchSize", 1, 65536);
@@ -261,7 +261,7 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
     if(disableFP16)
       useFP16Mode = enabled_t::False;
 
-    bool dotsGame = cfg.getBoolOrDefault(DOTS_KEY, false);
+    bool dotsGame = cfg.getOrDefaultBool(DOTS_KEY, false);
     NNEvaluator* nnEval = new NNEvaluator(
       nnModelName,
       nnModelFile,
@@ -311,7 +311,7 @@ int Setup::computeDefaultEigenBackendThreads(int expectedConcurrentEvals, Logger
 string Setup::loadHomeDataDirOverride(
   ConfigParser& cfg
 ){
-  return cfg.getStringOrDefault("homeDataDir", "");
+  return cfg.getOrDefaultString("homeDataDir", "");
 }
 
 SearchParams Setup::loadSingleParams(
@@ -409,7 +409,7 @@ vector<SearchParams> Setup::loadParams(
 ) {
 
   vector<SearchParams> paramss;
-  int numBots = cfg.getIntOrDefault("numBots", 1, MAX_BOT_PARAMS_FROM_CFG, 1);
+  int numBots = cfg.getOrDefaultInt("numBots", 1, MAX_BOT_PARAMS_FROM_CFG, 1);
 
   if(loadSingleConfigOnly) {
     if(numBots != 1)
@@ -607,7 +607,7 @@ Player Setup::parseReportAnalysisWinrates(
 }
 
 Rules Setup::loadSingleRules(ConfigParser& cfg, const bool loadKomi) {
-  const bool dotsGame = cfg.getBoolOrDefault(DOTS_KEY, false);
+  const bool dotsGame = cfg.getOrDefaultBool(DOTS_KEY, false);
   Rules rules = Rules::getDefault(dotsGame);
 
   if(string rulesStr; cfg.tryGetString("rules", rulesStr)) {
@@ -627,21 +627,21 @@ Rules Setup::loadSingleRules(ConfigParser& cfg, const bool loadKomi) {
       if(cfg.contains("whiteBonusPerHandicapStone")) throw StringError("Cannot both specify 'rules' and individual rules like whiteBonusPerHandicapStone");
     }
 
-    rules = Rules::parseRules(rulesStr, cfg.getBoolOrDefault(DOTS_KEY, false));
+    rules = Rules::parseRules(rulesStr, cfg.getOrDefaultBool(DOTS_KEY, false));
   }
   else {
     if (string startPosStr; cfg.tryGetString(START_POS_KEY, startPosStr)) {
       rules.startPos = Rules::parseStartPos(startPosStr);
     }
-    rules.startPosIsRandom = cfg.getBoolOrDefault(START_POS_RANDOM_KEY, rules.startPosIsRandom);
-    rules.multiStoneSuicideLegal = cfg.getBoolOrDefault("multiStoneSuicideLegal", rules.multiStoneSuicideLegal);
+    rules.startPosIsRandom = cfg.getOrDefaultBool(START_POS_RANDOM_KEY, rules.startPosIsRandom);
+    rules.multiStoneSuicideLegal = cfg.getOrDefaultBool("multiStoneSuicideLegal", rules.multiStoneSuicideLegal);
 
     if (dotsGame) {
-      rules.dotsCaptureEmptyBases = cfg.getBoolOrDefault(DOTS_CAPTURE_EMPTY_BASE_KEY, rules.dotsCaptureEmptyBases);
+      rules.dotsCaptureEmptyBases = cfg.getOrDefaultBool(DOTS_CAPTURE_EMPTY_BASE_KEY, rules.dotsCaptureEmptyBases);
     } else {
       rules.koRule = Rules::parseKoRule(cfg.getString("koRule", Rules::koRuleStrings()));
       rules.scoringRule = Rules::parseScoringRule(cfg.getString("scoringRule", Rules::scoringRuleStrings()));
-      rules.hasButton = cfg.getBoolOrDefault("hasButton", false);
+      rules.hasButton = cfg.getOrDefaultBool("hasButton", false);
       rules.komi = 7.5f;
 
       if(string taxRule; cfg.tryGetString("taxRule", taxRule, Rules::taxRuleStrings())) {
@@ -668,7 +668,7 @@ Rules Setup::loadSingleRules(ConfigParser& cfg, const bool loadKomi) {
         : whiteBonusPerHandicapStone == 0 ? Rules::WHB_ZERO
                                           : Rules::WHB_N;
 
-      rules.friendlyPassOk = cfg.getBoolOrDefault("friendlyPassOk", rules.friendlyPassOk);
+      rules.friendlyPassOk = cfg.getOrDefaultBool("friendlyPassOk", rules.friendlyPassOk);
 
       //Drop default komi to 6.5 for territory rules, and to 7.0 for button
       if(rules.scoringRule == Rules::SCORING_TERRITORY)
@@ -719,7 +719,7 @@ vector<pair<set<string>,set<string>>> Setup::getMutexKeySets() {
 }
 
 std::vector<std::unique_ptr<PatternBonusTable>> Setup::loadAvoidSgfPatternBonusTables(ConfigParser& cfg, Logger& logger) {
-  const int numBots = cfg.getIntOrDefault("numBots", 1, MAX_BOT_PARAMS_FROM_CFG, 1);
+  const int numBots = cfg.getOrDefaultInt("numBots", 1, MAX_BOT_PARAMS_FROM_CFG, 1);
 
   std::vector<std::unique_ptr<PatternBonusTable>> tables;
   for(int i = 0; i<numBots; i++) {
@@ -743,9 +743,9 @@ std::vector<std::unique_ptr<PatternBonusTable>> Setup::loadAvoidSgfPatternBonusT
 
       if(contains("PatternUtility")) {
         const double penalty = cfg.getDouble(find("PatternUtility"), -3.0, 3.0);
-        const double lambda = cfg.getDoubleOrDefault(find("PatternLambda"), 0.0, 1.0, 1.0);
-        const int minTurnNumber = cfg.getIntOrDefault(find("PatternMinTurnNumber"), 0, 1000000, 0);
-        const size_t maxFiles = static_cast<size_t>(cfg.getIntOrDefault(find("PatternMaxFiles"), 1, 1000000, 1000000));
+        const double lambda = cfg.getOrDefaultDouble(find("PatternLambda"), 0.0, 1.0, 1.0);
+        const int minTurnNumber = cfg.getOrDefaultInt(find("PatternMinTurnNumber"), 0, 1000000, 0);
+        const size_t maxFiles = static_cast<size_t>(cfg.getOrDefaultInt(find("PatternMaxFiles"), 1, 1000000, 1000000));
         vector<string> allowedPlayerNames;
         if(contains("PatternAllowedNames"))
           allowedPlayerNames = cfg.getStrings(find("PatternAllowedNames"), {}, true);

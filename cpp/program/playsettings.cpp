@@ -30,19 +30,19 @@ PlaySettings PlaySettings::loadForMatch(ConfigParser& cfg) {
   playSettings.allowResignation = cfg.getBool("allowResignation");
   playSettings.resignThreshold = cfg.getDouble("resignThreshold",-1.0,0.0); //Threshold on [-1,1], regardless of winLossUtilityFactor
   playSettings.resignConsecTurns = cfg.getInt("resignConsecTurns",1,100);
-  playSettings.compensateKomiVisits = cfg.getIntOrDefault("compensateKomiVisits", 1, 10000, 100);
-  playSettings.initGamesWithPolicy = cfg.getBoolOrDefault("initGamesWithPolicy", false);
+  playSettings.compensateKomiVisits = cfg.getOrDefaultInt("compensateKomiVisits", 1, 10000, 100);
+  playSettings.initGamesWithPolicy = cfg.getOrDefaultBool("initGamesWithPolicy", false);
   if(playSettings.initGamesWithPolicy) {
     playSettings.policyInitAreaProp = cfg.getDouble("policyInitAreaProp",0.0,1.0);
-    playSettings.startPosesPolicyInitAreaProp = cfg.getDoubleOrDefault("startPosesPolicyInitAreaProp", 0.0, 1.0, 0.0);
-    playSettings.compensateAfterPolicyInitProb = cfg.getDoubleOrDefault("compensateAfterPolicyInitProb", 0.0, 1.0, 1.0);
-    playSettings.policyInitGammaShape = cfg.getDoubleOrDefault("policyInitGammaShape", 0.5, 100.0, 1.0);
-    playSettings.policyInitAreaTemperature = cfg.getDoubleOrDefault("policyInitAreaTemperature", 0.1, 5.0, 1.0);
+    playSettings.startPosesPolicyInitAreaProp = cfg.getOrDefaultDouble("startPosesPolicyInitAreaProp", 0.0, 1.0, 0.0);
+    playSettings.compensateAfterPolicyInitProb = cfg.getOrDefaultDouble("compensateAfterPolicyInitProb", 0.0, 1.0, 1.0);
+    playSettings.policyInitGammaShape = cfg.getOrDefaultDouble("policyInitGammaShape", 0.5, 100.0, 1.0);
+    playSettings.policyInitAreaTemperature = cfg.getOrDefaultDouble("policyInitAreaTemperature", 0.1, 5.0, 1.0);
   }
-  playSettings.dynamicSelfKomiBonusMin = cfg.getDoubleOrDefault("dynamicSelfKomiBonusMin", -100.0, 100.0, 0.0);
-  playSettings.dynamicSelfKomiBonusMax = cfg.getDoubleOrDefault("dynamicSelfKomiBonusMax", -100.0, 100.0, 0.0);
-  playSettings.dynamicSelfKomiWinLossMin = cfg.getDoubleOrDefault("dynamicSelfKomiWinLossMin", -1.0, 1.0, -1.0);
-  playSettings.dynamicSelfKomiWinLossMax = cfg.getDoubleOrDefault("dynamicSelfKomiWinLossMax", -1.0, 1.0, 1.0);
+  playSettings.dynamicSelfKomiBonusMin = cfg.getOrDefaultDouble("dynamicSelfKomiBonusMin", -100.0, 100.0, 0.0);
+  playSettings.dynamicSelfKomiBonusMax = cfg.getOrDefaultDouble("dynamicSelfKomiBonusMax", -100.0, 100.0, 0.0);
+  playSettings.dynamicSelfKomiWinLossMin = cfg.getOrDefaultDouble("dynamicSelfKomiWinLossMin", -1.0, 1.0, -1.0);
+  playSettings.dynamicSelfKomiWinLossMax = cfg.getOrDefaultDouble("dynamicSelfKomiWinLossMax", -1.0, 1.0, 1.0);
   if(playSettings.dynamicSelfKomiBonusMin > playSettings.dynamicSelfKomiBonusMax)
     throw StringError("dynamicSelfKomiBonusMin > dynamicSelfKomiBonusMax");
   if(playSettings.dynamicSelfKomiWinLossMin > playSettings.dynamicSelfKomiWinLossMax)
@@ -57,32 +57,32 @@ PlaySettings PlaySettings::loadForGatekeeper(ConfigParser& cfg) {
   playSettings.allowResignation = cfg.getBool("allowResignation");
   playSettings.resignThreshold = cfg.getDouble("resignThreshold",-1.0,0.0); //Threshold on [-1,1], regardless of winLossUtilityFactor
   playSettings.resignConsecTurns = cfg.getInt("resignConsecTurns",1,100);
-  playSettings.compensateKomiVisits = cfg.getIntOrDefault("compensateKomiVisits", 1, 10000, 100);
+  playSettings.compensateKomiVisits = cfg.getOrDefaultInt("compensateKomiVisits", 1, 10000, 100);
   return playSettings;
 }
 
 PlaySettings PlaySettings::loadForSelfplay(ConfigParser& cfg, bool isDistributed) {
   PlaySettings playSettings;
   playSettings.initGamesWithPolicy = cfg.getBool("initGamesWithPolicy");
-  playSettings.policyInitAreaProp = cfg.getDoubleOrDefault("policyInitAreaProp", 0.0, 1.0, 0.04);
-  playSettings.startPosesPolicyInitAreaProp = cfg.getDoubleOrDefault("startPosesPolicyInitAreaProp", 0.0, 1.0, 0.0);
+  playSettings.policyInitAreaProp = cfg.getOrDefaultDouble("policyInitAreaProp", 0.0, 1.0, 0.04);
+  playSettings.startPosesPolicyInitAreaProp = cfg.getOrDefaultDouble("startPosesPolicyInitAreaProp", 0.0, 1.0, 0.0);
   playSettings.compensateAfterPolicyInitProb = cfg.getDouble("compensateAfterPolicyInitProb",0.0,1.0);
-  playSettings.policyInitGammaShape = cfg.getDoubleOrDefault("policyInitGammaShape", 0.5, 10.0, 1.0);
+  playSettings.policyInitGammaShape = cfg.getOrDefaultDouble("policyInitGammaShape", 0.5, 10.0, 1.0);
   playSettings.sidePositionProb =
     //forkSidePositionProb is the legacy name, included for backward compatibility
     (cfg.contains("forkSidePositionProb") && !cfg.contains("sidePositionProb")) ?
     cfg.getDouble("forkSidePositionProb",0.0,1.0) : cfg.getDouble("sidePositionProb",0.0,1.0);
 
-  playSettings.policyInitAreaTemperature = cfg.getDoubleOrDefault("policyInitAreaTemperature", 0.1, 5.0, 1.0);
-  playSettings.handicapTemperature = cfg.getDoubleOrDefault("handicapTemperature", 0.1, 5.0, 1.0);
+  playSettings.policyInitAreaTemperature = cfg.getOrDefaultDouble("policyInitAreaTemperature", 0.1, 5.0, 1.0);
+  playSettings.handicapTemperature = cfg.getOrDefaultDouble("handicapTemperature", 0.1, 5.0, 1.0);
 
-  playSettings.compensateKomiVisits = cfg.getIntOrDefault("compensateKomiVisits", 1, 10000, 20);
+  playSettings.compensateKomiVisits = cfg.getOrDefaultInt("compensateKomiVisits", 1, 10000, 20);
   // Go ahead and use a different default for distributed, so we don't have to wait for all users to switch to set a config line for it
   playSettings.flipKomiProbWhenNoCompensate =
-    cfg.getDoubleOrDefault("flipKomiProbWhenNoCompensate", 0.0, 1.0, isDistributed ? 0.25 : 0.0);
-  playSettings.estimateLeadVisits = cfg.getIntOrDefault("estimateLeadVisits", 1, 10000, 6);
-  playSettings.estimateLeadProb = cfg.getDoubleOrDefault("estimateLeadProb", 0.0, 1.0, 0.0);
-  playSettings.fancyKomiVarying = cfg.getBoolOrDefault("fancyKomiVarying", false);
+    cfg.getOrDefaultDouble("flipKomiProbWhenNoCompensate", 0.0, 1.0, isDistributed ? 0.25 : 0.0);
+  playSettings.estimateLeadVisits = cfg.getOrDefaultInt("estimateLeadVisits", 1, 10000, 6);
+  playSettings.estimateLeadProb = cfg.getOrDefaultDouble("estimateLeadProb", 0.0, 1.0, 0.0);
+  playSettings.fancyKomiVarying = cfg.getOrDefaultBool("fancyKomiVarying", false);
 
   playSettings.earlyForkGameProb = cfg.getDouble("earlyForkGameProb",0.0,0.5);
   playSettings.earlyForkGameExpectedMoveProp = cfg.getDouble("earlyForkGameExpectedMoveProp",0.0,1.0);
@@ -100,12 +100,12 @@ PlaySettings PlaySettings::loadForSelfplay(ConfigParser& cfg, bool isDistributed
   playSettings.reducedVisitsWeight = cfg.getFloat("reducedVisitsWeight",0.0f,1.0f);
   playSettings.policySurpriseDataWeight = cfg.getDouble("policySurpriseDataWeight",0.0,1.0);
   playSettings.valueSurpriseDataWeight = cfg.getDouble("valueSurpriseDataWeight",0.0,1.0);
-  playSettings.scaleDataWeight = cfg.getDoubleOrDefault("scaleDataWeight", 0.01, 10.0, 1.0);
+  playSettings.scaleDataWeight = cfg.getOrDefaultDouble("scaleDataWeight", 0.01, 10.0, 1.0);
   playSettings.handicapAsymmetricPlayoutProb = cfg.getDouble("handicapAsymmetricPlayoutProb",0.0,1.0);
   playSettings.normalAsymmetricPlayoutProb = cfg.getDouble("normalAsymmetricPlayoutProb",0.0,1.0);
   playSettings.maxAsymmetricRatio = cfg.getDouble("maxAsymmetricRatio",1.0,100.0);
   playSettings.minAsymmetricCompensateKomiProb = cfg.getDouble("minAsymmetricCompensateKomiProb",0.0,1.0);
-  playSettings.sekiForkHackProb = cfg.getDoubleOrDefault("sekiForkHackProb", 0.0, 1.0, 0.0);
+  playSettings.sekiForkHackProb = cfg.getOrDefaultDouble("sekiForkHackProb", 0.0, 1.0, 0.0);
   playSettings.forSelfPlay = true;
 
   if(playSettings.policySurpriseDataWeight + playSettings.valueSurpriseDataWeight > 1.0)

@@ -251,14 +251,14 @@ dd = s1,s2,s3
     testAssert(enabled_t::Auto == cfg.getEnabled("i").x);
     testAssert("str" == cfg.getString("j"));
 
-    testAssert(128 == cfg.getIntOrDefault("a1", std::numeric_limits<int>::min(), std::numeric_limits<int>::max(), 128));
-    testAssert(128L == cfg.getInt64OrDefault("b1", std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max(), 128L));
-    testAssert(128UL == cfg.getUInt64OrDefault("c1", std::numeric_limits<uint64_t>::min(), std::numeric_limits<uint64_t>::max(), 128UL));
-    testAssert(128.0f == cfg.getFloatOrDefault("d1", std::numeric_limits<float>::min(), std::numeric_limits<float>::max(), 128.0f));
-    testAssert(128.0 == cfg.getDoubleOrDefault("e1", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 128.0));
-    testAssert(false == cfg.getBoolOrDefault("f1", false));
-    testAssert(enabled_t::False == cfg.getEnabledOrDefault("g1", enabled_t::False).x);
-    testAssert("default" == cfg.getStringOrDefault("j1", "default"));
+    testAssert(128 == cfg.getOrDefaultInt("a1", std::numeric_limits<int>::min(), std::numeric_limits<int>::max(), 128));
+    testAssert(128L == cfg.getOrDefaultInt64("b1", std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max(), 128L));
+    testAssert(128UL == cfg.getOrDefaultUInt64("c1", std::numeric_limits<uint64_t>::min(), std::numeric_limits<uint64_t>::max(), 128UL));
+    testAssert(128.0f == cfg.getOrDefaultFloat("d1", std::numeric_limits<float>::min(), std::numeric_limits<float>::max(), 128.0f));
+    testAssert(128.0 == cfg.getOrDefaultDouble("e1", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 128.0));
+    testAssert(false == cfg.getOrDefaultBool("f1", false));
+    testAssert(enabled_t::False == cfg.getOrDefaultEnabled("g1", enabled_t::False).x);
+    testAssert("default" == cfg.getOrDefaultString("j1", "default"));
 
     int intValue;
     testAssert(cfg.tryGetInt("a", intValue));

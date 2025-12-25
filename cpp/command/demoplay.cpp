@@ -407,12 +407,12 @@ int MainCmds::demoplay(const vector<string>& args) {
   }
   logger.write("Loaded neural net");
 
-  const bool allowResignation = cfg.getBoolOrDefault("allowResignation", false);
+  const bool allowResignation = cfg.getOrDefaultBool("allowResignation", false);
   const double resignThreshold = allowResignation ? cfg.getDouble("resignThreshold",-1.0,0.0) : -1.0; //Threshold on [-1,1], regardless of winLossUtilityFactor
   const double resignScoreThreshold = allowResignation ? cfg.getDouble("resignScoreThreshold",-10000.0,0.0) : -10000.0;
 
-  const double searchFactorWhenWinning = cfg.getDoubleOrDefault("searchFactorWhenWinning", 0.01, 1.0, 1.0);
-  const double searchFactorWhenWinningThreshold = cfg.getDoubleOrDefault("searchFactorWhenWinningThreshold", 0.0, 1.0, 1.0);
+  const double searchFactorWhenWinning = cfg.getOrDefaultDouble("searchFactorWhenWinning", 0.01, 1.0, 1.0);
+  const double searchFactorWhenWinningThreshold = cfg.getOrDefaultDouble("searchFactorWhenWinningThreshold", 0.0, 1.0, 1.0);
 
   //Check for unused config keys
   cfg.warnUnusedKeys(cerr,&logger);

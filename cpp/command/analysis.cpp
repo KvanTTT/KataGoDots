@@ -109,7 +109,7 @@ int MainCmds::analysis(const vector<string>& args) {
     numAnalysisThreads = numAnalysisThreadsCmdline;
   }
 
-  if (cfg.getBoolOrDefault("forDeterministicTesting", false))
+  if (cfg.getOrDefaultBool("forDeterministicTesting", false))
     seedRand.init("forDeterministicTesting");
 
   const bool logToStdoutDefault = false;
@@ -123,12 +123,12 @@ int MainCmds::analysis(const vector<string>& args) {
     cerr << Version::getAppNameWithVersion() << endl;
   }
 
-  const bool logAllRequests = cfg.getBoolOrDefault("logAllRequests", false);
-  const bool logAllResponses = cfg.getBoolOrDefault("logAllResponses", false);
-  const bool logErrorsAndWarnings = cfg.getBoolOrDefault("logErrorsAndWarnings", true);
-  const bool logSearchInfo = cfg.getBoolOrDefault("logSearchInfo", false);
+  const bool logAllRequests = cfg.getOrDefaultBool("logAllRequests", false);
+  const bool logAllResponses = cfg.getOrDefaultBool("logAllResponses", false);
+  const bool logErrorsAndWarnings = cfg.getOrDefaultBool("logErrorsAndWarnings", true);
+  const bool logSearchInfo = cfg.getOrDefaultBool("logSearchInfo", false);
 
-  const bool warnUnusedFields = cfg.getBoolOrDefault("warnUnusedFields", true);
+  const bool warnUnusedFields = cfg.getOrDefaultBool("warnUnusedFields", true);
 
   auto loadParams = [&humanModelFile](ConfigParser& config, SearchParams& params, Player& perspective, Player defaultPerspective) {
     bool hasHumanModel = humanModelFile != "";
@@ -150,10 +150,10 @@ int MainCmds::analysis(const vector<string>& args) {
     patternBonusTable = std::move(tables[0]);
   }
 
-  const int analysisPVLen = cfg.getIntOrDefault("analysisPVLen", 1, 100, 15);
+  const int analysisPVLen = cfg.getOrDefaultInt("analysisPVLen", 1, 100, 15);
   const bool assumeMultipleStartingBlackMovesAreHandicap =
-    cfg.getBoolOrDefault("assumeMultipleStartingBlackMovesAreHandicap", true);
-  const bool preventEncore = cfg.getBoolOrDefault("preventCleanupPhase", true);
+    cfg.getOrDefaultBool("assumeMultipleStartingBlackMovesAreHandicap", true);
+  const bool preventEncore = cfg.getOrDefaultBool("preventCleanupPhase", true);
 
   NNEvaluator* nnEval = NULL;
   NNEvaluator* humanEval = NULL;

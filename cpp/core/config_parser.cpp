@@ -520,7 +520,7 @@ std::string ConfigParser::firstFoundOrEmpty(const std::vector<std::string>& poss
   return {};
 }
 
-std::string ConfigParser::getStringOrDefault(const std::string& key, const std::string& defaultValue, const std::set<std::string>& possibles) {
+std::string ConfigParser::getOrDefaultString(const std::string& key, const std::string& defaultValue, const std::set<std::string>& possibles) {
   string value;
   if (!tryGetString(key, value, possibles)) {
     value = defaultValue;
@@ -588,7 +588,7 @@ bool ConfigParser::tryGetBool(const std::string& key, bool& value) {
   return false;
 }
 
-bool ConfigParser::getBoolOrDefault(const std::string& key, const bool defaultValue) {
+bool ConfigParser::getOrDefaultBool(const std::string& key, const bool defaultValue) {
   return getOrError<bool>(key, false, true, defaultValue);
 }
 
@@ -614,7 +614,7 @@ bool ConfigParser::tryGetEnabled(const std::string& key, enabled_t& value) {
   return false;
 }
 
-enabled_t ConfigParser::getEnabledOrDefault(const string& key, const enabled_t defaultValue) {
+enabled_t ConfigParser::getOrDefaultEnabled(const string& key, const enabled_t defaultValue) {
   return getOrError<enabled_t>(key, enabled_t::False, enabled_t::Auto, defaultValue);
 }
 
@@ -622,7 +622,7 @@ enabled_t ConfigParser::getEnabled(const string& key) {
   return getOrError<enabled_t>(key, enabled_t::False, enabled_t::Auto, std::nullopt);
 }
 
-int ConfigParser::getIntOrDefault(const std::string& key, const int min, const int max, const int defaultValue) {
+int ConfigParser::getOrDefaultInt(const std::string& key, const int min, const int max, const int defaultValue) {
   return getOrError<int>(key, min, max, defaultValue);
 }
 
@@ -685,7 +685,7 @@ bool ConfigParser::tryGetInt64(const std::string& key, int64_t& value, const int
   return false;
 }
 
-int64_t ConfigParser::getInt64OrDefault(const std::string& key, const int64_t min, const int64_t max,
+int64_t ConfigParser::getOrDefaultInt64(const std::string& key, const int64_t min, const int64_t max,
   const int64_t defaultValue) {
   return getOrError<int64_t>(key, min, max, defaultValue);
 }
@@ -712,7 +712,7 @@ bool ConfigParser::tryGetUInt64(const std::string& key, uint64_t& value, const u
   return false;
 }
 
-uint64_t ConfigParser::getUInt64OrDefault(const std::string& key,
+uint64_t ConfigParser::getOrDefaultUInt64(const std::string& key,
   const uint64_t min, const uint64_t max,
   const uint64_t defaultValue) {
   return getOrError<uint64_t>(key, min, max, defaultValue);
@@ -740,7 +740,7 @@ bool ConfigParser::tryGetFloat(const std::string& key, float& value, const float
   return false;
 }
 
-float ConfigParser::getFloatOrDefault(const string& key, const float min, const float max, float defaultValue) {
+float ConfigParser::getOrDefaultFloat(const string& key, const float min, const float max, float defaultValue) {
   return getOrError<float>(key, min, max, defaultValue);
 }
 
@@ -770,7 +770,7 @@ double ConfigParser::getDouble(const std::string& key, const double min, const d
   return getOrError<double>(key, min, max, std::nullopt);
 }
 
-double ConfigParser::getDoubleOrDefault(const string& key, const double min, const double max, double defaultValue) {
+double ConfigParser::getOrDefaultDouble(const string& key, const double min, const double max, double defaultValue) {
   return getOrError<double>(key, min, max, defaultValue);
 }
 

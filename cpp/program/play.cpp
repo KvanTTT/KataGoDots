@@ -93,7 +93,7 @@ GameInitializer::GameInitializer(ConfigParser& cfg, Logger& logger, const string
 }
 
 void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
-  dotsGame = cfg.getBoolOrDefault(DOTS_KEY, false);
+  dotsGame = cfg.getOrDefaultBool(DOTS_KEY, false);
 
   if (dotsGame) {
     if (cfg.containsAny({"koRules", "scoringRules", "taxRules", "hasButtons"})) {
@@ -165,7 +165,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
       relProbSum += p;
     if(relProbSum <= 1e-100)
       throw IOError("bSizeRelProbs must sum to a positive value");
-    double allowRectangleProb = cfg.getDoubleOrDefault("allowRectangleProb", 0.0, 1.0, 0.0);
+    double allowRectangleProb = cfg.getOrDefaultDouble("allowRectangleProb", 0.0, 1.0, 0.0);
 
     if(allowedBEdges.size() <= 0)
       throw IOError("bSizes must have at least one value in " + cfg.getFileName());
@@ -209,7 +209,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
       throw IOError("bSizeRelProbs must sum to a positive value");
   }
 
-  komiAuto = cfg.getBoolOrDefault("komiAuto", false);
+  komiAuto = cfg.getOrDefaultBool("komiAuto", false);
 
   if (cfg.tryGetFloat("komiMean", komiMean, Rules::MIN_USER_KOMI, Rules::MAX_USER_KOMI)) {
     if (komiAuto) {
@@ -222,19 +222,19 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
     komiMean = dotsGame ? 0.0f : 7.5f;
   }
 
-  komiStdev = cfg.getFloatOrDefault("komiStdev",0.0f, 60.0f, 0.0f);
-  handicapProb = cfg.getDoubleOrDefault("handicapProb", 0.0, 1.0, 0.0);
-  handicapCompensateKomiProb = cfg.getDoubleOrDefault("handicapCompensateKomiProb", 0.0, 1.0, 0.0);
-  komiBigStdevProb = cfg.getDoubleOrDefault("komiBigStdevProb",0.0, 1.0, 0.0);
-  komiBigStdev = cfg.getFloatOrDefault("komiBigStdev", 0.0f, 60.0f, 10.0f);
-  komiBiggerStdevProb = cfg.getDoubleOrDefault("komiBiggerStdevProb", 0.0, 1.0, 0.0);
-  komiBiggerStdev = cfg.getFloatOrDefault("komiBiggerStdev", 0.0f, 120.0f, 30.0f);
-  handicapKomiInterpZeroProb = cfg.getDoubleOrDefault("handicapKomiInterpZeroProb", 0.0, 1.0, 0.0);
-  sgfKomiInterpZeroProb = cfg.getDoubleOrDefault("sgfKomiInterpZeroProb", 0.0, 1.0, 0.0);
+  komiStdev = cfg.getOrDefaultFloat("komiStdev",0.0f, 60.0f, 0.0f);
+  handicapProb = cfg.getOrDefaultDouble("handicapProb", 0.0, 1.0, 0.0);
+  handicapCompensateKomiProb = cfg.getOrDefaultDouble("handicapCompensateKomiProb", 0.0, 1.0, 0.0);
+  komiBigStdevProb = cfg.getOrDefaultDouble("komiBigStdevProb",0.0, 1.0, 0.0);
+  komiBigStdev = cfg.getOrDefaultFloat("komiBigStdev", 0.0f, 60.0f, 10.0f);
+  komiBiggerStdevProb = cfg.getOrDefaultDouble("komiBiggerStdevProb", 0.0, 1.0, 0.0);
+  komiBiggerStdev = cfg.getOrDefaultFloat("komiBiggerStdev", 0.0f, 120.0f, 30.0f);
+  handicapKomiInterpZeroProb = cfg.getOrDefaultDouble("handicapKomiInterpZeroProb", 0.0, 1.0, 0.0);
+  sgfKomiInterpZeroProb = cfg.getOrDefaultDouble("sgfKomiInterpZeroProb", 0.0, 1.0, 0.0);
 
-  forkCompensateKomiProb = cfg.getDoubleOrDefault("forkCompensateKomiProb", 0.0, 1.0, handicapCompensateKomiProb);
-  sgfCompensateKomiProb = cfg.getDoubleOrDefault("sgfCompensateKomiProb", 0.0, 1.0, forkCompensateKomiProb);
-  komiAllowIntegerProb = cfg.getDoubleOrDefault("komiAllowIntegerProb", 0.0, 1.0, 1.0);
+  forkCompensateKomiProb = cfg.getOrDefaultDouble("forkCompensateKomiProb", 0.0, 1.0, handicapCompensateKomiProb);
+  sgfCompensateKomiProb = cfg.getOrDefaultDouble("sgfCompensateKomiProb", 0.0, 1.0, forkCompensateKomiProb);
+  komiAllowIntegerProb = cfg.getOrDefaultDouble("komiAllowIntegerProb", 0.0, 1.0, 1.0);
 
   auto generateCumProbs = [](const vector<Sgf::PositionSample> poses, double lambda, double& effectiveSampleSize) {
     int64_t minInitialTurnNumber = 0;
@@ -281,7 +281,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
     startPosesProb = cfg.getDouble("startPosesProb",0.0,1.0);
 
     vector<string> dirs = Global::split(startPosesFromSgfDir, ',');
-    vector<string> excludes = Global::split(cfg.getStringOrDefault("startPosesSgfExcludes", ""), ',');
+    vector<string> excludes = Global::split(cfg.getOrDefaultString("startPosesSgfExcludes", ""), ',');
     double startPosesLoadProb = cfg.getDouble("startPosesLoadProb",0.0,1.0);
     double startPosesTurnWeightLambda = cfg.getDouble("startPosesTurnWeightLambda",-10,10);
 
@@ -407,10 +407,10 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
     maxBoardYSize = std::max(maxBoardYSize, pos.board.y_size);
   }
 
-  noResultStdev = cfg.getDoubleOrDefault("noResultStdev", 0.0, 1.0, 0.0);
+  noResultStdev = cfg.getOrDefaultDouble("noResultStdev", 0.0, 1.0, 0.0);
   numExtraBlackFixed = 0;
   cfg.tryGetInt("numExtraBlackFixed", numExtraBlackFixed, 1, 18);
-  drawRandRadius = cfg.getDoubleOrDefault("drawRandRadius", 0.0, 1.0, 0.0);
+  drawRandRadius = cfg.getOrDefaultDouble("drawRandRadius", 0.0, 1.0, 0.0);
 }
 
 GameInitializer::~GameInitializer()
@@ -2372,7 +2372,7 @@ GameRunner::GameRunner(ConfigParser& cfg, PlaySettings pSettings, Logger& logger
   logSearchInfo = cfg.getBool("logSearchInfo");
   logMoves = cfg.getBool("logMoves");
   maxMovesPerGame = cfg.getInt("maxMovesPerGame",0,1 << 30);
-  clearBotBeforeSearch = cfg.getBoolOrDefault("clearBotBeforeSearch", false);
+  clearBotBeforeSearch = cfg.getOrDefaultBool("clearBotBeforeSearch", false);
 
   //Initialize object for randomizing game settings
   gameInit = new GameInitializer(cfg,logger);
@@ -2385,7 +2385,7 @@ GameRunner::GameRunner(ConfigParser& cfg, const string& gameInitRandSeed, PlaySe
   logSearchInfo = cfg.getBool("logSearchInfo");
   logMoves = cfg.getBool("logMoves");
   maxMovesPerGame = cfg.getInt("maxMovesPerGame",0,1 << 30);
-  clearBotBeforeSearch = cfg.getBoolOrDefault("clearBotBeforeSearch", false);
+  clearBotBeforeSearch = cfg.getOrDefaultBool("clearBotBeforeSearch", false);
 
   //Initialize object for randomizing game settings
   gameInit = new GameInitializer(cfg,logger,gameInitRandSeed);

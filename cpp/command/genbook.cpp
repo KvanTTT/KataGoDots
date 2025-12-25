@@ -333,20 +333,20 @@ int MainCmds::genbook(const vector<string>& args) {
   const int boardSizeY = cfg.getInt("boardSizeY",2,Board::MAX_LEN_Y);
   const int repBound = cfg.getInt("repBound",3,1000);
 
-  const double bonusFileScale = cfg.getDoubleOrDefault("bonusFileScale", 0.0, 1000000.0, 1.0);
+  const double bonusFileScale = cfg.getOrDefaultDouble("bonusFileScale", 0.0, 1000000.0, 1.0);
 
-  const double randomizeParamsStdev = cfg.getDoubleOrDefault("randomizeParamsStdev", 0.0, 2.0, 0.0);
+  const double randomizeParamsStdev = cfg.getOrDefaultDouble("randomizeParamsStdev", 0.0, 2.0, 0.0);
 
   const bool logSearchInfo = cfg.getBool("logSearchInfo");
   const string rulesLabel = cfg.getString("rulesLabel");
   const string rulesLink = cfg.getString("rulesLink");
 
   const int64_t minTreeVisitsToRecord =
-    cfg.getInt64OrDefault("minTreeVisitsToRecord", 1, static_cast<int64_t>(1) << 50, params.maxVisits);
+    cfg.getOrDefaultInt64("minTreeVisitsToRecord", 1, static_cast<int64_t>(1) << 50, params.maxVisits);
   const int maxDepthToRecord =
-    cfg.getIntOrDefault("maxDepthToRecord", 1, 100, 1);
+    cfg.getOrDefaultInt("maxDepthToRecord", 1, 100, 1);
   const int64_t maxVisitsForLeaves =
-    cfg.getInt64OrDefault("maxVisitsForLeaves", 1, static_cast<int64_t>(1) << 50, (params.maxVisits+1) / 2);
+    cfg.getOrDefaultInt64("maxVisitsForLeaves", 1, static_cast<int64_t>(1) << 50, (params.maxVisits+1) / 2);
 
   BookParams cfgParams = BookParams::loadFromCfg(cfg, params.maxVisits, maxVisitsForLeaves);
 
@@ -380,8 +380,8 @@ int MainCmds::genbook(const vector<string>& args) {
     );
   }
 
-  const double wideRootNoiseBookExplore = cfg.getDoubleOrDefault("wideRootNoiseBookExplore", 0.0, 5.0, params.wideRootNoise);
-  const double cpuctExplorationLogBookExplore = cfg.getDoubleOrDefault("cpuctExplorationLogBookExplore", 0.0, 10.0, params.cpuctExplorationLog);
+  const double wideRootNoiseBookExplore = cfg.getOrDefaultDouble("wideRootNoiseBookExplore", 0.0, 5.0, params.wideRootNoise);
+  const double cpuctExplorationLogBookExplore = cfg.getOrDefaultDouble("cpuctExplorationLogBookExplore", 0.0, 10.0, params.cpuctExplorationLog);
   NNEvaluator* nnEval;
   NNEvaluator* humanEval = NULL;
   {
@@ -1516,10 +1516,10 @@ int MainCmds::writebook(const vector<string>& args) {
 
   const string rulesLabel = cfg.getString("rulesLabel");
   const string rulesLink = cfg.getString("rulesLink");
-  const double bonusFileScale = cfg.getDoubleOrDefault("bonusFileScale",0.0,1000000.0, 1.0);
+  const double bonusFileScale = cfg.getOrDefaultDouble("bonusFileScale",0.0,1000000.0, 1.0);
   const SearchParams params = Setup::loadSingleParams(cfg,Setup::SETUP_FOR_GTP);
 
-  const int64_t maxVisitsForLeaves = cfg.getInt64OrDefault("maxVisitsForLeaves", 1, static_cast<int64_t>(1) << 50, (params.maxVisits+1) / 2);
+  const int64_t maxVisitsForLeaves = cfg.getOrDefaultInt64("maxVisitsForLeaves", 1, static_cast<int64_t>(1) << 50, (params.maxVisits+1) / 2);
 
   BookParams cfgParams = BookParams::loadFromCfg(cfg, params.maxVisits, maxVisitsForLeaves);
 
