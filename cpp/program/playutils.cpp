@@ -95,17 +95,17 @@ static float roundKomiWithLinearProb(float komi, Rand& rand) {
 //Also ignores allowInteger
 void PlayUtils::setKomiWithoutNoise(const ExtraBlackAndKomi& extraBlackAndKomi, BoardHistory& hist) {
   float komi = extraBlackAndKomi.komiMean;
-  komi = roundAndClipKomi(komi, hist.getRecentBoard(0));
+  komi = roundAndClipKomi(komi, hist.initialBoard);
   assert(Rules::komiIsIntOrHalfInt(komi));
   hist.setKomi(komi);
 }
 
 void PlayUtils::setKomiWithNoise(const ExtraBlackAndKomi& extraBlackAndKomi, BoardHistory& hist, Rand& rand) {
   float komi = extraBlackAndKomi.komiMean;
-  const auto& lastBoard = hist.getRecentBoard(0);
+  const auto& initialBoard = hist.initialBoard;
 
   if (hist.rules.isDots) {
-    auto [lowerBound, upperBound] = lastBoard.getAcceptableKomiRange(true, 0);
+    auto [lowerBound, upperBound] = initialBoard.getAcceptableKomiRange(true, 0);
 
     float newKomi;
     int attemptsCount = 0;
@@ -135,7 +135,7 @@ void PlayUtils::setKomiWithNoise(const ExtraBlackAndKomi& extraBlackAndKomi, Boa
     if(extraBlackAndKomi.interpZero)
       komi = komi * static_cast<float>(rand.nextDouble());
     komi = roundKomiWithLinearProb(komi,rand);
-    komi = roundAndClipKomi(komi,lastBoard);
+    komi = roundAndClipKomi(komi,initialBoard);
     if(!extraBlackAndKomi.allowInteger && komi == static_cast<int>(komi))
       komi += rand.nextBool(0.5) ? -0.5f : 0.5f;
   }
@@ -528,7 +528,7 @@ static double getNaiveEvenKomiHelper(
          (lastWinLoss > 0 && winLoss > lastWinLoss + 0.1) ||
          (lastWinLoss < 0 && winLoss < lastWinLoss - 0.1)
       ) {
-        float fairKomi = PlayUtils::roundAndClipKomi(hist.rules.komi - lastShift * 0.5f, board);
+        float fairKomi = PlayUtils::roundAndClipKomi(hist.rules.komi - lastShift * 0.5f, hist.initialBoard);
         hist.setKomi(fairKomi);
         // cout << "STOP" << endl;
         // cout << lastLead << " " << lead << " " << lastWinLoss << " " << winLoss << endl;
@@ -554,7 +554,7 @@ static double getNaiveEvenKomiHelper(
       break;
 
     // cout << "Shifting by " << shift << endl;
-    float fairKomi = PlayUtils::roundAndClipKomi(hist.rules.komi + shift, board);
+    float fairKomi = PlayUtils::roundAndClipKomi(hist.rules.komi + shift, hist.initialBoard);
     hist.setKomi(fairKomi);
 
     //After a small shift, break out to the binary search.
@@ -565,7 +565,7 @@ static double getNaiveEvenKomiHelper(
   //Try a small window and do a binary search
   auto evalWinLoss = [&](double delta) {
     double newKomi = hist.rules.komi + delta;
-    double winLoss = evalKomi(scoreWLCache,botB,botW,board,hist,pla,numVisits,otherGameProps,PlayUtils::roundAndClipKomi(newKomi,board)).second;
+    double winLoss = evalKomi(scoreWLCache,botB,botW,board,hist,pla,numVisits,otherGameProps,PlayUtils::roundAndClipKomi(newKomi,hist.initialBoard)).second;
     // cout << "Delta " << delta << " wr " << winLoss << endl;
     return winLoss;
   };
@@ -655,7 +655,7 @@ void PlayUtils::adjustKomiToEven(
     newKomi = upper;
   else
     newKomi = lower;
-  hist.setKomi(PlayUtils::roundAndClipKomi(newKomi,board));
+  hist.setKomi(roundAndClipKomi(newKomi, hist.initialBoard));
 }
 
 float PlayUtils::computeLead(
@@ -678,7 +678,7 @@ float PlayUtils::computeLead(
   }
 
   auto evalWinLoss = [&](double newKomi) {
-    double winLoss = evalKomi(scoreWLCache,botB,botW,board,hist,pla,numVisits,otherGameProps,PlayUtils::roundAndClipKomi(newKomi,board)).second;
+    double winLoss = evalKomi(scoreWLCache,botB,botW,board,hist,pla,numVisits,otherGameProps,roundAndClipKomi(newKomi,hist.initialBoard)).second;
     // cout << "Delta " << delta << " wr " << winLoss << endl;
     return winLoss;
   };
