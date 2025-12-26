@@ -107,7 +107,7 @@ PlaySettings PlaySettings::loadForSelfplay(ConfigParser& cfg, bool isDistributed
   playSettings.normalAsymmetricPlayoutProb = cfg.getDouble("normalAsymmetricPlayoutProb",0.0,1.0);
   playSettings.maxAsymmetricRatio = cfg.getDouble("maxAsymmetricRatio",1.0,100.0);
   playSettings.minAsymmetricCompensateKomiProb = cfg.getDouble("minAsymmetricCompensateKomiProb",0.0,1.0);
-  playSettings.sekiForkHackProb = cfg.getOrDefaultDouble("sekiForkHackProb", 0.0, 1.0, 0.0);
+  playSettings.sekiForkHackProb = cfg.getOrDefaultDouble(SEKI_FORK_HACK_PROB_KEY, 0.0, 1.0, 0.0);
   playSettings.forSelfPlay = true;
 
   if(playSettings.policySurpriseDataWeight + playSettings.valueSurpriseDataWeight > 1.0)

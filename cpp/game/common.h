@@ -24,6 +24,7 @@ const std::string KOMI_BIGGER_STD_DEV_PROB_KEY = "komiBiggerStdevProb";
 const std::string KOMI_BIGGER_STD_DEV_KEY = "komiBiggerStdev";
 
 const std::string NO_RESULT_STDEV_KEY = "noResultStdev";
+const std::string SEKI_FORK_HACK_PROB_KEY = "sekiForkHackProb";
 
 const std::string BLACK_SCORE_IF_WHITE_GROUNDS_KEY = "blackScoreIfWhiteGrounds";
 const std::string WHITE_SCORE_IF_BLACK_GROUNDS_KEY = "whiteScoreIfBlackGrounds";
@@ -40,7 +41,8 @@ const std::vector GO_ONLY_KEYS = {
   KOMI_BIGGER_STD_DEV_PROB_KEY,
   KOMI_BIGGER_STD_DEV_KEY,
 
-  NO_RESULT_STDEV_KEY
+  NO_RESULT_STDEV_KEY,
+  SEKI_FORK_HACK_PROB_KEY,
 };
 
 const std::vector DOTS_ONLY_KEYS = {
