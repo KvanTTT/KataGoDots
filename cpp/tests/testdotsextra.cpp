@@ -529,3 +529,87 @@ void Tests::runDotsAcceptableKomiRange() {
   testAssert(lowerCrossExtraBlackNoDraw == -2.5f);
   testAssert(upperCrossExtraBlackNoDraw == +1.5f);
 }
+
+void Tests::runDotsKomiRandomization() {
+  cout << "Running Dots komi randomization tests" << endl;
+
+  auto check = [](const int startPos, const float mean, const float stdev, const bool allowInteger) {
+    const Board board = initializeBoard(startPos);
+    BoardHistory boardHistory(board);
+    auto [lowerBound, upperBound] = board.getAcceptableKomiRange(true, 0);
+
+    float min = std::numeric_limits<float>::infinity();
+    float max = -std::numeric_limits<float>::infinity();
+    set<float> values;
+    for (int i = 0; i < 256; i++) {
+      ExtraBlackAndKomi extraBlackAndKomi;
+      extraBlackAndKomi.komiMean = mean;
+      extraBlackAndKomi.komiStdev = stdev;
+      extraBlackAndKomi.allowInteger = allowInteger;
+
+      PlayUtils::setKomiWithNoise(extraBlackAndKomi, boardHistory, DOTS_RANDOM);
+      const float newKomi = boardHistory.rules.komi;
+
+      if (newKomi < min) min = newKomi;
+      if (newKomi > max) max = newKomi;
+
+      values.insert(newKomi);
+
+      testAssert(newKomi >= lowerBound && newKomi <= upperBound);
+      if (!allowInteger) {
+        testAssert(Global::isEqual(std::abs(std::fmod(newKomi, 1.0f)), 0.5f));
+      }
+    }
+
+    cout << "  Pos: " << board.rules.writeStartPosRule(startPos) << "; mean: " << mean << "; stdev: " << stdev << ", allowInteger: " << boolalpha << allowInteger << ", values: ";
+    for (auto it = values.begin(); it != values.end(); ++it) {
+      cout << *it;
+      if (it != std::prev(values.end())) {
+        cout << ", ";
+      }
+    }
+    cout << endl;
+  };
+
+  // SINGLE
+
+  // Normal range
+  check(Rules::START_POS_SINGLE, -0.25f, 0.25f, false);
+  check(Rules::START_POS_SINGLE, -0.25f, 0.25f, true);
+
+  // Zero range
+  check(Rules::START_POS_SINGLE, 0.0f, 0.0f, false);
+  check(Rules::START_POS_SINGLE, 0.0f, 0.0f, true);
+
+  // Out-of-range
+  check(Rules::START_POS_SINGLE, 2.0f, 1.0f, false);
+  check(Rules::START_POS_SINGLE, 2.0f, 1.0f, true);
+
+  // CROSS
+
+  // Normal range
+  check(Rules::START_POS_CROSS, 0.0f, 2.0f, false);
+  check(Rules::START_POS_CROSS, 0.0f, 2.0f, true);
+
+  // Zero range
+  check(Rules::START_POS_CROSS, 0.0f, 0.0f, false);
+  check(Rules::START_POS_CROSS, 0.0f, 0.0f, true);
+
+  // Out-of-range
+  check(Rules::START_POS_CROSS, 4.0f, 1.0f, false);
+  check(Rules::START_POS_CROSS, 4.0f, 1.0f, true);
+
+  // CROSS_4
+
+  // Normal range
+  check(Rules::START_POS_CROSS_4, 0.0f, 8.0f, false);
+  check(Rules::START_POS_CROSS_4, 0.0f, 8.0f, true);
+
+  // Zero range
+  check(Rules::START_POS_CROSS_4, 0.0f, 0.0f, false);
+  check(Rules::START_POS_CROSS_4, 0.0f, 0.0f, true);
+
+  // Out-of-range
+  check(Rules::START_POS_CROSS_4, 16.0f, 2.0f, false);
+  check(Rules::START_POS_CROSS_4, 16.0f, 2.0f, true);
+}

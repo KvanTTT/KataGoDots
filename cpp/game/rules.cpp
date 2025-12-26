@@ -153,7 +153,7 @@ Rules Rules::getSimpleTerritory() {
 }
 
 bool Rules::komiIsIntOrHalfInt(float komi) {
-  return std::isfinite(komi) && komi * 2 == (int)(komi * 2);
+  return std::isfinite(komi) && komi * 2 == static_cast<int>(komi * 2);
 }
 
 set<string> Rules::startPosStrings() {

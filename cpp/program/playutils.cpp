@@ -102,15 +102,45 @@ void PlayUtils::setKomiWithoutNoise(const ExtraBlackAndKomi& extraBlackAndKomi, 
 
 void PlayUtils::setKomiWithNoise(const ExtraBlackAndKomi& extraBlackAndKomi, BoardHistory& hist, Rand& rand) {
   float komi = extraBlackAndKomi.komiMean;
-  if(extraBlackAndKomi.komiStdev > 0)
-    komi += extraBlackAndKomi.komiStdev * (float)rand.nextGaussianTruncated(3.0);
-  if(extraBlackAndKomi.interpZero)
-    komi = komi * (float)rand.nextDouble();
-  komi = roundKomiWithLinearProb(komi,rand);
-  komi = roundAndClipKomi(komi, hist.getRecentBoard(0));
+  const auto& lastBoard = hist.getRecentBoard(0);
+
+  if (hist.rules.isDots) {
+    auto [lowerBound, upperBound] = lastBoard.getAcceptableKomiRange(true, 0);
+
+    float newKomi;
+    int attemptsCount = 0;
+    constexpr int maxAttemptsCount = 16;
+    do {
+      newKomi = komi;
+      if (extraBlackAndKomi.komiStdev > 0)
+        newKomi += extraBlackAndKomi.komiStdev * static_cast<float>(rand.nextGaussianTruncated(3.0));
+      if (extraBlackAndKomi.interpZero)
+        newKomi = newKomi * static_cast<float>(rand.nextDouble());
+      newKomi = roundKomiWithLinearProb(newKomi,rand);
+      newKomi = roundKomi(newKomi);
+      attemptsCount++;
+    } while ((newKomi < lowerBound || newKomi > upperBound ||
+      (!extraBlackAndKomi.allowInteger && Global::isEqual(newKomi, static_cast<float>(static_cast<int>(newKomi)))))
+      && attemptsCount < maxAttemptsCount);
+    if (attemptsCount == maxAttemptsCount) {
+      // Normally it shouldn't be executed, it means that komi parameters should be tuned.
+      newKomi = roundKomi((lowerBound + upperBound) * 0.5f);
+      if(!extraBlackAndKomi.allowInteger && Global::isEqual(newKomi, static_cast<float>(static_cast<int>(newKomi))))
+        newKomi += rand.nextBool(0.5) ? -0.5f : 0.5f;
+    }
+    komi = newKomi;
+  } else {
+    if(extraBlackAndKomi.komiStdev > 0)
+      komi += extraBlackAndKomi.komiStdev * static_cast<float>(rand.nextGaussianTruncated(3.0));
+    if(extraBlackAndKomi.interpZero)
+      komi = komi * static_cast<float>(rand.nextDouble());
+    komi = roundKomiWithLinearProb(komi,rand);
+    komi = roundAndClipKomi(komi,lastBoard);
+    if(!extraBlackAndKomi.allowInteger && komi == static_cast<int>(komi))
+      komi += rand.nextBool(0.5) ? -0.5f : 0.5f;
+  }
   assert(Rules::komiIsIntOrHalfInt(komi));
-  if(!extraBlackAndKomi.allowInteger && komi == (int)komi)
-    komi += rand.nextBool(0.5) ? (-0.5f) : (0.5f);
+
   hist.setKomi(komi);
 }
 
@@ -367,13 +397,26 @@ double PlayUtils::getHackedLCBForWinrate(const Search* search, const AnalysisDat
 }
 
 float PlayUtils::roundAndClipKomi(double unrounded, const Board& board) {
-  //Just in case, make sure komi is reasonable
-  float range = NNPos::KOMI_CLIP_RADIUS + board.x_size * board.y_size;
-  if(unrounded < -range)
-    unrounded = -range;
-  if(unrounded > range)
-    unrounded = range;
-  return (float)(0.5 * round(2.0 * unrounded));
+  // Just in case, make sure komi is reasonable
+  float lowerBound, upperBound;
+  if(!board.rules.isDots) {
+    upperBound = NNPos::KOMI_CLIP_RADIUS + static_cast<float>(board.x_size * board.y_size);
+    lowerBound = -upperBound;
+  } else {
+    auto [lowerBoundDots, upperBoundDots] = board.getAcceptableKomiRange(true, 0);
+    lowerBound = lowerBoundDots;
+    upperBound = upperBoundDots;
+  }
+
+  if(unrounded < lowerBound)
+    unrounded = lowerBound;
+  if(unrounded > upperBound)
+    unrounded = upperBound;
+  return roundKomi(unrounded);
+}
+
+float PlayUtils::roundKomi(const double unrounded) {
+  return static_cast<float>(0.5 * round(2.0 * unrounded));
 }
 
 static SearchParams getNoiselessParams(SearchParams oldParams, int64_t numVisits) {

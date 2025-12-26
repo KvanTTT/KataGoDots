@@ -29,6 +29,7 @@ namespace Tests {
   void runDotsSymmetryTests();
   void runDotsCapturingTests();
   void runDotsAcceptableKomiRange();
+  void runDotsKomiRandomization();
 
   void runBoardUndoTest();
   void runBoardHandicapTest();

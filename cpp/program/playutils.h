@@ -65,6 +65,8 @@ namespace PlayUtils {
 
   float roundAndClipKomi(double unrounded, const Board& board);
 
+  float roundKomi(double unrounded);
+
   void adjustKomiToEven(
     Search* botB,
     Search* botW, //can be NULL if only one bot
