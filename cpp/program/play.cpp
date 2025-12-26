@@ -94,20 +94,21 @@ GameInitializer::GameInitializer(ConfigParser& cfg, Logger& logger, const string
 
 void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
   dotsGame = cfg.getOrDefaultBool(DOTS_KEY, false);
+  vector<string> inapplicableKeys;
 
   if (dotsGame) {
-    if (cfg.containsAny({"koRules", "scoringRules", "taxRules", "hasButtons"})) {
-      throw IOError("koRules, scoringRules, taxRules, hasButtons are not applicable for Dots game. Please remove them from " + cfg.getFileName());
-    }
+    inapplicableKeys = GO_ONLY_KEYS;
 
-    allowedCaptureEmtpyBasesRules = cfg.getBools(DOTS_CAPTURE_EMPTY_BASES_KEY);
-    if (allowedCaptureEmtpyBasesRules.empty())
+    allowedCaptureEmptyBasesRules = cfg.getBools(DOTS_CAPTURE_EMPTY_BASES_KEY);
+    if (allowedCaptureEmptyBasesRules.empty())
       throw IOError(DOTS_CAPTURE_EMPTY_BASES_KEY + " must have at least one value in " + cfg.getFileName());
   } else {
-    allowedKoRuleStrs = cfg.getStrings("koRules", Rules::koRuleStrings());
-    allowedScoringRuleStrs = cfg.getStrings("scoringRules", Rules::scoringRuleStrings());
-    allowedTaxRuleStrs = cfg.getStrings("taxRules", Rules::taxRuleStrings());
-    allowedButtons = cfg.getBools("hasButtons");
+    inapplicableKeys = DOTS_ONLY_KEYS;
+
+    allowedKoRuleStrs = cfg.getStrings(KO_RULES_KEY, Rules::koRuleStrings());
+    allowedScoringRuleStrs = cfg.getStrings(SCORING_RULES_KEY, Rules::scoringRuleStrings());
+    allowedTaxRuleStrs = cfg.getStrings(TAX_RULES_KEY, Rules::taxRuleStrings());
+    allowedButtons = cfg.getBools(HAS_BUTTONS_KEY);
 
     for(size_t i = 0; i < allowedKoRuleStrs.size(); i++)
       allowedKoRules.push_back(Rules::parseKoRule(allowedKoRuleStrs[i]));
@@ -135,6 +136,12 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
         hasTrueButton = true;
     if(!hasAreaScoring && hasTrueButton)
       throw IOError("If scoringRules does not include AREA, hasButtons must be false in " + cfg.getFileName());
+  }
+
+  for (const auto& inapplicableKey : inapplicableKeys) {
+    if (cfg.contains(inapplicableKey)) {
+      throw IOError(inapplicableKey + " isn't applicable for " + (dotsGame ? "Dots" : "Go") + " game. Remove it from " + cfg.getFileName());
+    }
   }
 
   allowedMultiStoneSuicideLegals = cfg.getBools("multiStoneSuicideLegals");
@@ -225,10 +232,10 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
   komiStdev = cfg.getOrDefaultFloat("komiStdev",0.0f, 60.0f, 0.0f);
   handicapProb = cfg.getOrDefaultDouble("handicapProb", 0.0, 1.0, 0.0);
   handicapCompensateKomiProb = cfg.getOrDefaultDouble("handicapCompensateKomiProb", 0.0, 1.0, 0.0);
-  komiBigStdevProb = cfg.getOrDefaultDouble("komiBigStdevProb",0.0, 1.0, 0.0);
-  komiBigStdev = cfg.getOrDefaultFloat("komiBigStdev", 0.0f, 60.0f, 10.0f);
-  komiBiggerStdevProb = cfg.getOrDefaultDouble("komiBiggerStdevProb", 0.0, 1.0, 0.0);
-  komiBiggerStdev = cfg.getOrDefaultFloat("komiBiggerStdev", 0.0f, 120.0f, 30.0f);
+  komiBigStdevProb = cfg.getOrDefaultDouble(KOMI_BIG_STD_DEV_PROB_KEY,0.0, 1.0, 0.0);
+  komiBigStdev = cfg.getOrDefaultFloat(KOMI_BIG_STD_DEV_KEY, 0.0f, 60.0f, dotsGame ? 0.0f : 10.0f);
+  komiBiggerStdevProb = cfg.getOrDefaultDouble(KOMI_BIGGER_STD_DEV_PROB_KEY, 0.0, 1.0, 0.0);
+  komiBiggerStdev = cfg.getOrDefaultFloat(KOMI_BIGGER_STD_DEV_KEY, 0.0f, 120.0f, dotsGame ? 0.0f : 30.0f);
   handicapKomiInterpZeroProb = cfg.getOrDefaultDouble("handicapKomiInterpZeroProb", 0.0, 1.0, 0.0);
   sgfKomiInterpZeroProb = cfg.getOrDefaultDouble("sgfKomiInterpZeroProb", 0.0, 1.0, 0.0);
 
@@ -513,7 +520,7 @@ Rules GameInitializer::createRulesUnsynchronized() {
   }
 
   if (dotsGame) {
-     rules.dotsCaptureEmptyBases = allowedCaptureEmtpyBasesRules[rand.nextUInt(static_cast<uint32_t>(allowedCaptureEmtpyBasesRules.size()))];
+     rules.dotsCaptureEmptyBases = allowedCaptureEmptyBasesRules[rand.nextUInt(static_cast<uint32_t>(allowedCaptureEmptyBasesRules.size()))];
   } else {
     rules.koRule = allowedKoRules[rand.nextUInt((uint32_t)allowedKoRules.size())];
     rules.scoringRule = allowedScoringRules[rand.nextUInt((uint32_t)allowedScoringRules.size())];

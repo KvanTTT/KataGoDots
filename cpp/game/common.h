@@ -13,8 +13,33 @@ const std::string START_POS_RANDOM_KEY = "startPosIsRandom";
 const std::string START_POSES_KEY = "startPoses";
 const std::string START_POSES_ARE_RANDOM_KEY = "startPosesAreRandom";
 
+const std::string KO_RULES_KEY = "koRules";
+const std::string SCORING_RULES_KEY = "scoringRules";
+const std::string TAX_RULES_KEY = "taxRules";
+const std::string HAS_BUTTONS_KEY = "hasButtons";
+const std::string KOMI_BIG_STD_DEV_PROB_KEY = "komiBigStdevProb";
+const std::string KOMI_BIG_STD_DEV_KEY = "komiBigStdev";
+const std::string KOMI_BIGGER_STD_DEV_PROB_KEY = "komiBiggerStdevProb";
+const std::string KOMI_BIGGER_STD_DEV_KEY = "komiBiggerStdev";
+
 const std::string BLACK_SCORE_IF_WHITE_GROUNDS_KEY = "blackScoreIfWhiteGrounds";
 const std::string WHITE_SCORE_IF_BLACK_GROUNDS_KEY = "whiteScoreIfBlackGrounds";
+
+const std::vector GO_ONLY_KEYS = {
+  KO_RULES_KEY,
+  SCORING_RULES_KEY,
+  TAX_RULES_KEY,
+  HAS_BUTTONS_KEY,
+
+  KOMI_BIG_STD_DEV_PROB_KEY,
+  KOMI_BIG_STD_DEV_KEY,
+  KOMI_BIGGER_STD_DEV_PROB_KEY,
+  KOMI_BIGGER_STD_DEV_KEY,
+};
+
+const std::vector DOTS_ONLY_KEYS = {
+  DOTS_CAPTURE_EMPTY_BASES_KEY
+};
 
 const std::string PLAYER1 = "Player1";
 const std::string PLAYER2 = "Player2";

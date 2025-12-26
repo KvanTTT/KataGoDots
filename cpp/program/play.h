@@ -137,7 +137,7 @@ class GameInitializer {
   Rand rand;
 
   bool dotsGame;
-  std::vector<bool> allowedCaptureEmtpyBasesRules;
+  std::vector<bool> allowedCaptureEmptyBasesRules;
   std::vector<int> allowedStartPosRules;
   std::vector<bool> allowedStartPosRandomRules;
 
