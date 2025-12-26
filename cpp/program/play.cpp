@@ -414,7 +414,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
     maxBoardYSize = std::max(maxBoardYSize, pos.board.y_size);
   }
 
-  noResultStdev = cfg.getOrDefaultDouble("noResultStdev", 0.0, 1.0, 0.0);
+  noResultStdev = cfg.getOrDefaultDouble(NO_RESULT_STDEV_KEY, 0.0, 1.0, 0.0);
   numExtraBlackFixed = 0;
   cfg.tryGetInt("numExtraBlackFixed", numExtraBlackFixed, 1, 18);
   drawRandRadius = cfg.getOrDefaultDouble("drawRandRadius", 0.0, 1.0, 0.0);
