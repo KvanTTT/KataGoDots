@@ -563,8 +563,7 @@ struct GTPEngine {
       isGenmoveParams = true;
 
       Board board(boardXSize,boardYSize,currentRules);
-      board.setStartPos(seedRand);
-      constexpr Player pla = P_BLACK;
+      const Player pla = board.setStartPos(seedRand);
       BoardHistory hist(board,pla,currentRules,0);
       hist.setInitialTurnNumber(board.numStonesOnBoard());
       const vector<Move> newMoveHistory;
@@ -598,8 +597,7 @@ struct GTPEngine {
     int newXSize = bot->getRootBoard().x_size;
     int newYSize = bot->getRootBoard().y_size;
     Board board(newXSize,newYSize,currentRules);
-    board.setStartPos(gtpRand);
-    Player pla = P_BLACK;
+    const Player pla = board.setStartPos(gtpRand);
     BoardHistory hist(board,pla,currentRules,0);
     vector<Move> newMoveHistory;
     setPositionAndRules(pla,board,hist,board,pla,newMoveHistory);
@@ -1341,7 +1339,7 @@ struct GTPEngine {
     const int xSize = bot->getRootBoard().x_size;
     const int ySize = bot->getRootBoard().y_size;
     Board board(xSize,ySize,currentRules);
-    board.setStartPos(gtpRand);
+    Player pla = board.setStartPos(gtpRand);
     vector<Loc> handicapLocs;
     try {
       handicapLocs = PlayUtils::generateFixedHandicap(board, n);
@@ -1356,7 +1354,6 @@ struct GTPEngine {
     }
     assert(bot->getRootHist().rules == currentRules);
 
-    Player pla = P_BLACK;
     BoardHistory hist(board,pla,currentRules,0);
 
     //Also switch the initial player, expecting white should be next.
@@ -1392,8 +1389,7 @@ struct GTPEngine {
     assert(bot->getRootHist().rules == currentRules);
 
     Board board(xSize,ySize,currentRules);
-    board.setStartPos(rand);
-    Player pla = P_BLACK;
+    Player pla = board.setStartPos(rand);
     BoardHistory hist(board,pla,currentRules,0);
     double extraBlackTemperature = 0.25;
     const auto& handicapLocs = PlayUtils::playExtraBlack(bot->getSearchStopAndWait(), n, board, hist, extraBlackTemperature, rand);

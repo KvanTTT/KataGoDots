@@ -318,8 +318,9 @@ struct Board
   bool setStone(Loc loc, Color color);
 
   // Set the start pos and use the provided random in case of randomization is used
-  // It should be called strictly before handicap placement
-  void setStartPos(Rand& rand);
+  // It should be called strictly before handicap placement.
+  // Returns the player of the next move.
+  Player setStartPos(Rand& rand);
   //Sets the specified stone, including overwriting existing stones, but only if doing so will
   //not result in any captures or zero liberty groups.
   //Returns false if location or color were out of range, or if would cause a zero liberty group.

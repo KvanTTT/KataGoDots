@@ -108,8 +108,8 @@ SymmetryHelpers::SYMMETRY_TRANSPOSE_FLIP_Y_X);
   cout << "Check dots symmetry with start pos" << endl;
   const auto originalRules = Rules(Rules::DEFAULT_DOTS.startPos, false, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots);
   auto board = Board(5, 4, originalRules);
-  board.setStartPos(DOTS_RANDOM);
-  board.playMoveAssumeLegal(Location::getLoc(1, 2, board.x_size), P_BLACK);
+  const Player pla = board.setStartPos(DOTS_RANDOM);
+  board.playMoveAssumeLegal(Location::getLoc(1, 2, board.x_size), pla);
 
   const auto rotatedBoard = SymmetryHelpers::getSymBoard(board, SymmetryHelpers::SYMMETRY_TRANSPOSE_FLIP_X);
 

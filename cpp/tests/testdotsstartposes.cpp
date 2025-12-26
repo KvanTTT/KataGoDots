@@ -27,7 +27,8 @@ static void checkStartPos(const string& description, const int startPos, const b
   cout << "  " << description << " (" << to_string(x_size) << "," << to_string(y_size) << ")";
 
   auto board = Board(x_size, y_size, Rules(startPos, startPosIsRandom, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots));
-  board.setStartPos(DOTS_RANDOM);
+  const Player currentPlayer = board.setStartPos(DOTS_RANDOM);
+  testAssert((startPos == Rules::START_POS_SINGLE ? P_WHITE : P_BLACK) == currentPlayer);
   playXYMovesAssumeLegal(board, extraMoves);
 
   std::ostringstream oss;

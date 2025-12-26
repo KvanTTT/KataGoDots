@@ -821,10 +821,11 @@ bool Board::setStoneFailIfNoLibs(Loc loc, Color color, const bool startPos) {
   return true;
 }
 
-void Board::setStartPos(Rand& rand) {
+Player Board::setStartPos(Rand& rand) {
   const vector<Move> startPos = Rules::generateStartPos(rules.startPos, rules.startPosIsRandom ? &rand : nullptr, x_size, y_size);
   const bool success = setStonesFailIfNoLibs(startPos, true);
   assert(success);
+  return startPos.empty() ? P_BLACK : getOpp(startPos.back().pla);
 }
 
 bool Board::setStonesFailIfNoLibs(const std::vector<Move>& placements, const bool startPos) {

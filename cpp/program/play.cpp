@@ -652,9 +652,8 @@ void GameInitializer::createGameSharedUnsynchronized(
     int xSize = allowedBSizes[bSizeIdx].first;
     int ySize = allowedBSizes[bSizeIdx].second;
     board = Board(xSize,ySize,rules);
-    board.setStartPos(rand);
+    pla = board.setStartPos(rand);
 
-    pla = P_BLACK;
     hist.clear(board,pla,rules,0);
     hist.setInitialTurnNumber(rules.getNumOfStartPosStones());
 
