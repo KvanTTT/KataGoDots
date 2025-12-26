@@ -16,12 +16,17 @@ namespace PlayUtils {
   std::vector<short> generateFixedHandicap(const Board& board, int n);
 
   ExtraBlackAndKomi chooseExtraBlackAndKomi(
-    float base, float stdev, double allowIntegerProb,
-    double handicapProb, int numExtraBlackFixed,
-    double bigStdevProb, float bigStdev,
-    double biggerStdevProb, float biggerStdev,
-    double sqrtBoardArea, Rand& rand
-  );
+    float base,
+    float stdev,
+    double allowIntegerProb,
+    double handicapProb,
+    int numExtraBlackFixed,
+    double bigStdevProb,
+    float bigStdev,
+    double biggerStdevProb,
+    float biggerStdev,
+    const Board& board,
+    Rand& rand);
   void setKomiWithoutNoise(const ExtraBlackAndKomi& extraBlackAndKomi, BoardHistory& hist); //Also ignores allowInteger
   void setKomiWithNoise(const ExtraBlackAndKomi& extraBlackAndKomi, BoardHistory& hist, Rand& rand);
 

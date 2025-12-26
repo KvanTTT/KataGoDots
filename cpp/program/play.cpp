@@ -548,12 +548,17 @@ void GameInitializer::createGameSharedUnsynchronized(
     //No handicap when starting from an initial position.
     double thisHandicapProb = 0.0;
     extraBlackAndKomi = PlayUtils::chooseExtraBlackAndKomi(
-      hist.rules.komi, komiStdev, komiAllowIntegerProb,
-      thisHandicapProb, numExtraBlackFixed,
-      komiBigStdevProb, komiBigStdev,
-      komiBiggerStdevProb, komiBiggerStdev,
-      sqrt(board.x_size*board.y_size), rand
-    );
+      hist.rules.komi,
+      komiStdev,
+      komiAllowIntegerProb,
+      thisHandicapProb,
+      numExtraBlackFixed,
+      komiBigStdevProb,
+      komiBigStdev,
+      komiBiggerStdevProb,
+      komiBiggerStdev,
+      board,
+      rand);
     assert(extraBlackAndKomi.extraBlack == 0);
     PlayUtils::setKomiWithNoise(extraBlackAndKomi, hist, rand);
     otherGameProps.isSgfPos = false;
@@ -618,12 +623,17 @@ void GameInitializer::createGameSharedUnsynchronized(
     //No handicap when starting from a sampled position.
     double thisHandicapProb = 0.0;
     extraBlackAndKomi = PlayUtils::chooseExtraBlackAndKomi(
-      komiMean, komiStdev, komiAllowIntegerProb,
-      thisHandicapProb, numExtraBlackFixed,
-      komiBigStdevProb, komiBigStdev,
-      komiBiggerStdevProb, komiBiggerStdev,
-      sqrt(board.x_size*board.y_size), rand
-    );
+      komiMean,
+      komiStdev,
+      komiAllowIntegerProb,
+      thisHandicapProb,
+      numExtraBlackFixed,
+      komiBigStdevProb,
+      komiBigStdev,
+      komiBiggerStdevProb,
+      komiBiggerStdev,
+      board,
+      rand);
     PlayUtils::setKomiWithNoise(extraBlackAndKomi, hist, rand);
 
     otherGameProps.isSgfPos = hintLoc == Board::NULL_LOC;
@@ -649,12 +659,17 @@ void GameInitializer::createGameSharedUnsynchronized(
     hist.setInitialTurnNumber(rules.getNumOfStartPosStones());
 
     extraBlackAndKomi = PlayUtils::chooseExtraBlackAndKomi(
-      komiMean, komiStdev, komiAllowIntegerProb,
-      handicapProb, numExtraBlackFixed,
-      komiBigStdevProb, komiBigStdev,
-      komiBiggerStdevProb, komiBiggerStdev,
-      sqrt(board.x_size*board.y_size), rand
-    );
+      komiMean,
+      komiStdev,
+      komiAllowIntegerProb,
+      handicapProb,
+      numExtraBlackFixed,
+      komiBigStdevProb,
+      komiBigStdev,
+      komiBiggerStdevProb,
+      komiBiggerStdev,
+      board,
+      rand);
     PlayUtils::setKomiWithNoise(extraBlackAndKomi, hist, rand);
 
     otherGameProps.isSgfPos = false;
