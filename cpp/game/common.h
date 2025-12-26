@@ -17,6 +17,7 @@ const std::string KO_RULES_KEY = "koRules";
 const std::string SCORING_RULES_KEY = "scoringRules";
 const std::string TAX_RULES_KEY = "taxRules";
 const std::string HAS_BUTTONS_KEY = "hasButtons";
+const std::string FANCY_KOMI_VARYING_KEY = "fancyKomiVarying";
 const std::string KOMI_BIG_STD_DEV_PROB_KEY = "komiBigStdevProb";
 const std::string KOMI_BIG_STD_DEV_KEY = "komiBigStdev";
 const std::string KOMI_BIGGER_STD_DEV_PROB_KEY = "komiBiggerStdevProb";
@@ -31,6 +32,7 @@ const std::vector GO_ONLY_KEYS = {
   TAX_RULES_KEY,
   HAS_BUTTONS_KEY,
 
+  FANCY_KOMI_VARYING_KEY,
   KOMI_BIG_STD_DEV_PROB_KEY,
   KOMI_BIG_STD_DEV_KEY,
   KOMI_BIGGER_STD_DEV_PROB_KEY,

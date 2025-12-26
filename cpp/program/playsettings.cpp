@@ -1,5 +1,7 @@
 #include "../program/playsettings.h"
 
+#include "../game/common.h"
+
 PlaySettings::PlaySettings()
   :initGamesWithPolicy(false),policyInitAreaProp(0.0),startPosesPolicyInitAreaProp(0.0),
    compensateAfterPolicyInitProb(0.0),policyInitGammaShape(1.0),sidePositionProb(0.0),
@@ -82,7 +84,7 @@ PlaySettings PlaySettings::loadForSelfplay(ConfigParser& cfg, bool isDistributed
     cfg.getOrDefaultDouble("flipKomiProbWhenNoCompensate", 0.0, 1.0, isDistributed ? 0.25 : 0.0);
   playSettings.estimateLeadVisits = cfg.getOrDefaultInt("estimateLeadVisits", 1, 10000, 6);
   playSettings.estimateLeadProb = cfg.getOrDefaultDouble("estimateLeadProb", 0.0, 1.0, 0.0);
-  playSettings.fancyKomiVarying = cfg.getOrDefaultBool("fancyKomiVarying", false);
+  playSettings.fancyKomiVarying = cfg.getOrDefaultBool(FANCY_KOMI_VARYING_KEY, false);
 
   playSettings.earlyForkGameProb = cfg.getDouble("earlyForkGameProb",0.0,0.5);
   playSettings.earlyForkGameExpectedMoveProp = cfg.getDouble("earlyForkGameExpectedMoveProp",0.0,1.0);
