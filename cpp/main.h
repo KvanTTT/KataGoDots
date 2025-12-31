@@ -66,4 +66,5 @@ namespace Version {
   std::string getAppFullInfo();
   std::string getGitRevision();
   std::string getGitRevisionWithBackend();
+  std::string getBuildType();
 }

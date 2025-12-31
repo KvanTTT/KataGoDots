@@ -1,7 +1,8 @@
 #include <chrono>
 
-#include "../tests/tests.h"
+#include "../main.h"
 #include "../tests/testdotsutils.h"
+#include "../tests/tests.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -185,11 +186,7 @@ static void runDotsStressTestsInternal(
     cout << "    Capture empty bases: " << boolalpha << dotsCaptureEmptyBase << endl;
   }
   cout << "    Extra checks: " << boolalpha << performExtraChecks << endl;
-#ifdef NDEBUG
-  cout << "    Build: Release" << endl;
-#else
-  cout << "    Build: Debug" << endl;
-#endif
+  cout << "    Build type: " << Version::getBuildType() << endl;
   cout << "    Size: " << x_size << ":" << y_size << endl;
   cout << "    Komi: " << komi << endl;
   cout << "    Suicide: " << boolalpha << suicideAllowed << endl;

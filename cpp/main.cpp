@@ -225,6 +225,16 @@ string Version::getAppVersion() {
   return "1.16.4";
 }
 
+string Version::getBuildType() {
+  return
+#ifdef NDEBUG
+  "Release"
+#else
+  "Debug"
+#endif
+  ;
+}
+
 string Version::getAppNameWithVersion() {
   return getAppName() + " " + getAppVersion();
 }
@@ -264,6 +274,8 @@ string Version::getAppFullInfo() {
 #elif defined(BUILD_DISTRIBUTED)
   out << "Compiled to support contributing to online distributed selfplay" << endl;
 #endif
+
+  out << "Build Type: " << getBuildType() << endl;
 
   return out.str();
 }
