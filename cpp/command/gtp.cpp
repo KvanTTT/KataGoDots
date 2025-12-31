@@ -2052,7 +2052,8 @@ int MainCmds::gtp(const vector<string>& args) {
   bool allowResignation = cfg.getOrDefaultBool("allowResignation", false);
   const double resignThreshold = allowResignation ? cfg.getDouble("resignThreshold",-1.0,0.0) : -1.0; //Threshold on [-1,1], regardless of winLossUtilityFactor
   const int resignConsecTurns = cfg.getOrDefaultInt("resignConsecTurns", 1, 100, 3);
-  const double resignMinScoreDifference = cfg.getOrDefaultDouble("resignMinScoreDifference", 0.0, 1000.0, -1e10);
+  double resignMinScoreDifference = -1e10;
+  cfg.tryGetDouble("resignMinScoreDifference", resignMinScoreDifference, 0.0, 1000.0);
   const double resignMinMovesPerBoardArea = cfg.getOrDefaultDouble("resignMinMovesPerBoardArea", 0.0, 1.0, 0.0);
 
   Setup::initializeSession(cfg);
