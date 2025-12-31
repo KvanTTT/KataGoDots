@@ -1,7 +1,8 @@
 #include "main.h"
 
-#include "core/os.h"
 #include "core/mainargs.h"
+#include "core/os.h"
+#include "game/board.h"
 
 #ifdef NO_GIT_REVISION
 #define GIT_REVISION "<omitted>"
@@ -34,6 +35,7 @@ contribute : Connect to online distributed KataGo training and run perpetually c
 
 match : Run self-play match games based on a config, more efficient than gtp due to batching.
 version : Print version and exit.
+maxlen : Print the maximum width and height of the board.
 
 analysis : Runs an engine designed to analyze entire games in parallel.
 tuner : (OpenCL only) Run tuning to find and optimize parameters that work on your GPU.
@@ -173,6 +175,10 @@ static int handleSubcommand(const string& subcommand, const vector<string>& args
     cout << Version::getAppFullInfo() << std::flush;
     return 0;
   }
+  else if (subcommand == "maxlen") {
+    cout << Board::MAX_LEN_X << "," << Board::MAX_LEN_Y << std::flush;
+    return 0;
+  }
   else {
     cout << "Unknown subcommand: " << subcommand << endl;
     printHelp(args);
@@ -266,9 +272,7 @@ string Version::getAppFullInfo() {
 #if defined(USE_AVX2)
   out << "Compiled with AVX2 and FMA instructions" << endl;
 #endif
-#if defined(COMPILE_MAX_BOARD_LEN)
-  out << "Compiled to allow boards of size up to " << COMPILE_MAX_BOARD_LEN << endl;
-#endif
+  out << "Compiled to allow boards of size up to " << Board::MAX_LEN_X << "," << Board::MAX_LEN_Y << endl;
 #if defined(CACHE_TENSORRT_PLAN) && defined(USE_TENSORRT_BACKEND)
   out << "Compiled with TensorRT plan cache" << endl;
 #elif defined(BUILD_DISTRIBUTED)

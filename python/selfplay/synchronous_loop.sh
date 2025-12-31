@@ -87,6 +87,18 @@ git diff --staged --no-color > "$DATED_ARCHIVE"/diffstaged.txt
 # Also run the code out of the archive, so that we don't unexpectedly crash or change behavior if the local repo changes.
 cd "$DATED_ARCHIVE"
 
+if ! output=$(./bin/katago maxlen 2>&1); then
+    echo "Error: failed to run './bin/katago maxlen'. Compile exe from the latest master and rerun the script. Output was:" >&2
+    echo "$output" >&2
+    exit 1
+fi
+IFS="," read -r max_len_x max_len_y <<< "$output"
+if [[ -z "${max_len_x:-}" || -z "${max_len_y:-}" ]]; then
+    echo "Error: './bin/katago maxlen' did not return valid max lengths (got: '$output')." >&2
+    exit 1
+fi
+echo "MAX LEN: $max_len_x, $max_len_y"
+
 # Begin cycling forever, running each step in order.
 set -x
 while true
@@ -105,7 +117,7 @@ do
     )
 
     echo "Train"
-    time ./train.sh "$BASEDIR" "$TRAININGNAME" "$MODELKIND" "$BATCHSIZE" main -samples-per-epoch "$NUM_TRAIN_SAMPLES_PER_EPOCH" -swa-period-samples "$NUM_TRAIN_SAMPLES_PER_SWA" -quit-if-no-data -stop-when-train-bucket-limited -no-repeat-files -max-train-bucket-per-new-data "$MAX_TRAIN_PER_DATA" -max-train-bucket-size "$MAX_TRAIN_SAMPLES_PER_CYCLE"
+    time ./train.sh "$BASEDIR" "$TRAININGNAME" "$MODELKIND" "$BATCHSIZE" main "$max_len_x" "$max_len_y" -samples-per-epoch "$NUM_TRAIN_SAMPLES_PER_EPOCH" -swa-period-samples "$NUM_TRAIN_SAMPLES_PER_SWA" -quit-if-no-data -stop-when-train-bucket-limited -no-repeat-files -max-train-bucket-per-new-data "$MAX_TRAIN_PER_DATA" -max-train-bucket-size "$MAX_TRAIN_SAMPLES_PER_CYCLE"
 
     echo "Export"
     (

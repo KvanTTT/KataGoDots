@@ -65,7 +65,7 @@ if __name__ == "__main__":
     optional_args.add_argument('-initial-checkpoint', help='If no training checkpoint exists, initialize from this checkpoint', required=False)
 
     required_args.add_argument('-batch-size', help='Per-GPU batch size to use for training', type=int, required=True)
-    required_args.add_argument('-pos-len', help='Spatial edge length of expected training data, e.g. 19 for 19x19 Go', type=int, required=True)
+    required_args.add_argument('-pos-len', help='Spatial edge length of expected training data, e.g. 19 for 19x19 Go', type=int, required=False)
     optional_args.add_argument('-pos-len-x', help='Spatial width of expected training data. If undefined, `-pos-len` is used', type=int, required=False)
     optional_args.add_argument('-pos-len-y', help='Spatial height of expected training data. If undefined, `-pos-len` is used', type=int, required=False)
     optional_args.add_argument('-games', help='Games to train: ' + ", ".join(e.name for e in Game) + ' (GO by default)', type=parse_game, nargs="+", required=False)
@@ -155,7 +155,7 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
     exportprefix = args["exportprefix"]
     initial_checkpoint = args["initial_checkpoint"]
 
-    pos_len = args["pos_len"]
+    pos_len = args["pos_len"] or 19
     pos_len_x = args["pos_len_x"] or pos_len
     pos_len_y = args["pos_len_y"] or pos_len
     games = args["games"] or [Game.GO]
