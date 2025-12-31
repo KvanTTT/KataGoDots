@@ -459,7 +459,7 @@ endif()
 
 if(DOTS_GAME)
   target_compile_definitions(katago PRIVATE COMPILE_MAX_BOARD_LEN_X=39)
-  target_compile_definitions(katago PRIVATE COMPILE_MAX_BOARD_LEN_Y=39)
+  target_compile_definitions(katago PRIVATE COMPILE_MAX_BOARD_LEN_Y=39) # Change it to 32 to set up training on standard Dots size 39*32
   if(USE_BIGGER_BOARDS_EXPENSIVE)
     message(SEND_ERROR "USE_BIGGER_BOARDS_EXPENSIVE is not yet supported for Dots Game")
   endif()
