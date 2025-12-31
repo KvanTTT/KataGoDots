@@ -92,9 +92,12 @@ int MainCmds::selfplay(const vector<string>& args) {
   const string gameSeedBase = Global::uint64ToHexString(seedRand.nextUInt64());
 
   //Width and height of the board to use when writing data, typically 19
-  const int dataBoardLen = cfg.getInt("dataBoardLen",3,Board::MAX_LEN);
-  const int dataBoardLenX = cfg.getOrDefaultInt(DATA_LEN_X_KEY, 3, Board::MAX_LEN_X, dataBoardLen);
-  const int dataBoardLenY = cfg.getOrDefaultInt(DATA_LEN_Y_KEY, 3, Board::MAX_LEN_Y, dataBoardLen);
+  int dataBoardLen = Board::MAX_LEN;
+  bool dataBoardLenIsSpecified = cfg.tryGetInt("dataBoardLen", dataBoardLen);
+  const int dataBoardLenX = cfg.getOrDefaultInt(DATA_LEN_X_KEY, 3, Board::MAX_LEN_X,
+    dataBoardLenIsSpecified ? dataBoardLen : Board::MAX_LEN_X);
+  const int dataBoardLenY = cfg.getOrDefaultInt(DATA_LEN_Y_KEY, 3, Board::MAX_LEN_Y,
+    dataBoardLenIsSpecified ? dataBoardLen : Board::MAX_LEN_Y);
 
   const bool dotsGame = cfg.getOrDefaultBool(DOTS_KEY, false);
   const int inputsVersion = cfg.getOrDefaultInt("inputsVersion", 0, 10000, NNModelVersion::getInputsVersion(NNModelVersion::defaultModelVersion, dotsGame));
