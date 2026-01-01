@@ -163,15 +163,21 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
   }
 
   std::vector<int> allowedBEdges;
-  bool allowedBEdgesSpecified = cfg.tryGetInts(BOARD_SIZES_KEY, allowedBEdges, 2, Board::MAX_LEN);
+  const bool allowedBEdgesSpecified = cfg.tryGetInts(BOARD_SIZES_KEY, allowedBEdges, 2, Board::MAX_LEN);
 
   std::vector<std::pair<int, int>> parsedBSizes;
-  bool parsedBSizesSpecified = cfg.tryGetNonNegativeIntDashedPairs(BOARD_SIZES_XY_KEY, parsedBSizes, 2, 2, Board::MAX_LEN_X, Board::MAX_LEN_Y);
+  const bool parsedBSizesSpecified = cfg.tryGetNonNegativeIntDashedPairs(BOARD_SIZES_XY_KEY, parsedBSizes, 2, 2, Board::MAX_LEN_X, Board::MAX_LEN_Y);
 
-  if (allowedBEdgesSpecified == parsedBSizesSpecified)
-    throw IOError("Must specify exactly one of " + BOARD_SIZES_KEY + " or " + BOARD_SIZES_XY_KEY);
+  if (allowedBEdgesSpecified && parsedBSizesSpecified) {
+    throw IOError("Must specify either " + BOARD_SIZES_KEY + " or " + BOARD_SIZES_XY_KEY);
+  }
 
-  if (allowedBEdgesSpecified) {
+  if (!allowedBEdgesSpecified && !parsedBSizesSpecified) {
+    logger.write("No specified " + BOARD_SIZES_KEY + " or " + BOARD_SIZES_XY_KEY +
+      ". The default size will be used: " + std::to_string(Board::MAX_LEN_X) + ", " + std::to_string(Board::MAX_LEN_Y) + ".");
+    allowedBSizes = vector { pair(Board::MAX_LEN_X, Board::MAX_LEN_Y) };
+    allowedBSizeRelProbs = vector { 1.0 };
+  } else if (allowedBEdgesSpecified) {
     std::vector<double> allowedBEdgeRelProbs = cfg.getDoubles("bSizeRelProbs",0.0,1e100);
     double relProbSum = 0.0;
     for(const double p : allowedBEdgeRelProbs)
@@ -187,8 +193,8 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
 
     allowedBSizes.clear();
     allowedBSizeRelProbs.clear();
-    for(int i = 0; i<(int)allowedBEdges.size(); i++) {
-      for(int j = 0; j<(int)allowedBEdges.size(); j++) {
+    for(int i = 0; i < static_cast<int>(allowedBEdges.size()); i++) {
+      for(int j = 0; j < static_cast<int>(allowedBEdges.size()); j++) {
         int x = allowedBEdges[i];
         int y = allowedBEdges[j];
         if(x == y) {
@@ -208,8 +214,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
         }
       }
     }
-  }
-  else if (parsedBSizesSpecified) {
+  } else if (parsedBSizesSpecified) {
     if(cfg.contains("allowRectangleProb"))
       throw IOError("Cannot specify allowRectangleProb when specifying bSizesXY, please adjust the relative frequency of rectangles yourself");
     allowedBSizes = parsedBSizes;
