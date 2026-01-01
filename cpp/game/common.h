@@ -12,6 +12,8 @@ const std::string START_POS_KEY = "startPos";
 const std::string START_POS_RANDOM_KEY = "startPosIsRandom";
 const std::string START_POSES_KEY = "startPoses";
 const std::string START_POSES_ARE_RANDOM_KEY = "startPosesAreRandom";
+const std::string BOARD_SIZES_KEY = "bSizes";
+const std::string BOARD_SIZES_XY_KEY = "bSizesXY";
 
 const std::string KO_RULES_KEY = "koRules";
 const std::string SCORING_RULES_KEY = "scoringRules";

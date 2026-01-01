@@ -162,10 +162,16 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
       throw IOError(START_POSES_ARE_RANDOM_KEY + " must have at least one value in " + cfg.getFileName());
   }
 
-  if(cfg.contains("bSizes") == cfg.contains("bSizesXY"))
-    throw IOError("Must specify exactly one of bSizes or bSizesXY");
+  std::vector<int> allowedBEdges;
+  bool allowedBEdgesSpecified = cfg.tryGetInts(BOARD_SIZES_KEY, allowedBEdges, 2, Board::MAX_LEN);
 
-  if(std::vector<int> allowedBEdges; cfg.tryGetInts("bSizes", allowedBEdges, 2, Board::MAX_LEN)) {
+  std::vector<std::pair<int, int>> parsedBSizes;
+  bool parsedBSizesSpecified = cfg.tryGetNonNegativeIntDashedPairs(BOARD_SIZES_XY_KEY, parsedBSizes, 2, 2, Board::MAX_LEN_X, Board::MAX_LEN_Y);
+
+  if (allowedBEdgesSpecified == parsedBSizesSpecified)
+    throw IOError("Must specify exactly one of " + BOARD_SIZES_KEY + " or " + BOARD_SIZES_XY_KEY);
+
+  if (allowedBEdgesSpecified) {
     std::vector<double> allowedBEdgeRelProbs = cfg.getDoubles("bSizeRelProbs",0.0,1e100);
     double relProbSum = 0.0;
     for(const double p : allowedBEdgeRelProbs)
@@ -174,7 +180,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
       throw IOError("bSizeRelProbs must sum to a positive value");
     double allowRectangleProb = cfg.getOrDefaultDouble("allowRectangleProb", 0.0, 1.0, 0.0);
 
-    if(allowedBEdges.size() <= 0)
+    if(allowedBEdges.empty())
       throw IOError("bSizes must have at least one value in " + cfg.getFileName());
     if(allowedBEdges.size() != allowedBEdgeRelProbs.size())
       throw IOError("bSizes and bSizeRelProbs must have same number of values in " + cfg.getFileName());
@@ -186,7 +192,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
         int x = allowedBEdges[i];
         int y = allowedBEdges[j];
         if(x == y) {
-          allowedBSizes.push_back(std::make_pair(x,y));
+          allowedBSizes.emplace_back(x,y);
           allowedBSizeRelProbs.push_back(
             (1.0 - allowRectangleProb) * allowedBEdgeRelProbs[i] / relProbSum +
             allowRectangleProb * allowedBEdgeRelProbs[i] * allowedBEdgeRelProbs[j] / relProbSum / relProbSum
@@ -194,7 +200,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
         }
         else {
           if(allowRectangleProb > 0.0) {
-            allowedBSizes.push_back(std::make_pair(x,y));
+            allowedBSizes.emplace_back(x,y);
             allowedBSizeRelProbs.push_back(
               allowRectangleProb * allowedBEdgeRelProbs[i] * allowedBEdgeRelProbs[j] / relProbSum / relProbSum
             );
@@ -203,10 +209,10 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
       }
     }
   }
-  else if(cfg.contains("bSizesXY")) {
+  else if (parsedBSizesSpecified) {
     if(cfg.contains("allowRectangleProb"))
       throw IOError("Cannot specify allowRectangleProb when specifying bSizesXY, please adjust the relative frequency of rectangles yourself");
-    allowedBSizes = cfg.getNonNegativeIntDashedPairs("bSizesXY", 2, Board::MAX_LEN_X, Board::MAX_LEN_Y);
+    allowedBSizes = parsedBSizes;
     allowedBSizeRelProbs = cfg.getDoubles("bSizeRelProbs",0.0,1e100);
 
     double relProbSum = 0.0;

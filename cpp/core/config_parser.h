@@ -101,7 +101,9 @@ class ConfigParser {
   bool tryGetFloats(const std::string& key, std::vector<float>& values, float min = std::numeric_limits<float>::min(), float max = std::numeric_limits<float>::max());
   bool tryGetDoubles(const std::string& key, std::vector<double>& values, double min = std::numeric_limits<double>::min(), double max = std::numeric_limits<double>::max());
 
-  std::vector<std::pair<int,int>> getNonNegativeIntDashedPairs(const std::string& key, int min, int max1, int max2);
+  bool tryGetNonNegativeIntDashedPairs(const std::string& key, std::vector<std::pair<int,int>>& pairs, int min1, int min2, int max1, int max2);
+
+  void throwNotFoundKeyException(const std::string& key) const;
 
 private:
   bool initialized;
@@ -139,7 +141,6 @@ private:
 
   void validateValues(const std::string& key, const std::set<std::string>& possibles,
     const std::vector<std::string>& values) const;
-  void throwNotFoundKeyException(const std::string& key) const;
   template<typename T>
   bool getMultipleOrError(const std::string& key, std::vector<T>& values, T min, T max, bool errorIfNotFound);
   template<typename T>

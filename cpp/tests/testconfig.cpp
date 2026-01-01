@@ -238,6 +238,8 @@ aa = 1,2
 bb = 3.0,4.0
 cc = true,false,true
 dd = s1,s2,s3
+ee = 3-4,,5-2
+ee_ = 3
 )";
     istringstream in(s);
     ConfigParser cfg(in);
@@ -325,6 +327,12 @@ dd = s1,s2,s3
     vector<string> strs {"s1", "s2", "s3"};
     testAssert(strs == cfg.getStrings("dd"));
 
+    vector<pair<int, int>> pairs;
+    testAssert(cfg.tryGetNonNegativeIntDashedPairs("ee", pairs, 1, 1, 5, 5));
+    vector<pair<int, int>> expectedPairs { {3, 4}, {5, 2} };
+    testAssert(expectedPairs == pairs);
+    testAssert(!cfg.tryGetNonNegativeIntDashedPairs("ee1", pairs, 1, 1, 5, 5));
+
     auto checkFailed = [](ConfigParser& configParser, const std::function<void(ConfigParser& cfg)>& call)  {
       bool isFailed = false;
       try {
@@ -359,6 +367,16 @@ dd = s1,s2,s3
     });
     checkFailed(cfg, [](ConfigParser& config) {
       config.getString("j", {"str1", "str2"});
+    });
+
+    checkFailed(cfg, [](ConfigParser& config) {
+      vector<pair<int, int>> failedPairs;
+      config.tryGetNonNegativeIntDashedPairs("ee", failedPairs, 1, 1, 2, 2);
+    });
+
+    checkFailed(cfg, [](ConfigParser& config) {
+      vector<pair<int, int>> failedPairs;
+      config.tryGetNonNegativeIntDashedPairs("ee_", failedPairs, 1, 1, 2, 2);
     });
   }
 }

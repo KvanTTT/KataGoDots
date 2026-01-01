@@ -689,8 +689,10 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
 
   const int maxApproxRowsPerTrainFile = cfg.getInt("maxApproxRowsPerTrainFile",1,100000000);
 
-  const std::vector<std::pair<int,int>> allowedBoardSizes =
-    cfg.getNonNegativeIntDashedPairs("allowedBoardSizes", 2, Board::MAX_LEN_X, Board::MAX_LEN_Y);
+  std::vector<std::pair<int,int>> allowedBoardSizes;
+  if (!cfg.tryGetNonNegativeIntDashedPairs("allowedBoardSizes", allowedBoardSizes, 2, 2, Board::MAX_LEN_X, Board::MAX_LEN_Y)) {
+    cfg.throwNotFoundKeyException("allowedBoardSizes");
+  }
 
   if(dataBoardLen > Board::MAX_LEN)
     throw StringError("dataBoardLen > maximum board len, must recompile to increase");

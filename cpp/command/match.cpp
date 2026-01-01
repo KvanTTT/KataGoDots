@@ -106,17 +106,15 @@ int MainCmds::match(const vector<string>& args) {
       }
     }
 
-    if(cfg.contains("extraPairs")) {
-      std::vector<std::pair<int,int>> pairs = cfg.getNonNegativeIntDashedPairs("extraPairs", 0, numBots - 1, numBots - 1);
-      for(const std::pair<int,int>& pair: pairs) {
-        int p0 = pair.first;
-        int p1 = pair.second;
+    if(std::vector<std::pair<int, int>> pairs;
+       cfg.tryGetNonNegativeIntDashedPairs("extraPairs", pairs, 0, 0, numBots - 1, numBots - 1)) {
+      for(const auto& [p0, p1]: pairs) {
         if(cfg.getOrDefaultBool("extraPairsAreOneSidedBW", false)) {
-          matchupsPerRound.push_back(std::make_pair(p0,p1));
+          matchupsPerRound.emplace_back(p0,p1);
         }
         else {
-          matchupsPerRound.push_back(std::make_pair(p0,p1));
-          matchupsPerRound.push_back(std::make_pair(p1,p0));
+          matchupsPerRound.emplace_back(p0,p1);
+          matchupsPerRound.emplace_back(p1,p0);
         }
       }
     }

@@ -648,33 +648,31 @@ vector<int> ConfigParser::getInts(const string& key, const int min, const int ma
   return result;
 }
 
-vector<std::pair<int,int>> ConfigParser::getNonNegativeIntDashedPairs(const string& key, const int min, const int max1, const int max2) {
-  std::vector<string> pairStrs = getStrings(key);
-  std::vector<std::pair<int,int>> ret;
+bool ConfigParser::tryGetNonNegativeIntDashedPairs(const string& key, vector<std::pair<int,int>>& pairs, const int min1, const int min2, const int max1, const int max2) {
+  std::string str;
+  if (!tryGetString(key, str)) {
+    return false;
+  }
+
+  const std::vector<string> pairStrs = Global::split(str, ',');
   for(const string& pairStr: pairStrs) {
-    if(Global::trim(pairStr).size() <= 0)
+    if(Global::trim(pairStr).empty())
       continue;
-    std::vector<string> pieces = Global::split(Global::trim(pairStr),'-');
-    if(pieces.size() != 2) {
+    std::vector<string> pieces = Global::split(Global::trim(pairStr), '-');
+    int p0;
+    int p1;
+    if (pieces.size() != 2 || !Global::tryStringToInt(pieces[0], p0) || !Global::tryStringToInt(pieces[1], p1)) {
       throw IOError("Could not parse '" + pairStr + "' as a pair of integers separated by a dash for key '" + key + "' in config file " + fileName);
     }
 
-    bool suc;
-    int p0;
-    int p1;
-    suc = Global::tryStringToInt(pieces[0],p0);
-    if(!suc)
-      throw IOError("Could not parse '" + pairStr + "' as a pair of integers separated by a dash for key '" + key + "' in config file " + fileName);
-    suc = Global::tryStringToInt(pieces[1],p1);
-    if(!suc)
-      throw IOError("Could not parse '" + pairStr + "' as a pair of integers separated by a dash for key '" + key + "' in config file " + fileName);
+    if (p0 < min1 || p0 > max1 || p1 < min2 || p1 > max2)
+      throw IOError("Expected key '" + key + "' to have first value in range ["
+              + Global::intToString(min1) + ", " + Global::intToString(max1) + "] and second value in range ["
+              + Global::intToString(min2) + ", " + Global::intToString(max2) + "] in config file " + fileName);
 
-    if(p0 < min || p0 > max1 || p1 < min || p1 > max2)
-      throw IOError("Expected key '" + key + "' to have all values range " + Global::intToString(min) + " to (" + Global::intToString(max1) + ", " + Global::intToString(max2) + ") in config file " + fileName);
-
-    ret.push_back(std::make_pair(p0,p1));
+    pairs.emplace_back(p0, p1);
   }
-  return ret;
+  return true;
 }
 
 bool ConfigParser::tryGetInt64(const std::string& key, int64_t& value, const int64_t min, const int64_t max) {
