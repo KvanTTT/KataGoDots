@@ -612,3 +612,9 @@ endif()
 
 target_include_directories(katago PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
+if(NOT "${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
+  add_custom_command(TARGET katago POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:katago> ${CMAKE_SOURCE_DIR}/$<TARGET_FILE_NAME:katago>
+    COMMENT "Copying executable to cpp directory"
+  )
+endif()
