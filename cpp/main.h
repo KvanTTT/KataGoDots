@@ -63,7 +63,7 @@ namespace Version {
   std::string getAppName();
   std::string getAppVersion();
   std::string getAppNameWithVersion();
-  std::string getAppFullInfo();
+  std::string getAppFullInfo(bool csv = false);
   std::string getGitRevision();
   std::string getGitRevisionWithBackend();
   std::string getBuildType();

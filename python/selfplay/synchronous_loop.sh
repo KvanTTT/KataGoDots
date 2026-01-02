@@ -87,17 +87,27 @@ git diff --staged --no-color > "$DATED_ARCHIVE"/diffstaged.txt
 # Also run the code out of the archive, so that we don't unexpectedly crash or change behavior if the local repo changes.
 cd "$DATED_ARCHIVE"
 
-if ! output=$(./bin/katago maxlen 2>&1); then
-    echo "Error: failed to run './bin/katago maxlen'. Compile exe from the latest master and rerun the script. Output was:" >&2
+if ! output=$(./bin/katago version 2>&1); then
+    echo "Error: failed to run './bin/katago version'. Compile exe from the latest master and rerun the script. Output was:" >&2
     echo "$output" >&2
     exit 1
 fi
-IFS="," read -r max_len_x max_len_y <<< "$output"
-if [[ -z "${max_len_x:-}" || -z "${max_len_y:-}" ]]; then
-    echo "Error: './bin/katago maxlen' did not return valid max lengths (got: '$output')." >&2
-    exit 1
+echo "$output"
+
+info_output="$(./bin/katago info 2>&1)"
+IFS="," read -r info_app_name info_app_version info_git_rev info_compile_date_time info_backend info_max_len_x info_max_len_y info_build_type <<< "$info_output"
+if [[ -z "${info_app_name:-}" || -z "${info_app_version:-}" ]]; then
+    echo "Error: './bin/katago info' did not return valid info (got: '$info_output')." >&2
 fi
-echo "MAX LEN: $max_len_x, $max_len_y"
+
+if [[ "$info_build_type" == "Debug" ]]; then
+    echo "################################################################################"
+    echo "WARNING: KataGo is built in DEBUG mode. Self-play will be VERY SLOW."
+    echo "It is highly recommended to use a RELEASE build for self-play."
+    echo "################################################################################"
+    sleep 3
+fi
+
 
 # Begin cycling forever, running each step in order.
 set -x
@@ -117,7 +127,7 @@ do
     )
 
     echo "Train"
-    time ./train.sh "$BASEDIR" "$TRAININGNAME" "$MODELKIND" "$BATCHSIZE" main "$max_len_x" "$max_len_y" -samples-per-epoch "$NUM_TRAIN_SAMPLES_PER_EPOCH" -swa-period-samples "$NUM_TRAIN_SAMPLES_PER_SWA" -quit-if-no-data -stop-when-train-bucket-limited -no-repeat-files -max-train-bucket-per-new-data "$MAX_TRAIN_PER_DATA" -max-train-bucket-size "$MAX_TRAIN_SAMPLES_PER_CYCLE"
+    time ./train.sh "$BASEDIR" "$TRAININGNAME" "$MODELKIND" "$BATCHSIZE" main "$info_max_len_x" "$info_max_len_y" -samples-per-epoch "$NUM_TRAIN_SAMPLES_PER_EPOCH" -swa-period-samples "$NUM_TRAIN_SAMPLES_PER_SWA" -quit-if-no-data -stop-when-train-bucket-limited -no-repeat-files -max-train-bucket-per-new-data "$MAX_TRAIN_PER_DATA" -max-train-bucket-size "$MAX_TRAIN_SAMPLES_PER_CYCLE"
 
     echo "Export"
     (

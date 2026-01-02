@@ -35,7 +35,7 @@ contribute : Connect to online distributed KataGo training and run perpetually c
 
 match : Run self-play match games based on a config, more efficient than gtp due to batching.
 version : Print version and exit.
-maxlen : Print the maximum width and height of the board.
+info : Print info about the app in CSV format and exit.
 
 analysis : Runs an engine designed to analyze entire games in parallel.
 tuner : (OpenCL only) Run tuning to find and optimize parameters that work on your GPU.
@@ -175,8 +175,8 @@ static int handleSubcommand(const string& subcommand, const vector<string>& args
     cout << Version::getAppFullInfo() << std::flush;
     return 0;
   }
-  else if (subcommand == "maxlen") {
-    cout << Board::MAX_LEN_X << "," << Board::MAX_LEN_Y << std::flush;
+  else if (subcommand == "info") {
+    cout << Version::getAppFullInfo(true) << std::flush;
     return 0;
   }
   else {
@@ -245,41 +245,80 @@ string Version::getAppNameWithVersion() {
   return getAppName() + " " + getAppVersion();
 }
 
-string Version::getAppFullInfo() {
+string Version::getAppFullInfo(bool csv) {
   ostringstream out;
-  out << getAppNameWithVersion() << endl;
-  out << "Git revision: " << getGitRevision() << endl;
-  out << "Compile Time: " << __DATE__ << " " << __TIME__ << endl;
+
+  auto commaOrWhitespace = [csv] {
+    return csv ? "," : " ";
+  };
+
+  auto commaOrLineBreak = [csv] {
+    return csv ? "," : "\n";
+  };
+
+  out << getAppName() << commaOrWhitespace() << getAppVersion();
+  out << commaOrLineBreak();
+
+  if (!csv) {
+    out << "Git revision: ";
+  }
+  out << getGitRevision();
+  out << commaOrLineBreak();
+
+  if (!csv) {
+    out << "Compile Time: ";
+  }
+  out << __DATE__ << " " << __TIME__;
+  out << commaOrLineBreak();
+
+  string backend;
 #if defined(USE_CUDA_BACKEND)
-  out << "Using CUDA backend" << endl;
+  backend = "CUDA";
+#elif defined(USE_TENSORRT_BACKEND)
+  backend = "TensorRT";
+#elif defined(USE_METAL_BACKEND)
+  backend = "Metal";
+#elif defined(USE_OPENCL_BACKEND)
+  backend = "OpenCL";
+#elif defined(USE_EIGEN_BACKEND)
+  backend = "Eigen(CPU)";
+#else
+  backend = "dummy";
+#endif
+
+  if (!csv) {
+    out << "Backend: ";
+  }
+  out << backend;
+  out << commaOrLineBreak();
+
+  if (!csv) {
 #if defined(CUDA_TARGET_VERSION)
 #define STRINGIFY(x) #x
 #define STRINGIFY2(x) STRINGIFY(x)
-  out << "Compiled with CUDA version " << STRINGIFY2(CUDA_TARGET_VERSION) << endl;
-#endif
-#elif defined(USE_TENSORRT_BACKEND)
-  out << "Using TensorRT backend" << endl;
-#elif defined(USE_METAL_BACKEND)
-  out << "Using Metal backend" << endl;
-#elif defined(USE_OPENCL_BACKEND)
-  out << "Using OpenCL backend" << endl;
-#elif defined(USE_EIGEN_BACKEND)
-  out << "Using Eigen(CPU) backend" << endl;
-#else
-  out << "Using dummy backend" << endl;
+    out << "Compiled with CUDA version " << STRINGIFY2(CUDA_TARGET_VERSION) << endl;
 #endif
 
 #if defined(USE_AVX2)
-  out << "Compiled with AVX2 and FMA instructions" << endl;
+    out << "Compiled with AVX2 and FMA instructions" << endl;
 #endif
-  out << "Compiled to allow boards of size up to " << Board::MAX_LEN_X << "," << Board::MAX_LEN_Y << endl;
 #if defined(CACHE_TENSORRT_PLAN) && defined(USE_TENSORRT_BACKEND)
-  out << "Compiled with TensorRT plan cache" << endl;
+    out << "Compiled with TensorRT plan cache" << endl;
 #elif defined(BUILD_DISTRIBUTED)
-  out << "Compiled to support contributing to online distributed selfplay" << endl;
+    out << "Compiled to support contributing to online distributed selfplay" << endl;
 #endif
+  }
 
-  out << "Build Type: " << getBuildType() << endl;
+  if (!csv) {
+    out << "Compiled to allow boards of size up to ";
+  }
+  out << Board::MAX_LEN_X << commaOrWhitespace() << Board::MAX_LEN_Y;
+  out << commaOrLineBreak();
+
+  if (!csv) {
+    out << "Build Type: ";
+  }
+  out << getBuildType();
 
   return out.str();
 }
