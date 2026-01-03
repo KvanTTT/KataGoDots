@@ -1581,6 +1581,9 @@ ModelDesc::ModelDesc(istream& in, const string& sha256_, const bool binaryFloats
     modelVersion = Global::stringToInt(pieces[0]);
     maxLenX = Global::stringToInt(pieces[1]);
     maxLenY = Global::stringToInt(pieces[2]);
+    if (maxLenX != Board::MAX_LEN_X || maxLenY != Board::MAX_LEN_Y) {
+      cout << "Warning: Model " << name << " was trained on another MAX board size. Model size: " << maxLenX << "x" << maxLenY << ", Current size: " << Board::MAX_LEN_X << "x" << Board::MAX_LEN_Y << endl;
+    }
     const auto gamePieces = Global::split(pieces[3], ';');
     if (gamePieces.size() > 1) {
       throw StringError("KataGo currently supports only single-game mode. The `" + name + "` is a mixed model for games: " + Global::concat(gamePieces, ", "));
