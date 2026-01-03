@@ -45,6 +45,8 @@ if __name__ == "__main__":
     parser.add_argument('-print-norm', help='Names of outputs to print norms comma separated', type=str, required=False)
     parser.add_argument('-list-available-outputs', help='Print names of outputs available', action="store_true", required=False)
     parser.add_argument('-games', help='Games to train: ' + ', '.join(e.name for e in Game) + ' (GO by default)', type=parse_game, nargs="+", required=False)
+    parser.add_argument("-katago-git-rev", help='Git revision of katago executable', type=str, required=False)
+    parser.add_argument("-katago-backend", help='Backend of katago executable (CUDA, TensorRT, Metal, OpenCL, Eigen, dummy)', type=str, required=False)
 
     args = vars(parser.parse_args())
 
@@ -57,6 +59,8 @@ def main(args):
     pos_len_x = args["pos_len_x"] or pos_len
     pos_len_y = args["pos_len_y"] or pos_len
     games = args["games"] or [Game.GO]
+    katago_git_rev = args["katago_git_rev"]
+    katago_backend = args["katago_backend"]
     batch_size = args["batch_size"]
     use_swa = args["use_swa"]
     max_batches = args["max_batches"]
@@ -115,7 +119,7 @@ def main(args):
                 model_config = json.load(f)
         logging.info(str(model_config))
 
-        model = Model(model_config,pos_len_x,pos_len_y,games)
+        model = Model(model_config,pos_len_x,pos_len_y,games,katago_git_rev,katago_backend)
         model.initialize()
         model.to(device)
     else:

@@ -69,6 +69,8 @@ if __name__ == "__main__":
     optional_args.add_argument('-pos-len-x', help='Spatial width of expected training data. If undefined, `-pos-len` is used', type=int, required=False)
     optional_args.add_argument('-pos-len-y', help='Spatial height of expected training data. If undefined, `-pos-len` is used', type=int, required=False)
     optional_args.add_argument('-games', help='Games to train: ' + ", ".join(e.name for e in Game) + ' (GO by default)', type=parse_game, nargs="+", required=False)
+    optional_args.add_argument("-katago-git-rev", help='Git revision of katago executable', type=str, required=False)
+    optional_args.add_argument("-katago-backend", help='Backend of katago executable (CUDA, TensorRT, Metal, OpenCL, Eigen, dummy)', type=str, required=False)
     optional_args.add_argument('-samples-per-epoch', help='Number of data samples to consider as one epoch', type=int, required=False)
     optional_args.add_argument('-model-kind', help='String name for what model config to use', required=False)
     optional_args.add_argument('-lr-scale', help='LR multiplier on the hardcoded schedule', type=float, required=False)
@@ -158,6 +160,8 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
     pos_len = args["pos_len"] or 19
     pos_len_x = args["pos_len_x"] or pos_len
     pos_len_y = args["pos_len_y"] or pos_len
+    katago_git_rev = args["katago_git_rev"]
+    katago_backend = args["katago_backend"]
     games = args["games"] or [Game.GO]
     batch_size = args["batch_size"]
     samples_per_epoch = args["samples_per_epoch"]
@@ -319,6 +323,8 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
             state_dict["pos_len_x"] = getattr(ddp_model, "pos_len_x", 19)
             state_dict["pos_len_y"] = getattr(ddp_model, "pos_len_y", 19)
             state_dict["games"] = [g.name for g in getattr(ddp_model, "games", [Game.GO])]
+            state_dict["katago_git_rev"] = getattr(ddp_model, "katago_git_rev", None)
+            state_dict["katago_backend"] = getattr(ddp_model, "katago_backend", None)
             state_dict["optimizer"] = optimizer.state_dict()
             state_dict["metrics"] = metrics_obj.state_dict()
             state_dict["running_metrics"] = running_metrics
@@ -452,7 +458,7 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
             assert model_kind is not None, "Model kind is none or unspecified but the model is being created fresh"
             model_config = modelconfigs.config_of_name[model_kind]
             logging.info(str(model_config))
-            raw_model = Model(model_config,pos_len_x,pos_len_y,games)
+            raw_model = Model(model_config,pos_len_x,pos_len_y,games,katago_git_rev,katago_backend)
             raw_model.initialize()
 
             raw_model.to(device)
@@ -487,7 +493,7 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
             state_dict = torch.load(path_to_load_from, map_location=device)
             model_config = state_dict["config"] if "config" in state_dict else modelconfigs.config_of_name[model_kind]
             logging.info(str(model_config))
-            raw_model = Model(model_config,pos_len_x,pos_len_y,games)
+            raw_model = Model(model_config,pos_len_x,pos_len_y,games,katago_git_rev,katago_backend)
             raw_model.initialize()
 
             train_state = {}

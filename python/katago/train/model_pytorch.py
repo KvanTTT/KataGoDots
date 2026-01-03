@@ -1619,7 +1619,7 @@ def parse_game(value: str) -> Game:
         raise ArgumentTypeError(f"Game must be 'go' or 'dots', got '{value}'")
 
 class Model(torch.nn.Module):
-    def __init__(self, config: modelconfigs.ModelConfig, pos_len_x: int, pos_len_y: int, games=None):
+    def __init__(self, config: modelconfigs.ModelConfig, pos_len_x: int, pos_len_y: int, games=None, katago_git_rev: str = None, katago_backend: str = None):
         super(Model, self).__init__()
 
         self.config = config
@@ -1639,6 +1639,8 @@ class Model(torch.nn.Module):
         self.pos_len_x = pos_len_x
         self.pos_len_y = pos_len_y
         self.games = games or [Game.GO]
+        self.katago_git_rev = katago_git_rev
+        self.katago_backend = katago_backend
 
         if config["version"] <= 12:
             self.td_score_multiplier = 20.0

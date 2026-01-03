@@ -7,9 +7,9 @@ set -o pipefail
 # Or, to torchmodels_toexport_extra/ (EXPORTMODE == "extra").
 # Or just trains without exporting (EXPORTMODE == "trainonly").
 
-if [[ $# -lt 7 ]]
+if [[ $# -lt 9 ]]
 then
-    echo "Usage: $0 BASEDIR TRAININGNAME MODELKIND BATCHSIZE EXPORTMODE MAXLENX MAXLENY OTHERARGS"
+    echo "Usage: $0 BASEDIR TRAININGNAME MODELKIND BATCHSIZE EXPORTMODE MAXLENX MAXLENY GITREV BACKEND OTHERARGS"
     echo "BASEDIR containing selfplay data and models and related directories"
     echo "TRAININGNAME name to prefix models with, specific to this training daemon"
     echo "MODELKIND what size model to train, like b10c128, see ../modelconfigs.py"
@@ -17,6 +17,8 @@ then
     echo "EXPORTMODE 'main': train and export for selfplay. 'extra': train and export extra non-selfplay model. 'trainonly': train without export"
     echo "MAXLENX max board size x to train on"
     echo "MAXLENY max board size y to train on"
+    echo "GITREV git revision of katago executable"
+    echo "BACKEND of katago executable (CUDA, TensorRT, Metal, OpenCL, Eigen, dummy)"
     exit 0
 fi
 BASEDIR="$1"
@@ -32,6 +34,10 @@ shift
 MAXLENX="$1"
 shift
 MAXLENY="$1"
+shift
+GITREV="$1"
+shift
+BACKEND="$1"
 shift
 
 #------------------------------------------------------------------------------
@@ -93,6 +99,8 @@ time $PYTHON ./train.py \
      -pos-len-x "$MAXLENX" \
      -pos-len-y "$MAXLENY" \
      -games DOTS \
+     -katago-git-rev "$GITREV" \
+     -katago-backend "$BACKEND" \
      -batch-size "$BATCHSIZE" \
      -model-kind "$MODELKIND" \
      $EXTRAFLAG \

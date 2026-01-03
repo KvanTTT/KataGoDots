@@ -59,7 +59,9 @@ def load_model(checkpoint_file, use_swa, device, pos_len_x=19, pos_len_y=19, ver
     effective_pos_len_x = state_dict.get("pos_len_x", pos_len_x)
     effective_pos_len_y = state_dict.get("pos_len_y", pos_len_y)
     games = [parse_game(s) for s in state_dict.get("games", [Game.GO.name])]
-    model = Model(model_config, effective_pos_len_x, effective_pos_len_y, games)
+    katago_git_rev = state_dict.get("katago_git_rev", None)
+    katago_backend = state_dict.get("katago_backend", None)
+    model = Model(model_config, effective_pos_len_x, effective_pos_len_y, games, katago_git_rev, katago_backend)
     model.initialize()
 
     # Strip off any "module." from when the model was saved with DDP or other things

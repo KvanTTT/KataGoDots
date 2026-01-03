@@ -4,6 +4,7 @@
 #include <fstream>
 #include <zlib.h>
 
+#include "../main.h"
 #include "../core/global.h"
 #include "../core/fileutils.h"
 #include "../neuralnet/modelversion.h"
@@ -1585,6 +1586,16 @@ ModelDesc::ModelDesc(istream& in, const string& sha256_, const bool binaryFloats
       throw StringError("KataGo currently supports only single-game mode. The `" + name + "` is a mixed model for games: " + Global::concat(gamePieces, ", "));
     }
     isDotsGame = Global::isEqualCaseInsensitive(gamePieces[0], DOTS_KEY);
+    if (pieces.size() > 4) {
+      katagoGitRevision = pieces[4];
+      if (katagoGitRevision != Version::getGitRevision()) {
+        cout << "Warning: Model " << name << " was trained on a different KataGo version. Model rev: " << katagoGitRevision << ", Current rev: " << Version::getGitRevision() << endl;
+      }
+      if (katagoGitRevision.find("dirty") != std::string::npos) {
+        cout << "Warning: Model " << name << " was trained on a dirty KataGo version: " << katagoGitRevision << endl;
+      }
+      katagoBackend = pieces[5];
+    }
   } else {
     modelVersion = Global::stringToInt(str);
     maxLenX = -1; // It's unclear the exact training size of old modules. Typically, it's 19, but not always
@@ -1749,6 +1760,8 @@ ModelDesc& ModelDesc::operator=(ModelDesc&& other) noexcept {
   maxLenX = other.maxLenX;
   maxLenY = other.maxLenY;
   isDotsGame = other.isDotsGame;
+  katagoGitRevision = other.katagoGitRevision;
+  katagoBackend = other.katagoBackend;
   numInputChannels = other.numInputChannels;
   numInputGlobalChannels = other.numInputGlobalChannels;
   numInputMetaChannels = other.numInputMetaChannels;

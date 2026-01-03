@@ -87,6 +87,8 @@ def main(args):
     writestr("," + str(model.pos_len_x))
     writestr("," + str(model.pos_len_y))
     writestr("," + ";".join(c.name for c in model.games))
+    writestr("," + (model.katago_git_rev or ""))
+    writestr("," + (model.katago_backend or ""))
     writeln("")
     writeln(modelconfigs.get_num_bin_input_features(model_config))
     writeln(modelconfigs.get_num_global_input_features(model_config))

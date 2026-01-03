@@ -350,6 +350,8 @@ struct ModelDesc {
   int maxLenX; // Currently unused, but initialize it just in case for the future
   int maxLenY;
   bool isDotsGame;
+  std::string katagoGitRevision;
+  std::string katagoBackend;
   int numInputChannels;
   int numInputGlobalChannels;
   int numInputMetaChannels;
