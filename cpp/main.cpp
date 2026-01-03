@@ -271,25 +271,10 @@ string Version::getAppFullInfo(bool csv) {
   out << __DATE__ << " " << __TIME__;
   out << commaOrLineBreak();
 
-  string backend;
-#if defined(USE_CUDA_BACKEND)
-  backend = "CUDA";
-#elif defined(USE_TENSORRT_BACKEND)
-  backend = "TensorRT";
-#elif defined(USE_METAL_BACKEND)
-  backend = "Metal";
-#elif defined(USE_OPENCL_BACKEND)
-  backend = "OpenCL";
-#elif defined(USE_EIGEN_BACKEND)
-  backend = "Eigen(CPU)";
-#else
-  backend = "dummy";
-#endif
-
   if (!csv) {
     out << "Backend: ";
   }
-  out << backend;
+  out << getBackend();
   out << commaOrLineBreak();
 
   if (!csv) {
@@ -327,21 +312,20 @@ string Version::getGitRevision() {
   return GIT_REVISION;
 }
 
-string Version::getGitRevisionWithBackend() {
-  string s = GIT_REVISION;
-
+string Version::getBackend() {
+  return
 #if defined(USE_CUDA_BACKEND)
-  s += "-cuda";
+  "CUDA"
 #elif defined(USE_TENSORRT_BACKEND)
-  s += "-trt";
+  "TensorRT"
 #elif defined(USE_METAL_BACKEND)
-  s += "-metal";
+  "Metal"
 #elif defined(USE_OPENCL_BACKEND)
-  s += "-opencl";
+  "OpenCL"
 #elif defined(USE_EIGEN_BACKEND)
-  s += "-eigen";
+  "Eigen"
 #else
-  s += "-dummy";
+  "dummy"
 #endif
-  return s;
+  ;
 }

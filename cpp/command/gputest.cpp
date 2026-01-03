@@ -84,7 +84,7 @@ int MainCmds::testgpuerror(const vector<string>& args) {
   const bool logToStderrDefault = false;
   const bool logTimeDefault = false;
   Logger logger(NULL, logToStdoutDefault, logToStderrDefault, logTimeDefault);
-  logger.write("Version " + Version::getGitRevisionWithBackend());
+  logger.write("Version " + Version::getGitRevision() + "-" + Global::toLower(Version::getBackend()));
   logger.write("Testing " + modelFile);
   logger.write("Testing on " + boardSizeDataset);
   logger.write("Testing average errors between different GPU configurations...");
