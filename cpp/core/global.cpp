@@ -744,12 +744,12 @@ double Global::roundDynamic(double x, int precision) {
   return roundStatic(x, inverseScale);
 }
 
-bool Global::isEqual(const float f1, const float f2) {
-  return std::fabs(f1 - f2) <= FLOAT_EPS;
+bool Global::isEqual(const float f1, const float f2, float eps) {
+  return std::fabs(f1 - f2) <= eps;
 }
 
-bool Global::isZero(const float f) {
-  return std::fabs(f) <= FLOAT_EPS;
+bool Global::isZero(const float f, float eps) {
+  return std::fabs(f) <= eps;
 }
 
 void Global::runTests() {
@@ -759,6 +759,11 @@ void Global::runTests() {
   testAssert(isZero(-FLOAT_EPS));
   testAssert(!isEqual(42, 42 + 0.0001f));
   testAssert(!isEqual(-FLOAT_EPS, FLOAT_EPS));
+
+  testAssert(isZero(0.005f, 0.005f));
+  testAssert(isZero(0.005f, 0.006f));
+  testAssert(!isZero(0.006f, 0.005f));
+  testAssert(!isZero(0.01f, 0.005f));
 
   auto checkCoordConversion = [](const string& coord, const int value) {
     testAssert(toUpper(coord) == intToCoord(value));
