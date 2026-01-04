@@ -588,8 +588,9 @@ InputBuffers::InputBuffers(const LoadedModel* loadedModel, int maxBatchSz, int n
   singleOwnerMapElts = (size_t)m.numOwnershipChannels * nnXLen * nnYLen;
   singleScoreValuesResultElts = (size_t)m.numScoreValueChannels;
 
-  assert(NNModelVersion::getNumSpatialFeatures(m.modelVersion) == m.numInputChannels);
-  assert(NNModelVersion::getNumGlobalFeatures(m.modelVersion) == m.numInputGlobalChannels);
+  const bool isDotsGame = loadedModel->modelDesc.isDotsGame;
+  assert(NNModelVersion::getNumSpatialFeatures(m.modelVersion, isDotsGame) == m.numInputChannels);
+  assert(NNModelVersion::getNumGlobalFeatures(m.modelVersion, isDotsGame) == m.numInputGlobalChannels);
   assert(singleValueResultElts == 3);
 
   rowSpatialBufferElts = (size_t)maxBatchSz * singleSpatialElts;
@@ -735,10 +736,10 @@ void MetalProcess::convertNCHW(
   }
 }
 
-void MetalProcess::processRowData(size_t row, ComputeHandle* gpuHandle, InputBuffers* inputBuffers, NNResultBuf** inputBufs) {
-  int nnXLen = gpuHandle->nnXLen;
-  int nnYLen = gpuHandle->nnYLen;
-  int numSpatialFeatures = NNModelVersion::getNumSpatialFeatures(gpuHandle->version);
+void MetalProcess::processRowData(size_t row, ComputeHandle* gpuHandle, InputBuffers* inputBuffers, NNResultBuf** inputBufs, const bool dotsGame) {
+  const int nnXLen = gpuHandle->nnXLen;
+  const int nnYLen = gpuHandle->nnYLen;
+  const int numSpatialFeatures = NNModelVersion::getNumSpatialFeatures(gpuHandle->version, dotsGame);
 
   float* rowSpatialInput = &inputBuffers->userInputBuffer[inputBuffers->singleSpatialElts * row];
   float* rowGlobalInput = &inputBuffers->userInputGlobalBuffer[inputBuffers->singleInputGlobalElts * row];
@@ -900,11 +901,11 @@ void MetalProcess::processScoreValues(
 }
 
 void MetalProcess::processRow(
-  size_t row,
-  const ComputeHandle* gpuHandle,
-  InputBuffers* inputBuffers,
-  NNResultBuf** inputBufs,
-  vector<NNOutput*>& outputs) {
+    size_t row,
+    const ComputeHandle* gpuHandle,
+    InputBuffers* inputBuffers,
+    NNResultBuf** inputBufs,
+    const vector<NNOutput*>& outputs) {
   NNOutput* currentOutput = outputs[row];
   assert(currentOutput->nnXLen == gpuHandle->nnXLen);
   assert(currentOutput->nnYLen == gpuHandle->nnYLen);
@@ -923,20 +924,23 @@ void MetalProcess::processRow(
  * @param numBatchEltsFilled The number of batch elements filled in the input buffer.
  * @param inputBufs An array of pointers to NNResultBuf objects containing the neural network input data.
  * @param outputs A vector of NNOutput pointers to store the computed output.
+ * @param dotsGame True if this is a dots game.
  */
 void MetalProcess::getMetalOutput(
   ComputeHandle* gpuHandle,
   InputBuffers* inputBuffers,
-  int numBatchEltsFilled,
+  const int numBatchEltsFilled,
   NNResultBuf** inputBufs,
-  vector<NNOutput*>& outputs) {
+  const vector<NNOutput*>& outputs,
+  const bool dotsGame
+  ) {
   assert(numBatchEltsFilled > 0);
 
   int batchSize = numBatchEltsFilled;
 
   assert(batchSize <= inputBuffers->maxBatchSize);
-  assert((NNModelVersion::getNumSpatialFeatures(gpuHandle->version) * gpuHandle->nnXLen * gpuHandle->nnYLen) <= inputBuffers->singleInputElts);
-  assert(NNModelVersion::getNumGlobalFeatures(gpuHandle->version) == inputBuffers->singleInputGlobalElts);
+  assert((NNModelVersion::getNumSpatialFeatures(gpuHandle->version, dotsGame) * gpuHandle->nnXLen * gpuHandle->nnYLen) <= inputBuffers->singleInputElts);
+  assert(NNModelVersion::getNumGlobalFeatures(gpuHandle->version, dotsGame) == inputBuffers->singleInputGlobalElts);
 
   if(gpuHandle->metaEncoderVersion > 0) {
     assert(SGFMetadata::METADATA_INPUT_NUM_CHANNELS == inputBuffers->singleInputMetaElts);
@@ -945,7 +949,7 @@ void MetalProcess::getMetalOutput(
   assert(inputBuffers->singleValueResultElts == 3);
 
   for(size_t row = 0; row < batchSize; row++) {
-    MetalProcess::processRowData(row, gpuHandle, inputBuffers, inputBufs);
+    processRowData(row, gpuHandle, inputBuffers, inputBufs, dotsGame);
   }
 
   auto metalHandle = gpuHandle->metalhandle;
@@ -975,15 +979,17 @@ void MetalProcess::getMetalOutput(
  * @param numBatchEltsFilled The number of batch elements filled in the input buffer.
  * @param inputBufs An array of pointers to NNResultBuf objects containing the neural network input data.
  * @param outputs A vector of NNOutput pointers to store the computed output.
+ * @param dotsGame True if this is a dots game.
  */
 void NeuralNet::getOutput(
   ComputeHandle* gpuHandle,
   InputBuffers* inputBuffers,
   int numBatchEltsFilled,
   NNResultBuf** inputBufs,
-  vector<NNOutput*>& outputs) {
+  const vector<NNOutput*>& outputs,
+  const bool dotsGame) {
 
-  MetalProcess::getMetalOutput(gpuHandle, inputBuffers, numBatchEltsFilled, inputBufs, outputs);
+  MetalProcess::getMetalOutput(gpuHandle, inputBuffers, numBatchEltsFilled, inputBufs, outputs, dotsGame);
 }
 
 bool MetalProcess::testEvaluateConv(const ConvLayerDesc* desc,

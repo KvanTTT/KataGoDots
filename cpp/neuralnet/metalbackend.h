@@ -61,7 +61,7 @@ bool testEvaluateGlobalPoolingResidualBlock(const GlobalPoolingResidualBlockDesc
 
 void copyRowData(float* dest, const float* src, size_t numElements);
 void convertNCHW(float* rowSpatialInput, int C, int H, int W, bool inputsUseNHWC);
-void processRowData(size_t row, ComputeHandle* gpuHandle, InputBuffers* inputBuffers, NNResultBuf** inputBufs);
+void processRowData(size_t row, ComputeHandle* gpuHandle, InputBuffers* inputBuffers, NNResultBuf** inputBufs, bool dotsGame);
 float policyOptimismCalc(const double policyOptimism, const float p, const float pOpt);
 void processOptimism(InputBuffers* inputBuffers, NNOutput* currentOutput, const double policyOptimism, size_t row);
 
@@ -86,13 +86,13 @@ void processRow(size_t row,
                 const ComputeHandle* gpuHandle,
                 InputBuffers* inputBuffers,
                 NNResultBuf** inputBufs,
-                vector<NNOutput*>& outputs);
+                const vector<NNOutput*>& outputs);
 
 void getMetalOutput(ComputeHandle* gpuHandle,
                     InputBuffers* inputBuffers,
                     int numBatchEltsFilled,
                     NNResultBuf** inputBufs,
-                    vector<NNOutput*>& outputs);
+                    const vector<NNOutput*>& outputs, bool dotsGame);
 };
 
 /**
