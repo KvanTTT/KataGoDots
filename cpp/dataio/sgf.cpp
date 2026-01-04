@@ -2057,13 +2057,13 @@ void WriteSgf::writeSgf(
 
   size_t startTurnIdx = 0;
   ostringstream commentOut;
-  if(gameData != NULL) {
+  if(gameData != nullptr) {
     startTurnIdx = gameData->startHist.moveHistory.size();
     commentOut << "startTurnIdx=" << startTurnIdx;
     commentOut << ",initTurnNum=" << gameData->startHist.initialTurnNumber;
     commentOut << ",gameHash=" << gameData->gameHash;
 
-    static_assert(FinishedGameData::NUM_MODES == 8, "");
+    static_assert(FinishedGameData::NUM_MODES == 8);
     if(gameData->mode == FinishedGameData::MODE_NORMAL)
       commentOut << "," << "gtype=normal";
     else if(gameData->mode == FinishedGameData::MODE_CLEANUP_TRAINING)
@@ -2105,13 +2105,13 @@ void WriteSgf::writeSgf(
     commentOut << "," << "passAliveFinished=true";
   }
 
-  if(extraComments.size() > 0) {
-    if(commentOut.str().length() > 0)
+  if(!extraComments.empty()) {
+    if(!commentOut.str().empty())
       commentOut << " ";
     commentOut << extraComments[0];
   }
 
-  if(commentOut.str().length() > 0)
+  if(!commentOut.str().empty())
     out << "C[" << commentOut.str() << "]";
 
   string comment;
@@ -2146,62 +2146,74 @@ void WriteSgf::writeSgf(
       }
     }
 
-    if(gameData != NULL && i >= startTurnIdx) {
+    if(gameData != nullptr && i >= startTurnIdx) {
       size_t turnAfterStart = i-startTurnIdx;
       if(turnAfterStart < gameData->whiteValueTargetsByTurn.size()) {
         const ValueTargets& targets = gameData->whiteValueTargetsByTurn[turnAfterStart];
-        char winBuf[32];
-        char lossBuf[32];
-        char noResultBuf[32];
-        char scoreBuf[32];
-        sprintf(winBuf,"%.2f",targets.win);
-        sprintf(lossBuf,"%.2f",targets.loss);
-        sprintf(noResultBuf,"%.2f",targets.noResult);
-        sprintf(scoreBuf,"%.1f",targets.score);
-        if(comment.length() > 0)
+
+        if(!comment.empty())
           comment += " ";
+        char winBuf[32];
+        sprintf(winBuf,"%.2f",targets.win);
+
         comment += winBuf;
-        comment += " ";
-        comment += lossBuf;
-        comment += " ";
-        comment += noResultBuf;
+
+        if (!rules.isDots) {
+          char lossBuf[32];
+          char noResultBuf[32];
+          sprintf(lossBuf,"%.2f",targets.loss);
+          sprintf(noResultBuf,"%.2f",targets.noResult);
+          comment += " ";
+          comment += lossBuf;
+          comment += " ";
+          comment += noResultBuf;
+        } else {
+          assert(Global::isEqual(targets.win, 1.0f - targets.loss));
+          assert(Global::isZero(targets.noResult));
+        }
+
+        char scoreBuf[32];
+        sprintf(scoreBuf,"%.1f",targets.score);
         comment += " ";
         comment += scoreBuf;
       }
       if(turnAfterStart < gameData->policyTargetsByTurn.size()) {
         char visitsBuf[32];
-        sprintf(visitsBuf,"%d",(int)(gameData->policyTargetsByTurn[turnAfterStart].unreducedNumVisits));
-        if(comment.length() > 0)
+        sprintf(visitsBuf,"%d", static_cast<int>(gameData->policyTargetsByTurn[turnAfterStart].unreducedNumVisits));
+        if(!comment.empty())
           comment += " ";
         comment += "v=";
         comment += visitsBuf;
       }
       if(turnAfterStart < gameData->targetWeightByTurnUnrounded.size()) {
-        char weightBuf[32];
-        sprintf(weightBuf,"%.2f",gameData->targetWeightByTurnUnrounded[turnAfterStart]);
-        if(comment.length() > 0)
-          comment += " ";
-        comment += "weight=";
-        comment += weightBuf;
+        if (float weight = gameData->targetWeightByTurnUnrounded[turnAfterStart]; !rules.isDots || !Global::isZero(weight, 0.005f)) {
+          char weightBuf[32];
+          sprintf(weightBuf, "%.2f", weight);
+          if(!comment.empty())
+            comment += " ";
+          comment += !rules.isDots ? "weight" : "w"; // Preserve backward compatibility with Go programs
+          comment += "=";
+          comment += weightBuf;
+        }
       }
     }
 
     if(endHist.isGameFinished && i+1 == endHist.moveHistory.size()) {
-      if(comment.length() > 0)
+      if(!comment.empty())
         comment += " ";
-      comment += "result=" + WriteSgf::gameResultNoSgfTag(endHist,overrideFinishedWhiteScore);
+      comment += "result=" + gameResultNoSgfTag(endHist,overrideFinishedWhiteScore);
     }
 
     if(extraComments.size() > i+1) {
-      if(comment.length() > 0)
+      if(!comment.empty())
         comment += " ";
       comment += extraComments[i+1];
     }
 
-    if(comment.length() > 0)
+    if(!comment.empty())
       out << "C[" << comment << "]";
 
-    hist.makeBoardMoveAssumeLegal(board,loc,pla,NULL);
+    hist.makeBoardMoveAssumeLegal(board,loc,pla,nullptr);
 
   }
   out << ")";
