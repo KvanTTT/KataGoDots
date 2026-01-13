@@ -28,7 +28,9 @@ using Eigen::TensorMap;
 
 //Eigen doesn't seem to have a way to make a const tensor map out of a const float* ??
 //So we have to cast away qualifiers to build it.
+#ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wcast-qual"
+#endif
 
 // Eigen tensors are stored in column-major order, so an NHWC memory layout is given by Tensor<4>(C,W,H,N).
 
