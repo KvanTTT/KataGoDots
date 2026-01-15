@@ -378,6 +378,43 @@ R"(
 )"
 );
 
+  // Don't mark suicidal locations if suicide is disallowed
+  checkCapturingAndBase(
+"Empty base with disallowed suicide",
+R"(
+.x.
+x.x
+.x.
+)", R"(
+.  .  .
+.  .  .
+.  .  .
+)",
+R"(
+.  .  .
+.  .  .
+.  .  .
+)"
+, false);
+
+  checkCapturingAndBase(
+"Empty base with disallowed suicide 2",
+R"(
+.o.
+o.o
+.o.
+)", R"(
+.  .  .
+.  .  .
+.  .  .
+)",
+R"(
+.  .  .
+.  .  .
+.  .  .
+)"
+, false);
+
   checkCapturingAndBase(
 "Empty base can be broken",
 R"(
