@@ -12,6 +12,10 @@
 
 #include <sstream>
 
+#ifdef USE_EIGEN_BACKEND 
+#include <Eigen/Core>
+#endif  // USE_EIGEN_BACKEND
+
 //------------------------
 #include "core/using.h"
 //------------------------
@@ -188,9 +192,25 @@ static int handleSubcommand(const string& subcommand, const vector<string>& args
 }
 
 
-int main(int argc, const char* const* argv) {
+int main(int argc, const char* const* argv)
+{
+#ifdef USE_EIGEN_BACKEND
+  if(Eigen::nbThreads() == 0) {
+    cout << "There are no Eigen threads." << endl;
+#ifdef MSVC
+    cout << "If you use Visual Studio try the following:" << endl;
+    cout << "Open \"Project Properties\"" << endl;
+    cout << "Go To \"Configuration Properties\" → \"C/C++\" → \"Language\"" << endl;
+    cout << "Set \"Open MP Support\" = \"Yes(/openmp)\"" << endl;
+#else
+    cout << "Enable Open MP support or increase the number of Eigen threads" << endl;
+#endif
+  }
+#endif
+
   vector<string> args = MainArgs::getCommandLineArgsUTF8(argc,argv);
   MainArgs::makeCoutAndCerrAcceptUTF8();
+
 
   if(args.size() < 2) {
     printHelp(args);
