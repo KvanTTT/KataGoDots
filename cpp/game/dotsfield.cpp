@@ -935,6 +935,10 @@ void Board::calculateOneMoveCaptureAndBasePositionsForDots(vector<Color>& captur
       const Loc loc = Location::getLoc(x, y, x_size);
 
       const State state = getState(loc);
+      // Optimization: perform fast check to avoid more heavy checks and extra allocations.
+      // The most frequent case is the case when the location is empty.
+      if (getActiveColor(state) != C_EMPTY) continue;
+
       const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
 
       // It doesn't make sense to calculate the capturing when a dot placed into own empty territory.
