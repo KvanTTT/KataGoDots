@@ -466,9 +466,9 @@ void TrainingWriteBuffers::addRow(
   float leadTargetWeightFactor,
   const NNRawStats& nnRawStats,
   const Board* finalBoard,
-  Color* finalFullArea,
-  Color* finalOwnership,
-  float* finalWhiteScoring,
+  const Color* finalFullArea,
+  const Color* finalOwnership,
+  const float* finalWhiteScoring,
   const vector<Board>* posHistForFutureBoards, //can be null
   bool isSidePosition,
   int numNeuralNetsBehindLatest,
@@ -709,12 +709,17 @@ void TrainingWriteBuffers::addRow(
       for(int x = 0; x<board.x_size; x++) {
         int pos = NNPos::xyToPos(x,y,dataXLen);
         Loc loc = Location::getLoc(x,y,board.x_size);
-        if(finalOwnership[loc] == nextPlayer) rowOwnership[pos] = 1;
-        else if(finalOwnership[loc] == opp) rowOwnership[pos] = -1;
-        if (!hist.rules.isDots) {
-          //Mark full area points that ended up not being owned
-          if(finalFullArea[loc] != C_EMPTY && finalOwnership[loc] == C_EMPTY)
-            rowOwnership[pos+posArea] = (finalFullArea[loc] == nextPlayer ? 1 : -1);
+        if (Color finalOwnershipAtLoc = finalOwnership[loc]; finalOwnershipAtLoc == nextPlayer)
+          rowOwnership[pos] = 1;
+        else if(finalOwnershipAtLoc == opp)
+          rowOwnership[pos] = -1;
+        else if (finalOwnershipAtLoc == C_EMPTY) {
+          if (!hist.rules.isDots) {
+            if (Color finalFullAreaAtLoc = finalFullArea[loc]; finalFullAreaAtLoc != C_EMPTY) {
+              //Mark full area points that ended up not being owned
+              rowOwnership[pos+posArea] = finalFullAreaAtLoc == nextPlayer ? 1 : -1;
+            }
+          }
         }
       }
     }
