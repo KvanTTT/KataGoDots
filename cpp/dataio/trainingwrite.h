@@ -286,9 +286,9 @@ struct TrainingWriteBuffers {
     float leadTargetWeightFactor,
     const NNRawStats& nnRawStats,
     const Board* finalBoard,
-    Color* finalFullArea,
-    Color* finalOwnership,
-    float* finalWhiteScoring,
+    const Color* finalFullArea,
+    const Color* finalOwnership,
+    const float* finalWhiteScoring,
     const std::vector<Board>* posHistForFutureBoards, //can be null
     bool isSidePosition,
     int numNeuralNetsBehindLatest,

@@ -102,6 +102,10 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [OPENCL, EIGEN]
     
     steps:
     - name: Checkout code
@@ -116,19 +120,28 @@ jobs:
         path: |
           ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
           ${{ env.VCPKG_INSTALLATION_ROOT }}/packages
-        key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}-opencl
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}-${{ matrix.backend }}
         restore-keys: |
           ${{ runner.os }}-vcpkg-
 
     - name: Install vcpkg dependencies
       run: |
-        vcpkg install zlib:x64-windows libzip:x64-windows opencl:x64-windows
+        if ("${{ matrix.backend }}" -eq "OPENCL") {
+          vcpkg install zlib:x64-windows libzip:x64-windows opencl:x64-windows
+        } else {
+          vcpkg install zlib:x64-windows libzip:x64-windows eigen3:x64-windows
+        }
 
     - name: Configure CMake
       working-directory: cpp
       run: |
+        $eigenInclude = ""
+        if ("${{ matrix.backend }}" -eq "EIGEN") {
+          $eigenInclude = "-DEIGEN3_INCLUDE_DIRS=$env:VCPKG_INSTALLATION_ROOT/packages/eigen3_x64-windows/include/eigen3"
+        }
         cmake . -G "Visual Studio 17 2022" -A x64 `
-          -DUSE_BACKEND=OPENCL `
+          -DUSE_BACKEND=${{ matrix.backend }} `
+          $eigenInclude `
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
 
     - name: Build
@@ -151,7 +164,7 @@ jobs:
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
       with:
-        name: katago-windows-opencl
+        name: katago-windows-${{ matrix.backend }}
         path: |
           cpp/Release/*.exe
           cpp/Release/*.dll

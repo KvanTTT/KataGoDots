@@ -910,8 +910,7 @@ void Board::makeMoveAndCalculateCapturesAndBases(
 
     for(Base& base: moveRecord.bases) {
       if (base.is_real) {
-        const bool suicide = base.pla != pla;
-        if (!suicide) {
+        if (const bool suicide = base.pla != pla; !suicide) {
           captures[loc] = static_cast<Color>(captures[loc] | base.pla);
         }
 
@@ -936,14 +935,19 @@ void Board::calculateOneMoveCaptureAndBasePositionsForDots(vector<Color>& captur
       const Loc loc = Location::getLoc(x, y, x_size);
 
       const State state = getState(loc);
+      // Optimization: perform fast check to avoid more heavy checks and extra allocations.
+      // The most frequent case is the case when the location is empty.
+      if (getActiveColor(state) != C_EMPTY) continue;
+
       const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
 
-      // It doesn't make sense to calculate capturing when dot placed into own empty territory
-      if (emptyTerritoryColor != P_BLACK) {
+      // It doesn't make sense to calculate the capturing when a dot placed into own empty territory.
+      // Also, ignore locations in an empty base if suicide is disallowed.
+      if (emptyTerritoryColor == C_EMPTY || (emptyTerritoryColor == P_WHITE && rules.multiStoneSuicideLegal)) {
         makeMoveAndCalculateCapturesAndBases(P_BLACK, loc, captures, bases);
       }
 
-      if (emptyTerritoryColor != P_WHITE) {
+      if (emptyTerritoryColor == C_EMPTY || (emptyTerritoryColor == P_BLACK && rules.multiStoneSuicideLegal)) {
         makeMoveAndCalculateCapturesAndBases(P_WHITE, loc, captures, bases);
       }
     }
@@ -952,7 +956,7 @@ void Board::calculateOneMoveCaptureAndBasePositionsForDots(vector<Color>& captur
 
 std::pair<float, float> Board::getAcceptableKomiRange(const bool allowDraw, const int extraBlack) const {
   assert(rules.isDots);
-  auto lowerBound = static_cast<float>(-whiteScoreIfBlackGrounds) - extraBlack + (allowDraw ? 0.0f : 0.5f);
+  auto lowerBound = static_cast<float>(-whiteScoreIfBlackGrounds - extraBlack) + (allowDraw ? 0.0f : 0.5f);
   auto upperBound = static_cast<float>(blackScoreIfWhiteGrounds) + (allowDraw ? 0.0f : -0.5f);
   return {lowerBound, upperBound};
 }

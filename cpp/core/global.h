@@ -165,8 +165,8 @@ namespace Global
 
   // Float comparison
   constexpr float FLOAT_EPS = std::numeric_limits<float>::epsilon();
-  bool isEqual(float f1, float f2);
-  bool isZero(float f);
+  bool isEqual(float f1, float f2, float eps = FLOAT_EPS);
+  bool isZero(float f, float eps = FLOAT_EPS);
 
   void runTests();
 }  // namespace Global

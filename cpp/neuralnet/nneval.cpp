@@ -528,11 +528,15 @@ void NNEvaluator::serve(
         double whiteLossProb = 0.0 + rand.nextGaussian() * 0.20;
         double whiteScoreMean = 0.0 + rand.nextGaussian() * 0.20;
         double whiteScoreMeanSq = 0.0 + rand.nextGaussian() * 0.20;
-        double whiteNoResultProb = 0.0 + rand.nextGaussian() * 0.20;
         double varTimeLeft = 0.5 * boardXSize * boardYSize;
         resultBuf->result->whiteWinProb = (float)whiteWinProb;
         resultBuf->result->whiteLossProb = (float)whiteLossProb;
-        resultBuf->result->whiteNoResultProb = (float)whiteNoResultProb;
+        if (!dotsGame) {
+          const double whiteNoResultProb = 0.0 + rand.nextGaussian() * 0.20;
+          resultBuf->result->whiteNoResultProb = static_cast<float>(whiteNoResultProb);
+        } else {
+          resultBuf->result->whiteNoResultProb = 0.0f;
+        }
         resultBuf->result->whiteScoreMean = (float)whiteScoreMean;
         resultBuf->result->whiteScoreMeanSq = (float)whiteScoreMeanSq;
         resultBuf->result->whiteLead = (float)whiteScoreMean;
@@ -1032,7 +1036,11 @@ void NNEvaluator::evaluate(
         double shorttermWinlossErrorPreSoftplus = buf.result->shorttermWinlossError * postProcessParams.outputScaleMultiplier;
         double shorttermScoreErrorPreSoftplus = buf.result->shorttermScoreError * postProcessParams.outputScaleMultiplier;
 
-        if(history.rules.koRule != Rules::KO_SIMPLE && history.rules.scoringRule != Rules::SCORING_TERRITORY)
+        bool ignoreNoResult =
+          history.rules.isDots ||
+          (history.rules.koRule != Rules::KO_SIMPLE && history.rules.scoringRule != Rules::SCORING_TERRITORY);
+
+        if (ignoreNoResult)
           noResultLogits -= 100000.0;
 
         //Softmax
@@ -1041,7 +1049,7 @@ void NNEvaluator::evaluate(
         lossProb = exp(lossLogits - maxLogits);
         noResultProb = exp(noResultLogits - maxLogits);
 
-        if(history.rules.koRule != Rules::KO_SIMPLE && history.rules.scoringRule != Rules::SCORING_TERRITORY)
+        if (ignoreNoResult)
           noResultProb = 0.0;
 
         double probSum = winProb + lossProb + noResultProb;

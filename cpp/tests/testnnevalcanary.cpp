@@ -468,6 +468,9 @@ static std::shared_ptr<NNOutput> nnOutputOfJson(const std::string& s) {
   return nnOutput;
 }
 
+#ifndef USE_EIGEN_BACKEND
+[[maybe_unused]]
+#endif
 static void saveReferenceValuesToFile(const std::vector<std::shared_ptr<NNOutput>>& referenceValues, const string& referenceFileName, Logger& logger, bool verbose) {
   testAssert(referenceFileName != "");
   std::ofstream outFile;
@@ -485,6 +488,9 @@ static void saveReferenceValuesToFile(const std::vector<std::shared_ptr<NNOutput
   outFile.close();
 }
 
+#ifndef USE_EIGEN_BACKEND
+[[maybe_unused]]
+#endif
 static void loadReferenceValuesFromFile(std::vector<std::shared_ptr<NNOutput>>& referenceValues, const string& referenceFileName, Logger& logger, bool verbose) {
   testAssert(referenceFileName != "");
   referenceValues.clear();

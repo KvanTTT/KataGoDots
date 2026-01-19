@@ -239,54 +239,29 @@ void NNInputs::fillScoring(
 ) {
   std::fill_n(scoring, Board::MAX_ARR_SIZE, 0.0f);
 
-  if (board.isDots()) {
+  if(!groupTax) {
+    int blackCaptures = 0;
+    int whiteCaptures = 0;
     for(int y = 0; y<board.y_size; y++) {
       for(int x = 0; x<board.x_size; x++) {
         const Loc loc = Location::getLoc(x,y,board.x_size);
-        const State state = board.getState(loc);
-        const Color activeColor = getActiveColor(state);
-        const Color placedColor = getPlacedDotColor(state);
-
-        float scoringAtLoc;
-        float normCoef = 0.0f;
-        if (activeColor != C_EMPTY) {
-          assert(activeColor == C_BLACK || activeColor == C_WHITE);
-          normCoef = activeColor == C_WHITE ? 1.0f : -1.0f;
-
-          if (placedColor == C_EMPTY) {
-            scoringAtLoc = 0.5f; // Hopefully it encourages creating more bigger bases
-          }
-          else if (placedColor == activeColor) {
-            scoringAtLoc = !isTerritory(state) ? 0.25f : 0.0f; // Own dot inside own territory doesn't count at all
-          } else  {
-            assert(placedColor != C_WALL);
-            scoringAtLoc = 1.0f;  // placedColor != activeColor: actual scoring, encourage it with the max value
-          }
-        } else {
-          scoringAtLoc = 0.0f;
-        }
-        const float groundingPenalty = isGrounded(state) ? 1.0f : 0.5f; // Discourage ungrounded dots
-        scoring[loc] = scoringAtLoc * normCoef * groundingPenalty;
-      }
-    }
-  }
-  else if(!groupTax) {
-    for(int y = 0; y<board.y_size; y++) {
-      for(int x = 0; x<board.x_size; x++) {
-        Loc loc = Location::getLoc(x,y,board.x_size);
-        Color areaColor = area[loc];
-        if(areaColor == P_BLACK)
+        if (const Color areaColor = area[loc]; areaColor == P_BLACK) {
           scoring[loc] = -1.0f;
-        else if(areaColor == P_WHITE)
+          whiteCaptures++;
+        } else if(areaColor == P_WHITE) {
           scoring[loc] = 1.0f;
-        else {
+          blackCaptures++;
+        } else {
           assert(areaColor == C_EMPTY);
           scoring[loc] = 0;
         }
       }
     }
-  }
-  else {
+    if (board.isDots()) {
+      assert(board.numBlackCaptures == blackCaptures);
+      assert(board.numWhiteCaptures == whiteCaptures);
+    }
+  } else {
     bool visited[Board::MAX_ARR_SIZE];
     Loc queue[Board::MAX_ARR_SIZE];
 
