@@ -92,6 +92,23 @@ bool Rules::operator!=(const Rules& other) const {
   return !equals(other, false);
 }
 
+bool Rules::operator<(const Rules& other) const {
+  if (isDots != other.isDots) return isDots < other.isDots;
+  if (startPos != other.startPos) return startPos < other.startPos;
+  if (startPosIsRandom != other.startPosIsRandom) return startPosIsRandom < other.startPosIsRandom;
+  if (koRule != other.koRule) return koRule < other.koRule;
+  if (scoringRule != other.scoringRule) return scoringRule < other.scoringRule;
+  if (taxRule != other.taxRule) return taxRule < other.taxRule;
+  if (multiStoneSuicideLegal != other.multiStoneSuicideLegal) return multiStoneSuicideLegal < other.multiStoneSuicideLegal;
+  if (hasButton != other.hasButton) return hasButton < other.hasButton;
+  if (whiteHandicapBonusRule != other.whiteHandicapBonusRule) return whiteHandicapBonusRule < other.whiteHandicapBonusRule;
+  if (friendlyPassOk != other.friendlyPassOk) return friendlyPassOk < other.friendlyPassOk;
+  if (komi != other.komi) return komi < other.komi;
+  if (dotsCaptureEmptyBases != other.dotsCaptureEmptyBases) return dotsCaptureEmptyBases < other.dotsCaptureEmptyBases;
+  if (dotsFreeCapturedDots != other.dotsFreeCapturedDots) return dotsFreeCapturedDots < other.dotsFreeCapturedDots;
+  return false;
+}
+
 bool Rules::equalsIgnoringSgfDefinedProps(const Rules& other) const {
   return equals(other, true);
 }
@@ -389,124 +406,97 @@ Rules Rules::updateRules(const string& k, const string& v, const Rules& oldRules
   return rules;
 }
 
+static map<string, Rules> rulesPresetsMap;
+static map<Rules, string> rulesPresets;
+
+static void initializeRulesPresets() {
+  if (!rulesPresetsMap.empty()) return;
+
+  auto addPreset = [](const Rules& rules, const string& mainName, const vector<string>& extraNames) {
+    rulesPresets[rules] = mainName;
+    rulesPresetsMap[Global::toLower(mainName)] = rules;
+    for (const string& extraName : extraNames) {
+      rulesPresetsMap[Global::toLower(extraName)] = rules;
+    }
+  };
+
+  Rules dotsBBSRules = Rules::DEFAULT_DOTS;
+  dotsBBSRules.startPos = Rules::START_POS_CROSS;
+  dotsBBSRules.startPosIsRandom = false;
+  addPreset(dotsBBSRules, DOTS_BBS_STANDARD_RULES, {});
+
+  Rules dotsNotagoRules = Rules::DEFAULT_DOTS;
+  dotsNotagoRules.startPos = Rules::START_POS_CROSS_4;
+  dotsNotagoRules.startPosIsRandom = true;
+  addPreset(dotsNotagoRules, DOTS_NOTAGO_STANDARD_RULES, {});
+
+  addPreset(
+    Rules(Rules::KO_SIMPLE, Rules::SCORING_TERRITORY, Rules::TAX_SEKI, false, false, Rules::WHB_ZERO, false, 6.5f),
+    "Japanese",
+    {"korean"}
+    );
+
+  addPreset(
+    Rules(Rules::KO_SIMPLE, Rules::SCORING_AREA, Rules::TAX_NONE, false, false, Rules::WHB_N, true, 7.5f),
+    "Chinese",
+    {}
+  );
+
+  addPreset(
+    Rules(Rules::KO_POSITIONAL, Rules::SCORING_AREA, Rules::TAX_NONE, false, false, Rules::WHB_N, true, 7.5f),
+      "Chinese-OGS",
+      {"chineseogs", "chinese_ogs", "chinesekgs", "chinese_kgs", "chinese-kgs"}
+      );
+
+  addPreset(
+    Rules(Rules::KO_SIMPLE, Rules::SCORING_AREA, Rules::TAX_ALL, false, false, Rules::WHB_ZERO, true, 7.5f),
+      "StoneScoring",
+      {"ancientarea", "ancient-area", "ancient_area", "ancient area", "stone-scoring", "stone_scoring", "stone scoring"}
+      );
+
+  addPreset(Rules(Rules::KO_SIMPLE, Rules::SCORING_TERRITORY, Rules::TAX_ALL, false, false, Rules::WHB_ZERO, false, 6.5f),
+    "AncientTerritory",
+      {"ancient-territory", "ancient_territory", "ancient territory"});
+
+  addPreset(Rules(Rules::KO_SITUATIONAL, Rules::SCORING_AREA, Rules::TAX_NONE, false, true, Rules::WHB_N_MINUS_ONE, true, 7.0f),
+    "AgaButton",
+      {"aga-button", "aga_button", "aga button"});
+
+  addPreset(Rules(Rules::KO_SITUATIONAL, Rules::SCORING_AREA, Rules::TAX_NONE, false, false, Rules::WHB_N_MINUS_ONE, true, 7.5f),
+    "AGA",
+      {"bga", "french"}
+      );
+
+  addPreset(Rules(Rules::KO_SITUATIONAL, Rules::SCORING_AREA, Rules::TAX_NONE, true, false, Rules::WHB_ZERO, true, 7.5f),
+    "NewZealand",
+      {"nz", "new zealand", "new-zealand", "new_zealand"}
+      );
+
+  addPreset(Rules(Rules::KO_POSITIONAL, Rules::SCORING_AREA, Rules::TAX_NONE, true, false, Rules::WHB_ZERO, false, 7.5f),
+    "TrompTaylor",
+      {"tromp-taylor", "tromp_taylor", "tromp taylor"}
+      );
+
+  addPreset(Rules(Rules::KO_POSITIONAL, Rules::SCORING_AREA, Rules::TAX_NONE, true, false, Rules::WHB_ZERO, true, 7.5f),
+    "Goe",
+    {"ing"}
+    );
+}
+
 static Rules parseRulesHelper(const string& sOrig, bool allowKomi, bool isDots) {
-  auto rules = Rules(isDots);
+  initializeRulesPresets();
   string lowercased = Global::trim(Global::toLower(sOrig));
-  if(lowercased == DOTS_BBS_STANDARD_RULES) {
-    rules = Rules::DEFAULT_DOTS;
-    rules.startPos = Rules::START_POS_CROSS;
-    rules.startPosIsRandom = false;
-  } else if (lowercased == DOTS_NOTAGO_STANDARD_RULES) {
-    rules = Rules::DEFAULT_DOTS;
-    rules.startPos = Rules::START_POS_CROSS_4;
-    rules.startPosIsRandom = true;
-  } else if(lowercased == "japanese" || lowercased == "korean") {
-    rules.scoringRule = Rules::SCORING_TERRITORY;
-    rules.koRule = Rules::KO_SIMPLE;
-    rules.taxRule = Rules::TAX_SEKI;
-    rules.multiStoneSuicideLegal = false;
-    rules.hasButton = false;
-    rules.whiteHandicapBonusRule = Rules::WHB_ZERO;
-    rules.friendlyPassOk = false;
-    rules.komi = 6.5;
+
+  if (const auto it = rulesPresetsMap.find(lowercased); it != rulesPresetsMap.end()) {
+    if (it->second.isDots != isDots) {
+      // TODO: use `IOError` (currently `IOError` has no error message on Windows for some reason)
+      throw std::invalid_argument("Unable to use \"" + sOrig + "\" rules when " + DOTS_KEY + " is " + (isDots ? "true" : "false"));
+    }
+    return it->second;
   }
-  else if(lowercased == "chinese") {
-    rules.scoringRule = Rules::SCORING_AREA;
-    rules.koRule = Rules::KO_SIMPLE;
-    rules.taxRule = Rules::TAX_NONE;
-    rules.multiStoneSuicideLegal = false;
-    rules.hasButton = false;
-    rules.whiteHandicapBonusRule = Rules::WHB_N;
-    rules.friendlyPassOk = true;
-    rules.komi = 7.5;
-  }
-  else if(
-    lowercased == "chineseogs" || lowercased == "chinese_ogs" || lowercased == "chinese-ogs" ||
-    lowercased == "chinesekgs" || lowercased == "chinese_kgs" || lowercased == "chinese-kgs"
-  ) {
-    rules.scoringRule = Rules::SCORING_AREA;
-    rules.koRule = Rules::KO_POSITIONAL;
-    rules.taxRule = Rules::TAX_NONE;
-    rules.multiStoneSuicideLegal = false;
-    rules.hasButton = false;
-    rules.whiteHandicapBonusRule = Rules::WHB_N;
-    rules.friendlyPassOk = true;
-    rules.komi = 7.5;
-  }
-  else if(
-    lowercased == "ancientarea" || lowercased == "ancient-area" || lowercased == "ancient_area" || lowercased == "ancient area" ||
-    lowercased == "stonescoring" || lowercased == "stone-scoring" || lowercased == "stone_scoring" || lowercased == "stone scoring"
-  ) {
-    rules.scoringRule = Rules::SCORING_AREA;
-    rules.koRule = Rules::KO_SIMPLE;
-    rules.taxRule = Rules::TAX_ALL;
-    rules.multiStoneSuicideLegal = false;
-    rules.hasButton = false;
-    rules.whiteHandicapBonusRule = Rules::WHB_ZERO;
-    rules.friendlyPassOk = true;
-    rules.komi = 7.5;
-  }
-  else if(lowercased == "ancientterritory" || lowercased == "ancient-territory" || lowercased == "ancient_territory" || lowercased == "ancient territory") {
-    rules.scoringRule = Rules::SCORING_TERRITORY;
-    rules.koRule = Rules::KO_SIMPLE;
-    rules.taxRule = Rules::TAX_ALL;
-    rules.multiStoneSuicideLegal = false;
-    rules.hasButton = false;
-    rules.whiteHandicapBonusRule = Rules::WHB_ZERO;
-    rules.friendlyPassOk = false;
-    rules.komi = 6.5;
-  }
-  else if(lowercased == "agabutton" || lowercased == "aga-button" || lowercased == "aga_button" || lowercased == "aga button") {
-    rules.scoringRule = Rules::SCORING_AREA;
-    rules.koRule = Rules::KO_SITUATIONAL;
-    rules.taxRule = Rules::TAX_NONE;
-    rules.multiStoneSuicideLegal = false;
-    rules.hasButton = true;
-    rules.whiteHandicapBonusRule = Rules::WHB_N_MINUS_ONE;
-    rules.friendlyPassOk = true;
-    rules.komi = 7.0;
-  }
-  else if(lowercased == "aga" || lowercased == "bga" || lowercased == "french") {
-    rules.scoringRule = Rules::SCORING_AREA;
-    rules.koRule = Rules::KO_SITUATIONAL;
-    rules.taxRule = Rules::TAX_NONE;
-    rules.multiStoneSuicideLegal = false;
-    rules.hasButton = false;
-    rules.whiteHandicapBonusRule = Rules::WHB_N_MINUS_ONE;
-    rules.friendlyPassOk = true;
-    rules.komi = 7.5;
-  }
-  else if(lowercased == "nz" || lowercased == "newzealand" || lowercased == "new zealand" || lowercased == "new-zealand" || lowercased == "new_zealand") {
-    rules.scoringRule = Rules::SCORING_AREA;
-    rules.koRule = Rules::KO_SITUATIONAL;
-    rules.taxRule = Rules::TAX_NONE;
-    rules.multiStoneSuicideLegal = true;
-    rules.hasButton = false;
-    rules.whiteHandicapBonusRule = Rules::WHB_ZERO;
-    rules.friendlyPassOk = true;
-    rules.komi = 7.5;
-  }
-  else if(lowercased == "tromp-taylor" || lowercased == "tromp_taylor" || lowercased == "tromp taylor" || lowercased == "tromptaylor") {
-    rules.scoringRule = Rules::SCORING_AREA;
-    rules.koRule = Rules::KO_POSITIONAL;
-    rules.taxRule = Rules::TAX_NONE;
-    rules.multiStoneSuicideLegal = true;
-    rules.hasButton = false;
-    rules.whiteHandicapBonusRule = Rules::WHB_ZERO;
-    rules.friendlyPassOk = false;
-    rules.komi = 7.5;
-  }
-  else if(lowercased == "goe" || lowercased == "ing") {
-    rules.scoringRule = Rules::SCORING_AREA;
-    rules.koRule = Rules::KO_POSITIONAL;
-    rules.taxRule = Rules::TAX_NONE;
-    rules.multiStoneSuicideLegal = true;
-    rules.hasButton = false;
-    rules.whiteHandicapBonusRule = Rules::WHB_ZERO;
-    rules.friendlyPassOk = true;
-    rules.komi = 7.5;
-  }
-  else if(!sOrig.empty() && sOrig[0] == '{') {
+
+  auto rules = Rules(isDots);
+  if(!sOrig.empty() && sOrig[0] == '{') {
     //Default if not specified
     rules = Rules::getDefaultOrTrompTaylorish(isDots);
     bool komiSpecified = false;
@@ -719,24 +709,13 @@ bool Rules::tryParseRulesWithoutKomi(const string& sOrig, Rules& buf, float komi
 }
 
 string Rules::toStringNoSgfDefinedPropertiesMaybeNice() const {
-  if(equalsIgnoringSgfDefinedProps(parseRulesHelper(DOTS_BBS_STANDARD_RULES, false, isDots)))
-    return DOTS_BBS_STANDARD_RULES;
-  if(equalsIgnoringSgfDefinedProps(parseRulesHelper(DOTS_NOTAGO_STANDARD_RULES, false, isDots)))
-    return DOTS_NOTAGO_STANDARD_RULES;
-  if(equalsIgnoringSgfDefinedProps(parseRulesHelper("TrompTaylor",false, isDots)))
-    return "TrompTaylor";
-  if(equalsIgnoringSgfDefinedProps(parseRulesHelper("Japanese",false, isDots)))
-    return "Japanese";
-  if(equalsIgnoringSgfDefinedProps(parseRulesHelper("Chinese",false, isDots)))
-    return "Chinese";
-  if(equalsIgnoringSgfDefinedProps(parseRulesHelper("Chinese-OGS",false, isDots)))
-    return "Chinese-OGS";
-  if(equalsIgnoringSgfDefinedProps(parseRulesHelper("AGA",false, isDots)))
-    return "AGA";
-  if(equalsIgnoringSgfDefinedProps(parseRulesHelper("StoneScoring",false, isDots)))
-    return "StoneScoring";
-  if(equalsIgnoringSgfDefinedProps(parseRulesHelper("NewZealand",false, isDots)))
-    return "NewZealand";
+  initializeRulesPresets();
+
+  for(const auto&[rules, title] : rulesPresets) {
+    if(equalsIgnoringSgfDefinedProps(rules))
+      return title;
+  }
+
   return toString(false);
 }
 

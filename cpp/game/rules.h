@@ -79,6 +79,7 @@ struct Rules {
 
   bool operator==(const Rules& other) const;
   bool operator!=(const Rules& other) const;
+  bool operator<(const Rules& other) const;
 
   [[nodiscard]] bool equalsIgnoringSgfDefinedProps(const Rules& other) const;
   [[nodiscard]] bool equals(const Rules& other, bool ignoreSgfDefinedProps) const;
