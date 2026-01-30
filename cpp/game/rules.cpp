@@ -392,8 +392,14 @@ Rules Rules::updateRules(const string& k, const string& v, const Rules& oldRules
 static Rules parseRulesHelper(const string& sOrig, bool allowKomi, bool isDots) {
   auto rules = Rules(isDots);
   string lowercased = Global::trim(Global::toLower(sOrig));
-  if(lowercased == DOTS_KEY) {
+  if(lowercased == DOTS_BBS_STANDARD_RULES) {
     rules = Rules::DEFAULT_DOTS;
+    rules.startPos = Rules::START_POS_CROSS;
+    rules.startPosIsRandom = false;
+  } else if (lowercased == DOTS_NOTAGO_STANDARD_RULES) {
+    rules = Rules::DEFAULT_DOTS;
+    rules.startPos = Rules::START_POS_CROSS_4;
+    rules.startPosIsRandom = true;
   } else if(lowercased == "japanese" || lowercased == "korean") {
     rules.scoringRule = Rules::SCORING_TERRITORY;
     rules.koRule = Rules::KO_SIMPLE;
@@ -713,8 +719,10 @@ bool Rules::tryParseRulesWithoutKomi(const string& sOrig, Rules& buf, float komi
 }
 
 string Rules::toStringNoSgfDefinedPropertiesMaybeNice() const {
-  if(equalsIgnoringSgfDefinedProps(parseRulesHelper(DOTS_KEY, false, isDots)))
-    return "Dots";
+  if(equalsIgnoringSgfDefinedProps(parseRulesHelper(DOTS_BBS_STANDARD_RULES, false, isDots)))
+    return DOTS_BBS_STANDARD_RULES;
+  if(equalsIgnoringSgfDefinedProps(parseRulesHelper(DOTS_NOTAGO_STANDARD_RULES, false, isDots)))
+    return DOTS_NOTAGO_STANDARD_RULES;
   if(equalsIgnoringSgfDefinedProps(parseRulesHelper("TrompTaylor",false, isDots)))
     return "TrompTaylor";
   if(equalsIgnoringSgfDefinedProps(parseRulesHelper("Japanese",false, isDots)))
