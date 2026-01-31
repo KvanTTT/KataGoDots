@@ -12,6 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [OPENCL, EIGEN]
     
     steps:
     - name: Checkout code
@@ -20,7 +24,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake build-essential zlib1g-dev libzip-dev opencl-headers ocl-icd-opencl-dev
+        sudo apt-get install -y cmake build-essential zlib1g-dev libzip-dev opencl-headers ocl-icd-opencl-dev libeigen3-dev
 
     - name: Cache CMake build
       uses: actions/cache@v4
@@ -28,7 +32,7 @@ jobs:
         path: |
           cpp/CMakeCache.txt
           cpp/CMakeFiles
-        key: ${{ runner.os }}-cmake-${{ hashFiles('**/CMakeLists.txt') }}
+        key: ${{ runner.os }}-cmake-${{ hashFiles('**/CMakeLists.txt') }}-${{ matrix.backend }}
         restore-keys: |
           ${{ runner.os }}-cmake-
 
@@ -36,7 +40,7 @@ jobs:
       working-directory: cpp
       # Use '-DCMAKE_CXX_FLAGS_RELEASE="-s"' to strip debug symbols. Otherwise, the executable is too big
       run: |
-        cmake . -DUSE_BACKEND=OPENCL -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE="-s"
+        cmake . -DUSE_BACKEND=${{ matrix.backend }} -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE="-s"
 
     - name: Build
       working-directory: cpp
@@ -52,7 +56,7 @@ jobs:
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
       with:
-        name: katago-linux-opencl
+        name: katago-linux-${{ matrix.backend }}
         path: cpp/katago
 
   build-macos:
