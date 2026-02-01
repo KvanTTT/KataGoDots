@@ -23,12 +23,14 @@ using namespace std;
 const string GET_MOVES_COMMAND = "get_moves";
 const string GET_POSITION_COMMAND = "get_position";
 const string GET_BOARDSIZE = "get_boardsize";
+const string INFO = "info";
 
 static const vector<string> knownCommands = {
   //Basic GTP commands
   "protocol_version",
   "name",
   "version",
+  INFO,
   "known_command",
   "list_commands",
   "quit",
@@ -2308,6 +2310,14 @@ int MainCmds::gtp(const vector<string>& args) {
           parts.push_back(engine->humanEval->getAbbrevInternalModelName());
         response = Global::concat(parts,"+");
       }
+    }
+
+    else if (command == INFO) {
+      response = Version::getAppFullInfo(true);
+      if(engine->nnEval != nullptr)
+        response += "," + engine->nnEval->getInternalModelName();
+      if(engine->humanEval != nullptr)
+        response += "," + engine->humanEval->getInternalModelName();
     }
 
     else if(command == "known_command") {
