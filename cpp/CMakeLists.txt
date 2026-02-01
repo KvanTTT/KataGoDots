@@ -240,6 +240,7 @@ add_executable(katago
   core/threadsafequeue.cpp
   core/threadtest.cpp
   core/timer.cpp
+  core/TimeStampHandler.cpp
   game/board.cpp
   game/dotsfield.cpp
   game/rules.cpp

@@ -13,6 +13,7 @@
 #include "../program/selfplaymanager.h"
 #include "../command/commandline.h"
 #include "../main.h"
+#include "../core/TimeStampHandler.h"
 
 #include <chrono>
 #include <csignal>
@@ -80,16 +81,18 @@ int MainCmds::selfplay(const vector<string>& args) {
   MakeDir::make(outputDir);
   MakeDir::make(modelsDir);
 
+  auto *timeStampHandler = new TimeStampHandler(seedRand);
+  string timeStampSeed = timeStampHandler->getCurrentRandSeed();
+
   Logger logger(&cfg);
   //Log to random file name to better support starting/stopping as well as multiple parallel runs
-  logger.addFile(outputDir + "/log" + DateTime::getCompactDateTimeString() + "-" + Global::uint64ToHexString(seedRand.nextUInt64()) + ".log");
+  logger.addFile(timeStampHandler->generateFileName(outputDir + "/log", ".log"));
 
   logger.write("Self Play Engine starting...");
   logger.write(string("Git revision: ") + Version::getGitRevision());
 
   //Load runner settings
   const int numGameThreads = cfg.getInt("numGameThreads",1,16384);
-  const string gameSeedBase = Global::uint64ToHexString(seedRand.nextUInt64());
 
   //Width and height of the board to use when writing data, typically 19
   int dataBoardLen = Board::MAX_LEN;
@@ -141,7 +144,7 @@ int MainCmds::selfplay(const vector<string>& args) {
   auto loadLatestNeuralNetIntoManager =
     [inputsVersion,&manager,maxRowsPerTrainFile,firstFileRandMinProp,dataBoardLenX,dataBoardLenY,
      &modelsDir,&outputDir,&logger,&cfg,numGameThreads,
-     minBoardXSizeUsed,maxBoardXSizeUsed,minBoardYSizeUsed,maxBoardYSizeUsed,dotsGame](const string* lastNetName) -> bool {
+     minBoardXSizeUsed,maxBoardXSizeUsed,minBoardYSizeUsed,maxBoardYSizeUsed,dotsGame, timeStampHandler](const string* lastNetName) -> bool {
 
     string modelName;
     string modelFile;
@@ -209,7 +212,7 @@ int MainCmds::selfplay(const vector<string>& args) {
 
     {
       ofstream out;
-      FileUtils::open(out,modelOutputDir + "/" + "selfplay-" + Global::uint64ToHexString(rand.nextUInt64()) + ".cfg");
+      FileUtils::open(out, timeStampHandler->generateFileName(modelOutputDir + "/selfplay-", ".cfg"));
       out << cfg.getContents();
       out.close();
     }
@@ -217,11 +220,11 @@ int MainCmds::selfplay(const vector<string>& args) {
     //Note that this inputsVersion passed here is NOT necessarily the same as the one used in the neural net self play, it
     //simply controls the input feature version for the written data
     auto tdataWriter = new TrainingDataWriter(
-      tdataOutputDir, nullptr, inputsVersion, maxRowsPerTrainFile, firstFileRandMinProp, dataBoardLenX, dataBoardLenY, Global::uint64ToHexString(rand.nextUInt64()), 1, dotsGame);
+      tdataOutputDir, nullptr, inputsVersion, maxRowsPerTrainFile, firstFileRandMinProp, dataBoardLenX, dataBoardLenY, timeStampHandler->getCurrentRandSeed(), 1, dotsGame);
     ofstream* sgfOut = nullptr;
-    if(sgfOutputDir.length() > 0) {
+    if (!sgfOutputDir.empty()) {
       sgfOut = new ofstream();
-      FileUtils::open(*sgfOut, sgfOutputDir + "/" + Global::uint64ToHexString(rand.nextUInt64()) + ".sgfs");
+      FileUtils::open(*sgfOut, timeStampHandler->generateFileName(sgfOutputDir + "/selfplay-", ".sgfs"));
     }
 
     logger.write("Model loading loop thread loaded new neural net " + nnEval->getModelName());
@@ -251,7 +254,7 @@ int MainCmds::selfplay(const vector<string>& args) {
     &forkData,
     maxGamesTotal,
     &baseParams,
-    &gameSeedBase
+    &timeStampSeed
   ](int threadIdx) {
     auto shouldStopFunc = []() noexcept {
       return shouldStop.load();
@@ -299,7 +302,7 @@ int MainCmds::selfplay(const vector<string>& args) {
         botSpecB.baseParams = baseParams;
         MatchPairer::BotSpec botSpecW = botSpecB;
 
-        string seed = gameSeedBase + ":" + Global::uint64ToHexString(thisLoopSeedRand.nextUInt64());
+        string seed = timeStampSeed + ":" + Global::uint64ToHexString(thisLoopSeedRand.nextUInt64());
         gameData = gameRunner->runGame(
           seed, botSpecB, botSpecW, forkData, NULL, logger,
           shouldStopFunc,
@@ -386,6 +389,7 @@ int MainCmds::selfplay(const vector<string>& args) {
   NeuralNet::globalCleanup();
   delete forkData;
   delete gameRunner;
+  delete timeStampHandler;
   ScoreValue::freeTables();
 
   if(sigReceived.load())

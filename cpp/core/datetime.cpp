@@ -90,7 +90,7 @@ std::string DateTime::getCompactDateTimeString() {
   time_t time = getNow();
   std::tm tm = localTime(time);
   std::ostringstream out;
-  out << std::put_time(&tm, "%Y%m%d-%H%M%S");
+  out << std::put_time(&tm, "%Y-%m-%d-%H-%M-%S");
   return out.str();
 }
 
