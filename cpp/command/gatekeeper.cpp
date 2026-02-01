@@ -13,6 +13,7 @@
 #include "../program/play.h"
 #include "../command/commandline.h"
 #include "../main.h"
+#include "../core/TimeStampHandler.h"
 
 #include <sstream>
 
@@ -316,9 +317,11 @@ int MainCmds::gatekeeper(const vector<string>& args) {
   if(selfplayDir != "")
     MakeDir::make(selfplayDir);
 
+  auto *timeStampHandler = new TimeStampHandler(seedRand);
+
   Logger logger(&cfg);
   //Log to random file name to better support starting/stopping as well as multiple parallel runs
-  logger.addFile(sgfOutputDir + "/log" + DateTime::getCompactDateTimeString() + "-" + Global::uint64ToHexString(seedRand.nextUInt64()) + ".log");
+  logger.addFile(timeStampHandler->generateFileName(sgfOutputDir + "/log", ".log"));
 
   logger.write("Gatekeeper Engine starting...");
   logger.write(string("Git revision: ") + Version::getGitRevision());
@@ -375,7 +378,7 @@ int MainCmds::gatekeeper(const vector<string>& args) {
   auto loadLatestNeuralNet =
     [&testModelsDir,&rejectedModelsDir,&acceptedModelsDir,&sgfOutputDir,&logger,&cfg,numGameThreads,noAutoRejectOldModels,
      requiredCandidateWinProp,
-     minBoardXSizeUsed,maxBoardXSizeUsed,minBoardYSizeUsed,maxBoardYSizeUsed]() -> NetAndStuff* {
+     minBoardXSizeUsed,maxBoardXSizeUsed,minBoardYSizeUsed,maxBoardYSizeUsed, timeStampHandler]() -> NetAndStuff* {
     Rand rand;
 
     string testModelName;
@@ -430,7 +433,7 @@ int MainCmds::gatekeeper(const vector<string>& args) {
     MakeDir::make(sgfOutputDirThisModel);
     {
       ofstream out;
-      FileUtils::open(out, sgfOutputDirThisModel + "/" + "gatekeeper-" + Global::uint64ToHexString(rand.nextUInt64()) + ".cfg");
+      FileUtils::open(out, timeStampHandler->generateFileName(sgfOutputDirThisModel + "/gatekeeper-", ".cfg"));
       out << cfg.getContents();
       out.close();
     }
@@ -438,7 +441,7 @@ int MainCmds::gatekeeper(const vector<string>& args) {
     ofstream* sgfOut = NULL;
     if(sgfOutputDirThisModel.length() > 0) {
       sgfOut = new ofstream();
-      FileUtils::open(*sgfOut, sgfOutputDirThisModel + "/" + Global::uint64ToHexString(rand.nextUInt64()) + ".sgfs");
+      FileUtils::open(*sgfOut,  timeStampHandler->generateFileName(sgfOutputDirThisModel + "/gatekeeper-", ".sgfs"));
     }
     NetAndStuff* newNet = new NetAndStuff(
       cfg,
@@ -639,6 +642,7 @@ int MainCmds::gatekeeper(const vector<string>& args) {
   //Delete and clean up everything else
   NeuralNet::globalCleanup();
   delete gameRunner;
+  delete timeStampHandler;
   ScoreValue::freeTables();
 
   if(sigReceived.load())
