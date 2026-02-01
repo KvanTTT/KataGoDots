@@ -1,6 +1,7 @@
 #include "../dataio/trainingwrite.h"
 
 #include "../core/fileutils.h"
+#include "../core/TimeStampHandler.h"
 #include "../neuralnet/modelversion.h"
 
 using namespace std;
@@ -965,9 +966,10 @@ TrainingDataWriter::TrainingDataWriter(const string& newOutputDir, ostream* newD
   const int dataXLen,
   const int dataYLen,
   const string& randSeed,
+  TimeStampHandler* newTimeStampHandler,
   const int onlyWriteEvery,
   const bool dotsGame)
-  :outputDir(newOutputDir),inputsVersion(newInputsVersion),rand(randSeed),writeBuffers(nullptr),debugOut(newDebugOut),debugOnlyWriteEvery(onlyWriteEvery),rowCount(0)
+  :outputDir(newOutputDir),inputsVersion(newInputsVersion),rand(randSeed),timeStampHandler(newTimeStampHandler),writeBuffers(nullptr),debugOut(newDebugOut),debugOnlyWriteEvery(onlyWriteEvery),rowCount(0)
 {
   //Note that this inputsVersion is for data writing, it might be different than the inputsVersion used
   // to feed into a model during selfplay
@@ -1033,7 +1035,10 @@ bool TrainingDataWriter::flushIfNonempty(string& resultingFilename) {
     resultingFilename = "";
   }
   else {
-    resultingFilename = outputDir + "/" + Global::uint64ToHexString(rand.nextUInt64()) + ".npz";
+    if (timeStampHandler != nullptr)
+      resultingFilename = timeStampHandler->generateFileName(outputDir + "/", ".npz");
+    else
+      resultingFilename = outputDir + "/" + Global::uint64ToHexString(rand.nextUInt64()) + ".npz";
     string tmpFilename = resultingFilename + ".tmp";
     writeBuffers->writeToZipFile(tmpFilename);
     writeBuffers->clear();

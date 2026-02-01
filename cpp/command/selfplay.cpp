@@ -220,7 +220,7 @@ int MainCmds::selfplay(const vector<string>& args) {
     //Note that this inputsVersion passed here is NOT necessarily the same as the one used in the neural net self play, it
     //simply controls the input feature version for the written data
     auto tdataWriter = new TrainingDataWriter(
-      tdataOutputDir, nullptr, inputsVersion, maxRowsPerTrainFile, firstFileRandMinProp, dataBoardLenX, dataBoardLenY, timeStampHandler->getCurrentRandSeed(), 1, dotsGame);
+      tdataOutputDir, nullptr, inputsVersion, maxRowsPerTrainFile, firstFileRandMinProp, dataBoardLenX, dataBoardLenY, timeStampHandler->getCurrentRandSeed(), timeStampHandler, 1, dotsGame);
     ofstream* sgfOut = nullptr;
     if (!sgfOutputDir.empty()) {
       sgfOut = new ofstream();

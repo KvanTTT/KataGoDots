@@ -5,8 +5,9 @@
 #include "../neuralnet/nninputs.h"
 #include "../neuralnet/sgfmetadata.h"
 #include "../neuralnet/nninterface.h"
+#include "../core/TimeStampHandler.h"
 
-STRUCT_NAMED_PAIR(Loc,loc,int16_t,policyTarget,PolicyTargetMove);
+STRUCT_NAMED_PAIR(Loc, loc, int16_t, policyTarget, PolicyTargetMove);
 STRUCT_NAMED_PAIR(std::vector<PolicyTargetMove>*,policyTargets,int64_t,unreducedNumVisits,PolicyTarget);
 
 STRUCT_NAMED_QUAD(Loc,loc,float,winLoss,float,score,int64_t,visits,QValueTargetMove);
@@ -311,7 +312,19 @@ struct TrainingWriteBuffers {
 
 class TrainingDataWriter {
  public:
-  TrainingDataWriter(const std::string& newOutputDir, std::ostream* newDebugOut, int newInputsVersion, int maxRowsPerFile, double firstFileMinRandProp, int dataXLen, int dataYLen, const std::string& randSeed, int onlyWriteEvery = 1, bool dotsGame = false);
+  TrainingDataWriter(
+    const std::string& newOutputDir,
+    std::ostream* newDebugOut,
+    int newInputsVersion,
+    int maxRowsPerFile,
+    double firstFileMinRandProp,
+    int dataXLen,
+    int dataYLen,
+    const std::string& randSeed,
+    TimeStampHandler* newTimeStampHandler = nullptr,
+    int onlyWriteEvery = 1,
+    bool dotsGame = false
+    );
   ~TrainingDataWriter();
 
   void writeGame(const FinishedGameData& data);
@@ -325,6 +338,7 @@ class TrainingDataWriter {
   std::string outputDir;
   int inputsVersion;
   Rand rand;
+  TimeStampHandler* timeStampHandler;
   TrainingWriteBuffers* writeBuffers;
 
   std::ostream* debugOut;

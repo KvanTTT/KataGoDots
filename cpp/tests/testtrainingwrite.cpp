@@ -15,7 +15,7 @@ static TrainingDataWriter createTestTrainingDataWriter(
   const int nnYLen,
   const string& seed,
   const int onlyWriteEvery) {
-  return TrainingDataWriter(string(), &cout, inputVersion, 256, 1.0f, nnXLen, nnYLen, seed, onlyWriteEvery);
+  return TrainingDataWriter(string(), &cout, inputVersion, 256, 1.0f, nnXLen, nnYLen, seed, nullptr, onlyWriteEvery);
 }
 
 static NNEvaluator* startNNEval(
