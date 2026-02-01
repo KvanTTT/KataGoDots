@@ -812,7 +812,7 @@ struct ModelParser {
       }
       return activationLayer;
     }
-    else if(desc->activation == ACTIVATION_RELU) {
+    if(desc->activation == ACTIVATION_RELU) {
       auto activationLayer = model->network->addActivation(*input, ActivationType::kRELU);
       activationLayer->setName(desc->name.c_str());
       if(forceFP32) {
@@ -820,7 +820,7 @@ struct ModelParser {
       }
       return activationLayer;
     }
-    else if(desc->activation == ACTIVATION_MISH) {
+    if(desc->activation == ACTIVATION_MISH) {
       auto softplusLayer = model->network->addActivation(*input, ActivationType::kSOFTPLUS);
       auto softplusLayerName = desc->name + "/softplus";
       softplusLayer->setName(softplusLayerName.c_str());
@@ -836,7 +836,7 @@ struct ModelParser {
       }
       return mergeLayer;
     }
-    else if(desc->activation == ACTIVATION_MISH_SCALE8) {
+    if(desc->activation == ACTIVATION_MISH_SCALE8) {
       auto softplusLayer = model->network->addActivation(*input, ActivationType::kSOFTPLUS);
       softplusLayer->setAlpha(1.0f);
       softplusLayer->setBeta(8.0f);
@@ -854,9 +854,8 @@ struct ModelParser {
       }
       return mergeLayer;
     }
-    else {
-      ASSERT_UNREACHABLE;
-    }
+    ASSERT_UNREACHABLE;
+    return nullptr;
   }
 
   ILayer* applyGPoolLayer(ILayer* inputLayer, bool forceFP32 = false, bool isValueHead = false) {
