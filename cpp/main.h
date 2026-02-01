@@ -67,4 +67,5 @@ namespace Version {
   std::string getGitRevision();
   std::string getBackend();
   std::string getBuildType();
+  std::string getCompilationDateTime(bool csv = false);
 }

@@ -288,7 +288,7 @@ string Version::getAppFullInfo(bool csv) {
   if (!csv) {
     out << "Compile Time: ";
   }
-  out << __DATE__ << " " << __TIME__;
+  out << getCompilationDateTime(csv);
   out << commaOrLineBreak();
 
   if (!csv) {
@@ -348,4 +348,40 @@ string Version::getBackend() {
   "dummy"
 #endif
   ;
+}
+
+string Version::getCompilationDateTime(const bool csv) {
+  if (csv) {
+    try {
+      // Try to return date-time in the following format (completely numeric): YYYY-MM-DD-HH-MM-SS
+      const vector<std::string> dateStrs = Global::split(__DATE__);
+      const vector<std::string> timeStrs = Global::split(__TIME__, ':');
+
+      const int year = Global::stringToInt(dateStrs[2]);
+
+      static const vector<string> months = {
+        "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"
+      };
+      const size_t monthIndex = indexOf(months, dateStrs[0]);
+      if (monthIndex == std::string::npos) throw std::runtime_error("Invalid month");
+
+      const int day = Global::stringToInt(dateStrs[1]);
+
+      const int hour = Global::stringToInt(timeStrs[0]);
+
+      const int minute = Global::stringToInt(timeStrs[1]);
+
+      const int second = Global::stringToInt(timeStrs[2]);
+
+      std::string out;
+      out.resize(19); // "YYYY-MM-DD-hh-mm-ss" = 19 chars
+      std::snprintf(out.data(), out.size() + 1,
+                    "%04d-%02d-%02d-%02d-%02d-%02d",
+                    year, static_cast<int>(monthIndex) + 1, day, hour, minute, second);
+      return out;
+    } catch (const std::exception& _) {
+    }
+  }
+
+  return string(__DATE__) + " " + string(__TIME__);
 }
