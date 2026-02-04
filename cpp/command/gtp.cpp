@@ -288,6 +288,10 @@ static bool shouldResign(
   const double resignMinScoreDifference,
   const double resignMinMovesPerBoardArea
 ) {
+  if (hist.rules.isDots && hist.winOrEffectiveDrawByGrounding(board, getOpp(pla), false)) {
+    return true;
+  }
+
   double initialBlackAdvantageInPoints = initialBlackAdvantage(hist);
 
   int minTurnForResignation = 0;
