@@ -2488,13 +2488,13 @@ oxxxxx.xo
       if(rand.nextBool(passProb))
         moveLoc = Board::PASS_LOC;
       else {
-        moveLoc = PlayUtils::chooseRandomLegalMove(board,tmpHist,pla,rand,Board::NULL_LOC);
+        moveLoc = PlayUtils::chooseRandomLegalMove(board,tmpHist,pla,rand,true,Board::NULL_LOC);
         //Resample to increase likelihood of capture moves.
         if(!board.wouldBeCapture(moveLoc,pla))
-          moveLoc = PlayUtils::chooseRandomLegalMove(board,tmpHist,pla,rand,Board::NULL_LOC);
+          moveLoc = PlayUtils::chooseRandomLegalMove(board,tmpHist,pla,rand,true,Board::NULL_LOC);
         //Resample to decrease likelihood of moves not adjacent to opponent
         if(!board.isAdjacentToPla(moveLoc,getOpp(pla)))
-          moveLoc = PlayUtils::chooseRandomLegalMove(board,tmpHist,pla,rand,Board::NULL_LOC);
+          moveLoc = PlayUtils::chooseRandomLegalMove(board,tmpHist,pla,rand,true,Board::NULL_LOC);
       }
       bool preventEncore = rand.nextBool(0.5);
       if(rand.nextBool(0.5)) {

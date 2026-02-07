@@ -867,17 +867,16 @@ static void logSearch(Search* bot, Logger& logger, Loc loc, OtherGameProperties 
 }
 
 static Loc chooseRandomForkingMove(const NNOutput* nnOutput, const Board& board, const BoardHistory& hist, Player pla, Rand& gameRand, Loc banMove) {
-  double r = gameRand.nextDouble();
-  bool allowPass = !hist.rules.isDots || hist.winOrEffectiveDrawByGrounding(board, pla);
+  const double r = gameRand.nextDouble();
+  const bool allowPass = !hist.rules.isDots || hist.winOrEffectiveDrawByGrounding(board, pla);
   //70% of the time, do a random temperature 1 policy move
   if(r < 0.70)
     return PlayUtils::chooseRandomPolicyMove(nnOutput, board, hist, pla, gameRand, 1.0, allowPass, banMove);
   //25% of the time, do a random temperature 2 policy move
-  else if(r < 0.95)
+  if(r < 0.95)
     return PlayUtils::chooseRandomPolicyMove(nnOutput, board, hist, pla, gameRand, 2.0, allowPass, banMove);
   //5% of the time, do a random legal move
-  else
-    return PlayUtils::chooseRandomLegalMove(board, hist, pla, gameRand, banMove);
+  return PlayUtils::chooseRandomLegalMove(board, hist, pla, gameRand, allowPass, banMove);
 }
 
 void Play::extractPolicyTarget(
@@ -2272,8 +2271,8 @@ void Play::maybeForkGame(
   int numChoices = gameRand.nextInt(playSettings.forkGameMinChoices, maxChoices);
   assert(numChoices <= NNPos::MAX_NN_POLICY_SIZE);
   Loc possibleMoves[NNPos::MAX_NN_POLICY_SIZE];
-  int numPossible = PlayUtils::chooseRandomLegalMoves(board,hist,pla,gameRand,possibleMoves,numChoices);
-  if(numPossible <= 0)
+  const bool allowPass = !hist.rules.isDots || hist.winOrEffectiveDrawByGrounding(board, pla);
+  if (const int numPossible = PlayUtils::chooseRandomLegalMoves(board,hist,pla,gameRand,allowPass,possibleMoves, numChoices); numPossible <= 0)
     return;
 
   //Try the one the value net thinks is best
