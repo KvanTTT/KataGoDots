@@ -170,10 +170,9 @@ struct BoardHistory {
   bool makeBoardMoveTolerant(Board& board, Loc moveLoc, Player movePla, bool preventEncore);
   bool isLegalTolerant(const Board& board, Loc moveLoc, Player movePla) const;
 
-  //Slightly expensive, check if the entire game is all pass-alive-territory, and if so, declare the game finished
-  // For Dots game it's Grounding alive
-  void endGameIfAllPassAlive(const Board& board);
-  void endGameIfNoLegalMoves(const Board& board);
+  // Slightly expensive, check if the entire game is all pass-alive-territory, and if so, declare the game finished
+  // For Dots game it's grounding alive or exhaustiveness of legal moves.
+  bool endGameIfReasonable(const Board& board, bool checkAllPassAlive, Player pla);
   //Score the board as-is. If the game is already finished, and is NOT a no-result, then this should be idempotent.
   void endAndScoreGameNow(const Board& board);
   // Effective draw is when there are no ungrounded dots on the field (disregarding Komi)

@@ -223,9 +223,7 @@ int MainCmds::evalrandominits(const vector<string>& args) {
       hist.makeBoardMoveAssumeLegal(board,loc,pla,NULL);
       pla = getOpp(pla);
 
-      hist.endGameIfAllPassAlive(board);
-      hist.endGameIfNoLegalMoves(board);
-      if(hist.isGameFinished)
+      if (hist.endGameIfReasonable(board, true, pla))
         break;
     }
 

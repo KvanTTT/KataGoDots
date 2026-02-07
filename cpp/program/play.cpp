@@ -1584,10 +1584,7 @@ FinishedGameData* Play::runGame(
 
   //Main play loop
   for(int i = 0; i<maxMovesPerGame; i++) {
-    if(doEndGameIfAllPassAlive)
-      hist.endGameIfAllPassAlive(board);
-    hist.endGameIfNoLegalMoves(board);
-    if(hist.isGameFinished)
+    if (hist.endGameIfReasonable(board, doEndGameIfAllPassAlive, pla))
       break;
 
     if(shouldPause != nullptr)

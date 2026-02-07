@@ -302,10 +302,7 @@ void PlayUtils::initializeGameUsingPolicy(
     pla = getOpp(pla);
 
     //Rarely, playing the random moves out this way will end the game
-    if(doEndGameIfAllPassAlive)
-      hist.endGameIfAllPassAlive(board);
-    hist.endGameIfNoLegalMoves(board);
-    if(hist.isGameFinished)
+    if (hist.endGameIfReasonable(board, doEndGameIfAllPassAlive, pla))
       break;
   }
 }

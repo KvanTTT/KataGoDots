@@ -934,6 +934,84 @@ oxo.o.
     testAssert(1.0f == boardHistory.whiteScoreIfGroundingAlive(board));
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
   }
+
+  {
+    const Board board = parseDotsField(R"(
+xo
+xo
+)", Rules::DEFAULT_DOTS.startPosIsRandom, true, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, {});
+    auto boardHistory = BoardHistory(board);
+    testAssert(boardHistory.endGameIfReasonable(board, false, P_BLACK));
+    testAssert(C_EMPTY == boardHistory.winner);
+    testAssert(0.0f == boardHistory.finalWhiteMinusBlackScore);
+  }
+
+  {
+    const Board board = parseDotsField(R"(
+xo
+xo
+)", Rules::DEFAULT_DOTS.startPosIsRandom, true, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, {});
+    auto boardHistory = BoardHistory(board);
+    testAssert(boardHistory.endGameIfReasonable(board, false, P_WHITE));
+    testAssert(C_EMPTY == boardHistory.winner);
+    testAssert(0.0f == boardHistory.finalWhiteMinusBlackScore);
+  }
+
+  {
+    const Board board = parseDotsField(R"(
+ooo
+oxo
+o.o
+)", Rules::DEFAULT_DOTS.startPosIsRandom, true, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots,  {XYMove(1, 2, P_WHITE)});
+    auto boardHistory = BoardHistory(board);
+    testAssert(boardHistory.endGameIfReasonable(board, false, P_BLACK));
+    testAssert(P_WHITE == boardHistory.winner);
+    testAssert(1.0f == boardHistory.finalWhiteMinusBlackScore);
+  }
+
+  {
+    const Board board = parseDotsField(R"(
+xxxxx
+x.xox
+xxx.x
+)", Rules::DEFAULT_DOTS.startPosIsRandom, true, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, {XYMove(3, 2, P_BLACK)});
+    auto boardHistory = BoardHistory(board);
+
+    testAssert(!boardHistory.endGameIfReasonable(board, false, P_BLACK));
+    testAssert(!boardHistory.endGameIfReasonable(board, false, P_WHITE)); // sui allowed -> game is not yet finished for WHITE
+  }
+
+  {
+    const Board board = parseDotsField(R"(
+xxxxx
+x.xox
+xxx.x
+)", Rules::DEFAULT_DOTS.startPosIsRandom, false, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, {XYMove(3, 2, P_BLACK)});
+    auto boardHistory = BoardHistory(board);
+
+
+    testAssert(!boardHistory.endGameIfReasonable(board, false, P_BLACK));
+    testAssert(boardHistory.endGameIfReasonable(board, false, P_WHITE)); // sui disallowed -> game is already finished for WHITE
+    testAssert(P_BLACK == boardHistory.winner);
+    testAssert(-1.0f == boardHistory.finalWhiteMinusBlackScore);
+  }
+
+  {
+    const Board board = parseDotsField(R"(
+xxxxx
+x...x
+x.x.x
+x...x
+xxxxx
+)", Rules::DEFAULT_DOTS.startPosIsRandom, false, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, {});
+    auto boardHistory = BoardHistory(board);
+
+    // The field is not grounding alive; however, the game should be finished because there are no legal moves for WHITE
+    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
+    testAssert(boardHistory.endGameIfReasonable(board, false, P_WHITE));
+    testAssert(C_EMPTY == boardHistory.winner);
+    testAssert(0.0f == boardHistory.finalWhiteMinusBlackScore);
+  }
 }
 
 void Tests::runDotsPosHashTests() {

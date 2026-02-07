@@ -763,75 +763,87 @@ void BoardHistory::endAndScoreGameNow(const Board& board) {
   endAndScoreGameNow(board,area);
 }
 
-void BoardHistory::endGameIfAllPassAlive(const Board& board) {
-  assert(rules.isDots == board.isDots());
-  if (isGameFinished) return;
+bool BoardHistory::endGameIfReasonable(const Board& board, const bool checkAllPassAlive, const Player pla) {
+  if (isGameFinished) return true;
 
   if (rules.isDots) {
-    if (const float whiteScoreAfterGrounding = whiteScoreIfGroundingAlive(board, true); !std::isnan(whiteScoreAfterGrounding)) {
-      setFinalScoreAndWinner(whiteScoreAfterGrounding);
+    float finalWhiteScore = std::numeric_limits<float>::quiet_NaN();
+
+    if (checkAllPassAlive) {
+      finalWhiteScore = whiteScoreIfGroundingAlive(board, true);
+    }
+
+    if (std::isnan(finalWhiteScore)) {
+      bool legalMoveExist = false;
+
+      for(int y = 0; y < board.y_size && !legalMoveExist; y++) {
+        for(int x = 0; x < board.x_size; x++) {
+          if (const Loc loc = Location::getLoc(x, y, board.x_size); board.isLegal(loc, pla, rules.multiStoneSuicideLegal, true)) {
+            legalMoveExist = true;
+            break;
+          }
+        }
+      }
+
+      if (!legalMoveExist) {
+        finalWhiteScore = board.numBlackCaptures - board.numWhiteCaptures + whiteBonusScore + whiteHandicapBonusScore + rules.komi;
+      }
+    }
+
+    if (!std::isnan(finalWhiteScore)) {
+      setFinalScoreAndWinner(finalWhiteScore);
       isScored = true;
       isNoResult = false;
       isResignation = false;
       isGameFinished = true;
       isPastNormalPhaseEnd = false;
       isPassAliveFinished = true;
-    }
-  } else {
-    Color area[Board::MAX_ARR_SIZE];
-    int boardScore = 0;
-
-    bool nonPassAliveStones = false;
-    bool safeBigTerritories = false;
-    bool unsafeBigTerritories = false;
-    board.calculateArea(
-      area,
-      nonPassAliveStones, safeBigTerritories, unsafeBigTerritories, rules.multiStoneSuicideLegal
-    );
-
-    for(int y = 0; y<board.y_size; y++) {
-      for(int x = 0; x<board.x_size; x++) {
-        Loc loc = Location::getLoc(x,y,board.x_size);
-        if(area[loc] == C_WHITE)
-          boardScore += 1;
-        else if(area[loc] == C_BLACK)
-          boardScore -= 1;
-        else
-          return;
-      }
+      return true;
     }
 
-    //In the case that we have a group tax, rescore normally to actually count the group tax
-    if(rules.taxRule == Rules::TAX_ALL)
-      endAndScoreGameNow(board);
-    else {
-      if(hasButton) {
-        hasButton = false;
-        whiteBonusScore += (presumedNextMovePla == P_WHITE ? 0.5f : -0.5f);
-      }
-      setFinalScoreAndWinner(boardScore + whiteBonusScore + whiteHandicapBonusScore + rules.komi);
-      isScored = true;
-      isNoResult = false;
-      isResignation = false;
-      isGameFinished = true;
-      isPastNormalPhaseEnd = false;
-      isPassAliveFinished = true;
+    return false;
+  }
+
+  if(!checkAllPassAlive)
+    return false;
+
+  Color area[Board::MAX_ARR_SIZE];
+  int boardScore = 0;
+
+  bool nonPassAliveStones = false;
+  bool safeBigTerritories = false;
+  bool unsafeBigTerritories = false;
+  board.calculateArea(area, nonPassAliveStones, safeBigTerritories, unsafeBigTerritories, rules.multiStoneSuicideLegal);
+
+  for(int y = 0; y < board.y_size; y++) {
+    for(int x = 0; x < board.x_size; x++) {
+      if(Loc loc = Location::getLoc(x, y, board.x_size); area[loc] == C_WHITE)
+        boardScore += 1;
+      else if(area[loc] == C_BLACK)
+        boardScore -= 1;
+      else
+        return false;
     }
   }
-}
 
-void BoardHistory::endGameIfNoLegalMoves(const Board& board) {
-  if (isGameFinished) return;
-  if (board.numLegalMovesIfSuiAllowed == 0) {
-    for(int y = 0; y < board.y_size; y++) {
-      for(int x = 0; x < board.x_size; x++) {
-        const Loc loc = Location::getLoc(x, y, board.x_size);
-        assert(!board.isLegal(loc, P_BLACK, rules.multiStoneSuicideLegal, true));
-        assert(!board.isLegal(loc, P_WHITE, rules.multiStoneSuicideLegal, true));
-      }
-    }
+  // In the case that we have a group tax, rescore normally to actually count the group tax
+  if(rules.taxRule == Rules::TAX_ALL)
     endAndScoreGameNow(board);
+  else {
+    if(hasButton) {
+      hasButton = false;
+      whiteBonusScore += (presumedNextMovePla == P_WHITE ? 0.5f : -0.5f);
+    }
+    setFinalScoreAndWinner(boardScore + whiteBonusScore + whiteHandicapBonusScore + rules.komi);
+    isScored = true;
+    isNoResult = false;
+    isResignation = false;
+    isGameFinished = true;
+    isPastNormalPhaseEnd = false;
+    isPassAliveFinished = true;
   }
+
+  return true;
 }
 
 void BoardHistory::setWinnerByResignation(Player pla) {
