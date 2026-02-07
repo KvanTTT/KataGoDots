@@ -660,7 +660,7 @@ R"(
 ..oo..
 ......
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
-    Board board = boardWithMoveRecords.board;
+    const Board board = boardWithMoveRecords.board;
 
     State state = boardWithMoveRecords.board.getState(Location::getLoc(2, 2, board.x_size));
     testAssert(C_WHITE == getEmptyTerritoryColor(state));
@@ -711,13 +711,16 @@ void Tests::runDotsBoardHistoryGroundingTests() {
 .ox.
 ....
 )");
-    const auto boardHistory = BoardHistory(board);
+    auto boardHistory = BoardHistory(board);
     testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK, false));
     testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE, false));
 
     // No draw because there are some ungrounded dots
     testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK, true));
     testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE, true));
+
+    boardHistory.rules.komi = -0.5f;
+    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
   }
 
   {
@@ -727,13 +730,19 @@ void Tests::runDotsBoardHistoryGroundingTests() {
 .ox.
 .ox.
 )");
-    const auto boardHistory = BoardHistory(board);
+    auto boardHistory = BoardHistory(board);
     testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK, false));
     testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE, false));
 
     // Effective draw because all dots are grounded
     testAssert(boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK, true));
     testAssert(boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE, true));
+
+    boardHistory.rules.komi = 0.5f;
+    testAssert(0.5f == boardHistory.whiteScoreIfGroundingAlive(board));
+
+    boardHistory.rules.komi = -0.5f;
+    testAssert(-0.5f == boardHistory.whiteScoreIfGroundingAlive(board));
   }
 
   {
@@ -773,8 +782,7 @@ xox.x.
 ..o..
 .oxo.
 .....
-)");
-    board.playMoveAssumeLegal(Location::getLoc(2, 3, board.x_size), P_WHITE);
+)", {XYMove(2, 3, P_WHITE)});
     testAssert(1 == board.numBlackCaptures);
     const auto boardHistory = BoardHistory(board);
     testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK));
@@ -788,13 +796,22 @@ xox.x.
 ..x..
 .xox.
 .....
-)");
-    board.playMoveAssumeLegal(Location::getLoc(2, 3, board.x_size), P_BLACK);
+)", {XYMove(2, 3, P_BLACK)});
     testAssert(1 == board.numWhiteCaptures);
-    const auto boardHistory = BoardHistory(board);
+    auto boardHistory = BoardHistory(board);
     testAssert(boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK));
     testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE));
     testAssert(-1.0f == boardHistory.whiteScoreIfGroundingAlive(board));
+
+    boardHistory.rules.komi = +1.0f;
+    // Draw by grounding because the komi compensates score and there are no ungrounded dots
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board));
+
+    boardHistory.rules.komi = +0.5f;
+    testAssert(-0.5f == boardHistory.whiteScoreIfGroundingAlive(board));
+
+    boardHistory.rules.komi = -0.5f;
+    testAssert(-1.5f == boardHistory.whiteScoreIfGroundingAlive(board));
   }
 
   {
@@ -804,8 +821,7 @@ xox.x.
 .xox.
 .....
 .....
-)");
-    board.playMoveAssumeLegal(Location::getLoc(2, 3, board.x_size), P_BLACK);
+)", {XYMove(2, 3, P_BLACK)});
     testAssert(1 == board.numWhiteCaptures);
     const auto boardHistory = BoardHistory(board);
     testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK));
