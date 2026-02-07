@@ -765,9 +765,10 @@ void BoardHistory::endAndScoreGameNow(const Board& board) {
 
 void BoardHistory::endGameIfAllPassAlive(const Board& board) {
   assert(rules.isDots == board.isDots());
+  if (isGameFinished) return;
 
   if (rules.isDots) {
-    if (const float whiteScoreAfterGrounding = whiteScoreIfGroundingAlive(board); whiteScoreAfterGrounding != std::numeric_limits<float>::quiet_NaN()) {
+    if (const float whiteScoreAfterGrounding = whiteScoreIfGroundingAlive(board, true); !std::isnan(whiteScoreAfterGrounding)) {
       setFinalScoreAndWinner(whiteScoreAfterGrounding);
       isScored = true;
       isNoResult = false;
@@ -820,6 +821,7 @@ void BoardHistory::endGameIfAllPassAlive(const Board& board) {
 }
 
 void BoardHistory::endGameIfNoLegalMoves(const Board& board) {
+  if (isGameFinished) return;
   if (board.numLegalMovesIfSuiAllowed == 0) {
     for(int y = 0; y < board.y_size; y++) {
       for(int x = 0; x < board.x_size; x++) {

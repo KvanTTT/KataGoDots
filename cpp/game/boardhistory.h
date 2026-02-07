@@ -179,8 +179,9 @@ struct BoardHistory {
   // Effective draw is when there are no ungrounded dots on the field (disregarding Komi)
   // We can consider grounding in this case because the further game typically doesn't make sense.
   bool winOrEffectiveDrawByGrounding(const Board& board, Player pla, bool considerDraw = true) const;
-  // Return > 0 if white wins by grounding, < 0 if black wins by grounding, 0 if there are no ungrounded dots and Nan otherwise
-  float whiteScoreIfGroundingAlive(const Board& board) const;
+  // Returns > 0 if white wins by grounding (considering komi), < 0 if black wins by grounding, 0 if there are no ungrounded dots and Nan otherwise
+  // If onlyGroundedDots is true, the function returns a value if only grounding doesn't affect the current captures.
+  float whiteScoreIfGroundingAlive(const Board& board, bool noGroundingCaptures = false) const;
   void endAndScoreGameNow(const Board& board, Color area[Board::MAX_ARR_SIZE]);
 
   void setWinnerByResignation(Player pla);
