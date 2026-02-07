@@ -1065,8 +1065,7 @@ struct GTPEngine {
     testAssert(onMoveWasCalled);
     string response;
     bool responseIsError = false;
-    Loc moveLocToPlay = Board::NULL_LOC;
-    handleGenMoveResult(pla,bot->getSearchStopAndWait(),logger,gargs,args,genmoveMoveLoc,response,responseIsError,moveLocToPlay);
+    const Loc moveLocToPlay = handleGenMoveResult(pla,bot->getSearchStopAndWait(),logger,gargs,args,genmoveMoveLoc,response,responseIsError);
     printGTPResponse(response,responseIsError);
     if(moveLocToPlay != Board::NULL_LOC && playChosenMove) {
       bool suc = bot->makeMove(moveLocToPlay,pla,preventEncore);
@@ -1090,7 +1089,6 @@ struct GTPEngine {
     auto onMove = [pla,&logger,gargs,args,printGTPResponse,this](Loc moveLoc, int searchId, Search* search) {
       string response;
       bool responseIsError = false;
-      Loc moveLocToPlay = Board::NULL_LOC;
 
       // Search invalidated before completion
       if(searchId != genmoveExpectedId.load()) {
@@ -1101,7 +1099,7 @@ struct GTPEngine {
         printGTPResponse(response,responseIsError);
         return;
       }
-      handleGenMoveResult(pla,search,logger,gargs,args,moveLoc,response,responseIsError,moveLocToPlay);
+      handleGenMoveResult(pla,search,logger,gargs,args,moveLoc,response,responseIsError);
       printGTPResponse(response,responseIsError);
     };
     launchGenMove(pla,gargs,args,onMove);
@@ -1184,19 +1182,18 @@ struct GTPEngine {
     }
   }
 
-  void handleGenMoveResult(
+  Loc handleGenMoveResult(
     Player pla,
     Search* searchBot,
     Logger& logger,
     const GenmoveArgs& gargs,
     const AnalyzeArgs& args,
     Loc moveLoc,
-    string& response, bool& responseIsError,
-    Loc& moveLocToPlay
+    string& response,
+    bool& responseIsError
   ) {
     response = "";
     responseIsError = false;
-    moveLocToPlay = Board::NULL_LOC;
 
     const Search* search = searchBot;
 
@@ -1212,7 +1209,7 @@ struct GTPEngine {
       sout << "MoveLoc: " << Location::toString(moveLoc,search->getRootBoard()) << "\n";
       logger.write(sout.str());
       genmoveTimeSum += genmoveTimer.getSeconds();
-      return;
+      return Board::NULL_LOC;
     }
 
     SearchNode* rootNode = search->rootNode;
@@ -1298,18 +1295,21 @@ struct GTPEngine {
 
     //Implement friendly pass - in area scoring rules other than tromp-taylor, maybe pass once there are no points
     //left to gain.
-    int64_t numVisitsForFriendlyPass = 8 + std::min((int64_t)1000, std::min(params.maxVisits, params.maxPlayouts) / 10);
-    moveLoc = PlayUtils::maybeFriendlyPass(gargs.cleanupBeforePass, gargs.friendlyPass, pla, moveLoc, searchBot, numVisitsForFriendlyPass);
+    if (resigned) {
+      moveLoc = Board::RESIGN_LOC;
+    } else if (const BoardHistory& hist = search->getRootHist(); !hist.rules.isDots) {
+      int64_t numVisitsForFriendlyPass = 8 + std::min((int64_t)1000, std::min(params.maxVisits, params.maxPlayouts) / 10);
+      moveLoc = PlayUtils::maybeFriendlyPass(gargs.cleanupBeforePass, gargs.friendlyPass, pla, moveLoc, searchBot, numVisitsForFriendlyPass);
 
-    //Implement cleanupBeforePass hack - if the bot wants to pass, instead cleanup if there is something to clean
-    //and we are in a ruleset where this is necessary or the user has configured it.
-    moveLoc = PlayUtils::maybeCleanupBeforePass(gargs.cleanupBeforePass, gargs.friendlyPass, pla, moveLoc, bot);
+      //Implement cleanupBeforePass hack - if the bot wants to pass, instead cleanup if there is something to clean
+      //and we are in a ruleset where this is necessary or the user has configured it.
+      moveLoc = PlayUtils::maybeCleanupBeforePass(gargs.cleanupBeforePass, gargs.friendlyPass, pla, moveLoc, bot);
+    } else if (hist.winOrEffectiveDrawByGrounding(search->getRootBoard(), pla)) {
+      moveLoc = Board::PASS_LOC;
+    }
 
     //Actual reporting of chosen move---------------------
-    if(resigned)
-      response = "resign";
-    else
-      response = Location::toString(moveLoc,search->getRootBoard());
+    response = Location::toString(moveLoc,search->getRootBoard());
 
     if(autoAvoidPatterns) {
       // Auto pattern expects moveless records using hintloc to contain the move.
@@ -1323,13 +1323,11 @@ struct GTPEngine {
       genmoveSamples.push_back(posSample);
     }
 
-    if(!resigned) {
-      moveLocToPlay = moveLoc;
-    }
-
     if(args.analyzing) {
       response = "play " + response;
     }
+
+    return moveLoc;
   }
 
   void clearCache() const {
