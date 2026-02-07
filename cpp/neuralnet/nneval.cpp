@@ -862,15 +862,20 @@ void NNEvaluator::evaluate(
     bool isLegal[NNPos::MAX_NN_POLICY_SIZE];
     int legalCount = 0;
     assert(nextPlayer == history.presumedNextMovePla);
+
+    // Force grounding move if it doesn't affect captures
+    const bool allowOnlyGrounding = history.rules.isDots && !std::isnan(history.whiteScoreIfGroundingAlive(board, true));
+
     for(int i = 0; i<policySize; i++) {
-      Loc loc = NNPos::posToLoc(i,xSize,ySize,nnXLen,nnYLen);
+      const Loc loc = NNPos::posToLoc(i,xSize,ySize,nnXLen,nnYLen);
       bool legal;
       if (loc == Board::PASS_LOC && history.rules.isDots) {
-        // We need at least one legal loc, so choose grounding if it wins the game or there are no legal pos moves.
+        // We need at least one legal loc, so choose grounding if it wins the game or there are no legal moves.
         // Also, choose grounding in case of effective draw because the further game makes no sense.
-        legal = legalCount == 0 || history.winOrEffectiveDrawByGrounding(board, nextPlayer);
+        // Allow other moves as well to let NN decide which dangling dots are needed to be grounded.
+        legal = legalCount == 0 || allowOnlyGrounding || history.winOrEffectiveDrawByGrounding(board, nextPlayer);
       } else {
-        legal = history.isLegal(board,loc,nextPlayer);
+        legal = allowOnlyGrounding ? false : history.isLegal(board,loc,nextPlayer);
       }
       isLegal[i] = legal;
       if (legal) {
