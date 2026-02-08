@@ -908,14 +908,12 @@ void Board::makeMoveAndCalculateCapturesAndBases(
   if(isLegal(loc, pla, rules.multiStoneSuicideLegal, false)) {
     MoveRecord moveRecord = const_cast<Board*>(this)->playMoveRecordedDots(loc, pla);
 
-    for(Base& base: moveRecord.bases) {
-      if (base.is_real) {
-        if (const bool suicide = base.pla != pla; !suicide) {
-          captures[loc] = static_cast<Color>(captures[loc] | base.pla);
-        }
+    for(Base const& base: moveRecord.bases) {
+      // Completely ignore empty bases and suicide locations because they differ from one-move captures
+      if (base.is_real && base.pla == pla) {
+        captures[loc] = static_cast<Color>(captures[loc] | base.pla);
 
         for(const Loc& rollbackLoc: base.rollback_locations) {
-          // Consider empty bases as well
           bases[rollbackLoc] = static_cast<Color>(bases[rollbackLoc] | base.pla);
         }
       }
@@ -941,13 +939,12 @@ void Board::calculateOneMoveCaptureAndBasePositionsForDots(vector<Color>& captur
 
       const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
 
-      // It doesn't make sense to calculate the capturing when a dot placed into own empty territory.
-      // Also, ignore locations in an empty base if suicide is disallowed.
-      if (emptyTerritoryColor == C_EMPTY || (emptyTerritoryColor == P_WHITE && rules.multiStoneSuicideLegal)) {
+      // It doesn't make sense to calculate capturing when the dot placed into own empty territory
+      if (emptyTerritoryColor != P_BLACK) {
         makeMoveAndCalculateCapturesAndBases(P_BLACK, loc, captures, bases);
       }
 
-      if (emptyTerritoryColor == C_EMPTY || (emptyTerritoryColor == P_BLACK && rules.multiStoneSuicideLegal)) {
+      if (emptyTerritoryColor != P_WHITE) {
         makeMoveAndCalculateCapturesAndBases(P_WHITE, loc, captures, bases);
       }
     }

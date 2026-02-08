@@ -361,7 +361,7 @@ oxo
 );
 
   checkCapturingAndBase(
-  "Empty base",
+  "Empty base (don't mark locations even if sui is allowed)",
   R"(
 .x.
 x.x
@@ -373,32 +373,13 @@ x.x
 )",
 R"(
 .  .  .
-.  X  .
-.  .  .
-)"
-);
-
-  // Don't mark suicidal locations if suicide is disallowed
-  checkCapturingAndBase(
-"Empty base with disallowed suicide",
-R"(
-.x.
-x.x
-.x.
-)", R"(
-.  .  .
-.  .  .
-.  .  .
-)",
-R"(
-.  .  .
 .  .  .
 .  .  .
 )"
-, false);
+, true);
 
   checkCapturingAndBase(
-"Empty base with disallowed suicide 2",
+"Empty base (don't mark locations)",
 R"(
 .o.
 o.o
@@ -432,8 +413,8 @@ oxo.
 )",
 R"(
 .  .  .  .
-.  X  X  .
-.  X  .  .
+.  .  .  .
+.  .  .  .
 .  O  .  .
 .  .  .  .
 )"
