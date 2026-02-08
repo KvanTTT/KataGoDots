@@ -121,6 +121,7 @@ void NNInputs::fillRowV7Dots(
   assert(moveHistoryLen >= hist.numApproxValidTurnsThisPhase);
 
   int numTurnsOfHistoryIncluded = 0; // TODO: it will be used for ladders, https://github.com/KvanTTT/KataGoDots/issues/3
+  bool groundIsEncountered = false;
   Player currentPla = opp;
   for (int i = 0; i < amountOfHistoryToTryToUse; i++) {
     const int index = moveHistoryLen - i - 1;
@@ -133,18 +134,19 @@ void NNInputs::fillRowV7Dots(
 
     const Loc prevLoc = prevMove.loc;
 
-    // Grounding is not expected since it's always an ending move.
-#ifdef NDEBUG
-    // Check for null and ground move just in case
-    if (prevLoc == Board::NULL_LOC || prevLoc == Board::PASS_LOC) continue;
-#else
-    assert(prevLoc != Board::NULL_LOC && prevLoc != Board::PASS_LOC);
-#endif
-
+    // Increment *before* checking for null loc to be consistent with original katago
     numTurnsOfHistoryIncluded++;
 
-    const int histPos = NNPos::locToPos(prevLoc, xSize, nnXLen, nnYLen);
-    setRowBin(rowBin, histPos, static_cast<int>(DotsSpatialFeature::Prev1Loc_9) + i, 1.0f, posStride, featureStride);
+    if (prevLoc == Board::NULL_LOC) continue;
+
+    if (prevLoc == Board::PASS_LOC) {
+      assert(!groundIsEncountered); // Since the grounding is always ending mode, it could be only single one
+      setGlobal(DotsGlobalFeature::HistoryGroundLoc_0);
+      groundIsEncountered = true;
+    } else {
+      const int histPos = NNPos::locToPos(prevLoc, xSize, nnXLen, nnYLen);
+      setRowBin(rowBin, histPos, static_cast<int>(DotsSpatialFeature::Prev1Loc_9) + i, 1.0f, posStride, featureStride);
+    }
 
     currentPla = getOpp(currentPla);
   }

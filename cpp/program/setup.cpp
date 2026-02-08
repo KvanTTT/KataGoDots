@@ -105,7 +105,7 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
     const string& nnModelFile = nnModelFiles[i];
     const string& expectedSha256 = expectedSha256s.size() > 0 ? expectedSha256s[i]: "";
 
-    bool debugSkipNeuralNetDefault = (nnModelFile == "/dev/null");
+    bool debugSkipNeuralNetDefault = nnModelFile == "/dev/null";
     bool debugSkipNeuralNet =
       setupFor == SETUP_FOR_DISTRIBUTED ? debugSkipNeuralNetDefault :
       cfg.getOrDefaultBool("debugSkipNeuralNet", debugSkipNeuralNetDefault);

@@ -91,7 +91,7 @@ namespace NNInputs {
   };
 
   enum class DotsGlobalFeature  {
-    Reserved_0, // 0: prev loc 1 PASS
+    HistoryGroundLoc_0, // 0: prev loc 1 PASS
     Reserved_1, // 1: prev loc 2 PASS
     Reserved_2, // 2: prev loc 3 PASS
     Reserved_3, // 3: prev loc 4 PASS
