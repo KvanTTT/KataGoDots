@@ -379,7 +379,7 @@ struct Board
     bool isMultiStoneSuicideLegal
   ) const;
 
-  int calculateOwnershipAndWhiteScore(Color* result, Color groundingPlayer) const;
+  int calculateOwnershipAndWhiteScore(Color* result, Color groundColor) const;
 
   // Calculates the area (including non pass alive stones, safe and unsafe big territories)
   //However, strips out any "seki" regions.

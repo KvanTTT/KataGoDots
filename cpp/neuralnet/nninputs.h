@@ -105,7 +105,7 @@ namespace NNInputs {
     TaxAll_11, // 11: TAX_ALL
     Reserved_12, // 12: encore phase > 0
     Reserved_13, // 13: encore phase > 1
-    WinByGrounding_14, // 14: does a pass end the current phase given the ruleset and history?
+    EndByGrounding_14, // 14: does a pass end the current phase given the ruleset and history?
     PlayoutDoublingAdvantageIsEnabled_15, // 15: playoutDoublingAdvantage is enabled (handicap play)
     PlayoutDoublingAdvantage_16, // 16: playoutDoublingAdvantage
     CaptureEmpty_17, // 17: button

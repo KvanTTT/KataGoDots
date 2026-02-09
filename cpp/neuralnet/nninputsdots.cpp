@@ -45,7 +45,7 @@ void NNInputs::fillRowV7Dots(
     rowGlobal[static_cast<int>(globalFeature)] = value;
   };
 
-  bool hasLegalNonGroundMoves = false;
+  bool hasReasonableNonGroundMoves = false;
 
   for(int y = 0; y<ySize; y++) {
     for(int x = 0; x<xSize; x++) {
@@ -58,8 +58,7 @@ void NNInputs::fillRowV7Dots(
       const Color activeColor = getActiveColor(state);
       const Color placedColor = getPlacedDotColor(state);
 
-      hasLegalNonGroundMoves = hasLegalNonGroundMoves ||
-        (activeColor == C_EMPTY && !board.isIllegalSuicide(loc, nextPlayer, rules.multiStoneSuicideLegal));
+      hasReasonableNonGroundMoves = hasReasonableNonGroundMoves || hist.isReasonable(board, loc, nextPlayer);
 
       if (activeColor == pla)
         setSpatial(pos, DotsSpatialFeature::PlayerActive_1);
@@ -109,35 +108,43 @@ void NNInputs::fillRowV7Dots(
 
   int maxTurnsOfHistoryToInclude = 5;
   const vector<Move>& moveHistory = hist.moveHistory;
-  if (!hasLegalNonGroundMoves) {
-    // Don't include history for non-resultative games:
-    //   * There are no legal non-ground moves to play
-    //   * The number of moves exceeds the max limit (not yet implemented).
-    //     Although, it shouldn't happen in any Dots game (grounding should happen before).
+  if (!hasReasonableNonGroundMoves) {
+    // Don't include history for non-resultative games: when there are no reasonable non-ground moves to play
     maxTurnsOfHistoryToInclude = 0;
   }
   const int amountOfHistoryToTryToUse = std::min(maxTurnsOfHistoryToInclude, hist.numApproxValidTurnsThisPhase);
   const int moveHistoryLen = static_cast<int>(moveHistory.size());
   assert(moveHistoryLen >= hist.numApproxValidTurnsThisPhase);
 
-  int numTurnsOfHistoryIncluded = 0; // TODO: it will be used for ladders, https://github.com/KvanTTT/KataGoDots/issues/3
   bool groundIsEncountered = false;
   Player currentPla = opp;
   for (int i = 0; i < amountOfHistoryToTryToUse; i++) {
     const int index = moveHistoryLen - i - 1;
-    if (index < 0) break;
+    if (index < 0) {
+      break;
+    }
 
     const Move& prevMove = moveHistory[index];
 
     // History is only actual for strict moves order (colors should be alternating)
-    if (prevMove.pla != currentPla) break;
+    if (prevMove.pla != currentPla) {
+      break;
+    }
 
     const Loc prevLoc = prevMove.loc;
 
-    // Increment *before* checking for null loc to be consistent with original katago
-    numTurnsOfHistoryIncluded++;
+    if (prevLoc == Board::NULL_LOC) {
+      continue;
+    }
 
-    if (prevLoc == Board::NULL_LOC) continue;
+    // If the game is played until the exhaustiveness of all reasonable moves, the history shouldn't be included (see above)
+    assert(prevLoc != Board::PASS_LOC || hasReasonableNonGroundMoves);
+
+    // Unreasonable moves can exist in a real game (suicides, corners), but not during training.
+    // Ignore them for refinement because NN wasn't trained on them.
+    if (!hist.isReasonable(hist.getRecentBoard(i + 1), prevLoc, currentPla, false)) {
+      continue;
+    }
 
     if (prevLoc == Board::PASS_LOC) {
       assert(!groundIsEncountered); // Since the grounding is always ending mode, it could be only single one
@@ -169,9 +176,9 @@ void NNInputs::fillRowV7Dots(
     setGlobal(DotsGlobalFeature::CaptureEmpty_17);
   }
 
-  if (hist.winOrEffectiveDrawByGrounding(board, pla)) {
+  if (hist.isGroundReasonable(board)) {
     // Train to better understand grounding
-    setGlobal(DotsGlobalFeature::WinByGrounding_14);
+    setGlobal(DotsGlobalFeature::EndByGrounding_14);
   }
 
   setGlobal(DotsGlobalFeature::FieldSizeKomiParity_18, 0.0f); // TODO: implement later

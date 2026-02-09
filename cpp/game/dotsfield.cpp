@@ -167,7 +167,7 @@ void Board::clearVisited(const vector<Loc>& locations) const {
   }
 }
 
-int Board::calculateOwnershipAndWhiteScore(Color* result, const Color groundingPlayer) const {
+int Board::calculateOwnershipAndWhiteScore(Color* result, const Color groundColor) const {
   [[maybe_unused]] int whiteCaptures = 0;
   [[maybe_unused]] int blackCaptures = 0;
 
@@ -179,7 +179,7 @@ int Board::calculateOwnershipAndWhiteScore(Color* result, const Color groundingP
       const Color placedDotColor = getPlacedDotColor(state);
       Color ownershipColor = C_EMPTY;
       if (activeColor != C_EMPTY) {
-        if (isGrounded(state) || groundingPlayer == C_EMPTY) {
+        if (isGrounded(state) || groundColor == C_EMPTY) {
           if (placedDotColor != C_EMPTY && activeColor != placedDotColor) {
             ownershipColor = activeColor;
             if (placedDotColor == P_BLACK) {
@@ -191,10 +191,10 @@ int Board::calculateOwnershipAndWhiteScore(Color* result, const Color groundingP
         } else {
           // If the game is finished by grounding by a player,
           // Remove its ungrounded dots to get a more refined ownership and score.
-          if (groundingPlayer == C_WHITE && placedDotColor == P_WHITE) {
+          if (groundColor == C_WHITE && placedDotColor == P_WHITE) {
             ownershipColor = P_BLACK;
             whiteCaptures++;
-          } else if (groundingPlayer == C_BLACK && placedDotColor == P_BLACK) {
+          } else if (groundColor == C_BLACK && placedDotColor == P_BLACK) {
             ownershipColor = P_WHITE;
             blackCaptures++;
           }
@@ -204,13 +204,13 @@ int Board::calculateOwnershipAndWhiteScore(Color* result, const Color groundingP
     }
   }
 
-  if (groundingPlayer == C_WHITE) {
+  if (groundColor == C_WHITE) {
     // White wins by grounding
     assert(blackScoreIfWhiteGrounds == whiteCaptures - blackCaptures);
     return -blackScoreIfWhiteGrounds;
   }
 
-  if (groundingPlayer == C_BLACK) {
+  if (groundColor == C_BLACK) {
     // Black wins by grounding
     assert(whiteScoreIfBlackGrounds == blackCaptures - whiteCaptures);
     return whiteScoreIfBlackGrounds;

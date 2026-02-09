@@ -317,7 +317,7 @@ bool Board::isSuicide(Loc loc, Player pla) const
   if (loc == PASS_LOC)
     return false;
   if (loc == RESIGN_LOC)
-    return true; // It's seems reasonable to treat resigning as suicide
+    return true; // It seems reasonable to treat resigning as suicide
 
   if (rules.isDots) {
     return isSuicideDots(loc, pla);

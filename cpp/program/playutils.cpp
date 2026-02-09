@@ -145,45 +145,47 @@ void PlayUtils::setKomiWithNoise(const ExtraBlackAndKomi& extraBlackAndKomi, Boa
 }
 
 
-Loc PlayUtils::chooseRandomLegalMove(const Board& board, const BoardHistory& hist, const Player pla, Rand& gameRand, const bool allowPass, const Loc banMove) {
+Loc PlayUtils::chooseRandomLegalMove(
+  const Board& board,
+  const BoardHistory& hist,
+  const Player pla,
+  Rand& gameRand,
+  const Loc banMove) {
   int numLegalMoves = 0;
   Loc locs[Board::MAX_ARR_SIZE];
   testAssert(pla == hist.presumedNextMovePla);
   for(Loc loc = 0; loc < Board::MAX_ARR_SIZE; loc++) {
-    if(loc != Board::RESIGN_LOC &&
-      (loc != Board::PASS_LOC || allowPass) &&
-      hist.isLegal(board,loc,pla) &&
-      loc != banMove
-    ) {
+    if (hist.isReasonable(board,loc,pla) && loc != banMove) {
       locs[numLegalMoves] = loc;
       numLegalMoves += 1;
     }
   }
   if(numLegalMoves > 0) {
-    int n = gameRand.nextUInt(numLegalMoves);
+    const int n = gameRand.nextUInt(numLegalMoves);
     return locs[n];
   }
   return Board::NULL_LOC;
 }
 
-int PlayUtils::chooseRandomLegalMoves(const Board& board, const BoardHistory& hist,
-  const Player pla, Rand& gameRand, const bool allowPass, Loc* buf,
+int PlayUtils::chooseRandomLegalMoves(
+  const Board& board,
+  const BoardHistory& hist,
+  const Player pla,
+  Rand& gameRand,
+  Loc* buf,
   const int len) {
   int numLegalMoves = 0;
   Loc locs[Board::MAX_ARR_SIZE];
   testAssert(pla == hist.presumedNextMovePla);
-  for(Loc loc = 0; loc < Board::MAX_ARR_SIZE; loc++) {
-    if(loc != Board::RESIGN_LOC &&
-      (loc != Board::PASS_LOC || allowPass) &&
-      hist.isLegal(board,loc,pla)
-    ) {
+  for (Loc loc = 0; loc < Board::MAX_ARR_SIZE; loc++) {
+    if (hist.isReasonable(board,loc,pla)) {
       locs[numLegalMoves] = loc;
       numLegalMoves += 1;
     }
   }
   if(numLegalMoves > 0) {
     for(int i = 0; i<len; i++) {
-      int n = gameRand.nextUInt(numLegalMoves);
+      const int n = gameRand.nextUInt(numLegalMoves);
       buf[i] = locs[n];
     }
     return len;
@@ -203,11 +205,11 @@ Loc PlayUtils::chooseRandomPolicyMove(
   int locs[NNPos::MAX_NN_POLICY_SIZE];
   testAssert(pla == hist.presumedNextMovePla);
   for(int pos = 0; pos<NNPos::MAX_NN_POLICY_SIZE; pos++) {
-    Loc loc = NNPos::posToLoc(pos,board.x_size,board.y_size,nnXLen,nnYLen);
+    const Loc loc = NNPos::posToLoc(pos,board.x_size,board.y_size,nnXLen,nnYLen);
     if((loc == Board::PASS_LOC && !allowPass) || loc == banMove)
       continue;
-    if(policyProbs[pos] > 0.0 && hist.isLegal(board,loc,pla)) {
-      double relProb = policyProbs[pos];
+    if(policyProbs[pos] > 0.0 && hist.isReasonable(board,loc,pla)) {
+      const double relProb = policyProbs[pos];
       relProbs[numLegalMoves] = relProb;
       locs[numLegalMoves] = loc;
       numLegalMoves += 1;

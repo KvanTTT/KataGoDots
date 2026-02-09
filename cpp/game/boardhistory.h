@@ -140,6 +140,8 @@ struct BoardHistory {
 
   //Check if a move on the board is legal, taking into account the full game state and superko
   bool isLegal(const Board& board, Loc moveLoc, Player movePla) const;
+  // Returns true if move is legal and reasonable (isn't immediately losing and could bring benefit in future)
+  bool isReasonable(const Board& board, Loc moveLoc, Player movePla, bool checkPla = true) const;
   //Check if passing right now would end the current phase of play, or the entire game
   bool passWouldEndPhase(const Board& board, Player movePla) const;
   bool passWouldEndGame(const Board& board, Player movePla) const;
@@ -175,12 +177,21 @@ struct BoardHistory {
   bool endGameIfReasonable(const Board& board, bool checkAllPassAlive, Player pla);
   //Score the board as-is. If the game is already finished, and is NOT a no-result, then this should be idempotent.
   void endAndScoreGameNow(const Board& board);
-  // Effective draw is when there are no ungrounded dots on the field (disregarding Komi)
-  // We can consider grounding in this case because the further game typically doesn't make sense.
-  bool winOrEffectiveDrawByGrounding(const Board& board, Player pla, bool considerDraw = true) const;
-  // Returns > 0 if white wins by grounding (considering komi), < 0 if black wins by grounding, 0 if there are no ungrounded dots and Nan otherwise
-  // If onlyGroundedDots is true, the function returns a value if only grounding doesn't affect the current captures.
-  float whiteScoreIfGroundingAlive(const Board& board, bool noGroundingCaptures = false) const;
+
+  // Returns true if all dots are grounded or some player wins by grounding
+  bool isGroundReasonable(const Board& board) const;
+  // Returns true if opp player wins by grounding
+  bool isResignReasonable(const Board& board, Player pla) const;
+  // Returns true if all dots are grounded or pla can win by grounding without losing any dot
+  // Used when choosing legal moves and force the only ground as legal
+  // it should be accurate because it doesn't affect captures and allows optimizing playouts (early finishing)
+  bool isNotCapturingGroundingAlive(const Board& board, Player pla) const;
+
+  float whiteScoreIfGroundingAlive(const Board &board) const;
+  // Allows early finishing the game
+  float whiteScoreIfAllDotsAreGrounded(const Board &board) const;
+  float whiteScoreIfNotCapturingGroundingAlive(const Board &board, Player pla) const;
+
   void endAndScoreGameNow(const Board& board, Color area[Board::MAX_ARR_SIZE]);
 
   void setWinnerByResignation(Player pla);
@@ -209,13 +220,25 @@ struct BoardHistory {
 private:
   bool koHashOccursInHistory(Hash128 koHash, const KoHashTable* rootKoHashTable) const;
   void setKoRecapBlocked(Loc loc, bool b);
-  int countDotsScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]) const;
+  static int countDotsScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]);
   int countAreaScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]) const;
   int countTerritoryAreaScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]) const;
   void setFinalScoreAndWinner(float score);
   int newConsecutiveEndingPassesAfterPass() const;
   bool phaseHasSpightlikeEndingAndPassHistoryClearing() const;
   bool wouldBeSpightlikeEndingPass(Player movePla, Hash128 koHashBeforeMove) const;
+  // Returns (considering bonus):
+  //   * > 0 if white wins by grounding
+  //   * < 0 if black wins by grounding
+  //   * 0 if all dots are grounded
+  //   * NaN if there are some ungrounded dots that can affect result and game is not yet finished
+
+  // The method returns a not NaN result if groundColor is:
+  //   * C_EMPTY: all dots are grounded or any player can win by grounding with or without its opp extra captures
+  //   * C_BLACK: all dots are grounded or BLACK can win by grounding without extra WHITE captures
+  //   * C_WHITE: all dots are grounded or WHITE can win by grounding without extra BLACK captures
+  //   * C_WALL: all dots are grounded
+  float whiteScoreIfGroundingAlive(const Board& board, Color groundColor) const;
 };
 
 struct KoHashTable {

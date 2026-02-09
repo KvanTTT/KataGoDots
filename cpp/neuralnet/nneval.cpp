@@ -863,19 +863,21 @@ void NNEvaluator::evaluate(
     int legalCount = 0;
     assert(nextPlayer == history.presumedNextMovePla);
 
-    // Force grounding move if it doesn't affect captures
-    const bool allowOnlyGrounding = history.rules.isDots && !std::isnan(history.whiteScoreIfGroundingAlive(board, true));
+    // Force grounding move if it doesn't affect captures.
+    // Otherwise, let NN decide when it should use grounding and which ungrounded dots should be grounded.
+    // Grounding with captures affects the score, and it's more accurate for training not to force it.
+    const bool allowOnlyGrounding = history.rules.isDots && history.isNotCapturingGroundingAlive(board, nextPlayer);
 
     for(int i = 0; i<policySize; i++) {
       const Loc loc = NNPos::posToLoc(i,xSize,ySize,nnXLen,nnYLen);
       bool legal;
-      if (loc == Board::PASS_LOC && history.rules.isDots) {
-        // We need at least one legal loc, so choose grounding if it wins the game or there are no legal moves.
-        // Also, choose grounding in case of effective draw because the further game makes no sense.
-        // Allow other moves as well to let NN decide which dangling dots are needed to be grounded.
-        legal = legalCount == 0 || allowOnlyGrounding || history.winOrEffectiveDrawByGrounding(board, nextPlayer);
+      // Legalize the grounding if it doesn't lose the game, or even it's a single reasonable move to play.
+      // Also, legalize the grounding when there are no normal moves on the field (board) because we need at least one legal move.
+      // If the grounding has captures, allow normal moves as well and let NN decide which dangling dots are needed to be grounded (if any).
+      if (loc == Board::PASS_LOC) {
+        legal = legalCount == 0 || allowOnlyGrounding || history.isReasonable(board,loc,nextPlayer);
       } else {
-        legal = allowOnlyGrounding ? false : history.isLegal(board,loc,nextPlayer);
+        legal = allowOnlyGrounding ? false : history.isReasonable(board,loc,nextPlayer);
       }
       isLegal[i] = legal;
       if (legal) {

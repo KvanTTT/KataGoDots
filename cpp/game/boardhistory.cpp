@@ -541,9 +541,9 @@ void BoardHistory::printDebugInfo(ostream& out, const Board& board) const {
 }
 
 
-const Board& BoardHistory::getRecentBoard(int numMovesAgo) const {
+const Board& BoardHistory::getRecentBoard(const int numMovesAgo) const {
   assert(numMovesAgo >= 0 && numMovesAgo < NUM_RECENT_BOARDS);
-  int idx = (currentRecentBoardIdx - numMovesAgo + NUM_RECENT_BOARDS) % NUM_RECENT_BOARDS;
+  const int idx = (currentRecentBoardIdx - numMovesAgo + NUM_RECENT_BOARDS) % NUM_RECENT_BOARDS;
   return recentBoards[idx];
 }
 
@@ -770,22 +770,22 @@ bool BoardHistory::endGameIfReasonable(const Board& board, const bool checkAllPa
     float finalWhiteScore = std::numeric_limits<float>::quiet_NaN();
 
     if (checkAllPassAlive) {
-      finalWhiteScore = whiteScoreIfGroundingAlive(board, true);
+      finalWhiteScore = whiteScoreIfAllDotsAreGrounded(board);
     }
 
     if (std::isnan(finalWhiteScore)) {
-      bool legalMoveExist = false;
+      bool reasonableMoveExist = false;
 
-      for(int y = 0; y < board.y_size && !legalMoveExist; y++) {
+      for(int y = 0; y < board.y_size && !reasonableMoveExist; y++) {
         for(int x = 0; x < board.x_size; x++) {
-          if (const Loc loc = Location::getLoc(x, y, board.x_size); board.isLegal(loc, pla, rules.multiStoneSuicideLegal, true)) {
-            legalMoveExist = true;
+          if (const Loc loc = Location::getLoc(x, y, board.x_size); isReasonable(board, loc, pla)) {
+            reasonableMoveExist = true;
             break;
           }
         }
       }
 
-      if (!legalMoveExist) {
+      if (!reasonableMoveExist) {
         finalWhiteScore = board.numBlackCaptures - board.numWhiteCaptures + whiteBonusScore + whiteHandicapBonusScore + rules.komi;
       }
     }
@@ -864,6 +864,34 @@ void BoardHistory::setKoRecapBlocked(Loc loc, bool b) {
     //We used to have per-color marks, so the zobrist was for both. Just combine them.
     koRecapBlockHash ^= Board::ZOBRIST_KO_MARK_HASH[loc][C_BLACK] ^ Board::ZOBRIST_KO_MARK_HASH[loc][C_WHITE];
   }
+}
+
+bool BoardHistory::isReasonable(const Board& board, const Loc moveLoc, const Player movePla, const bool checkPla) const {
+  if (!rules.isDots) {
+    return isLegal(board, moveLoc, movePla);
+  }
+
+  if (moveLoc == Board::RESIGN_LOC) {
+    return isResignReasonable(board, movePla);
+  }
+
+  if (checkPla && movePla != presumedNextMovePla) {
+    return false;
+  }
+
+  if (moveLoc == Board::PASS_LOC) {
+    return isGroundReasonable(board);
+  }
+
+  // Drop corner locs because they are never beneficial
+  const int x = Location::getX(moveLoc, board.x_size);
+  const int y = Location::getY(moveLoc, board.x_size);
+  if ((x == 0 || x == board.x_size - 1) && (y == 0 || y == board.y_size - 1)) {
+    return false;
+  }
+
+  // Suicide is always losing, don't allow it
+  return board.isLegal(moveLoc, movePla, false, false);
 }
 
 bool BoardHistory::isLegal(const Board& board, Loc moveLoc, Player movePla) const {

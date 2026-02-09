@@ -712,33 +712,32 @@ void Tests::runDotsBoardHistoryGroundingTests() {
 ....
 )");
     auto boardHistory = BoardHistory(board);
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK, false));
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE, false));
 
     // No draw because there are some ungrounded dots
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK, true));
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE, true));
+    testAssert(!boardHistory.isGroundReasonable(board));
+    testAssert(!boardHistory.isResignReasonable(board, P_BLACK));
+    testAssert(!boardHistory.isResignReasonable(board, P_WHITE));
 
     boardHistory.rules.komi = -0.5f;
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
 
     // No draw because there are some ungrounded dots even considering komi that makes draw for white
     boardHistory.rules.komi = 2.0f;
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
 
     boardHistory.rules.komi = -2.0f;
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
 
     boardHistory.rules.komi = 2.5f;
     testAssert(0.5f == boardHistory.whiteScoreIfGroundingAlive(board));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
 
     boardHistory.rules.komi = -2.5f;
     testAssert(-0.5f == boardHistory.whiteScoreIfGroundingAlive(board));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
   }
 
   {
@@ -749,23 +748,22 @@ void Tests::runDotsBoardHistoryGroundingTests() {
 .ox.
 )");
     auto boardHistory = BoardHistory(board);
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK, false));
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE, false));
 
     // Effective draw because all dots are grounded
-    testAssert(boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK, true));
-    testAssert(boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE, true));
+    testAssert(boardHistory.isGroundReasonable(board));
+    testAssert(!boardHistory.isResignReasonable(board, P_BLACK));
+    testAssert(!boardHistory.isResignReasonable(board, P_WHITE));
 
     testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board));
-    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, true));
+    testAssert(0.0f == boardHistory.whiteScoreIfAllDotsAreGrounded(board));
 
     boardHistory.rules.komi = 0.5f;
     testAssert(0.5f == boardHistory.whiteScoreIfGroundingAlive(board));
-    testAssert(0.5f == boardHistory.whiteScoreIfGroundingAlive(board, true));
+    testAssert(0.5f == boardHistory.whiteScoreIfAllDotsAreGrounded(board));
 
     boardHistory.rules.komi = -0.5f;
     testAssert(-0.5f == boardHistory.whiteScoreIfGroundingAlive(board));
-    testAssert(-0.5f == boardHistory.whiteScoreIfGroundingAlive(board, true));
+    testAssert(-0.5f == boardHistory.whiteScoreIfAllDotsAreGrounded(board));
   }
 
   {
@@ -779,8 +777,10 @@ xox...
     const auto boardHistory = BoardHistory(board);
 
     // Also effective draw because all bases are grounded
-    testAssert(boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK, true));
-    testAssert(boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE, true));
+    testAssert(boardHistory.isGroundReasonable(board));
+
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board));
+    testAssert(0.0f == boardHistory.whiteScoreIfAllDotsAreGrounded(board));
   }
 
   {
@@ -795,11 +795,10 @@ xox.x.
     const auto boardHistory = BoardHistory(board);
 
     // No effective draw because there are ungrounded dots
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK, true));
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE, true));
+    testAssert(!boardHistory.isGroundReasonable(board));
 
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
   }
 
   {
@@ -811,9 +810,13 @@ xox.x.
 )", {XYMove(2, 3, P_WHITE)});
     testAssert(1 == board.numBlackCaptures);
     const auto boardHistory = BoardHistory(board);
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK));
-    testAssert(boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE));
+
+    testAssert(boardHistory.isGroundReasonable(board));
+    testAssert(boardHistory.isResignReasonable(board, C_BLACK));
+    testAssert(!boardHistory.isResignReasonable(board, C_WHITE));
+
     testAssert(1.0f == boardHistory.whiteScoreIfGroundingAlive(board));
+    testAssert(1.0f == boardHistory.whiteScoreIfAllDotsAreGrounded(board));
   }
 
   {
@@ -825,22 +828,23 @@ xox.x.
 )", {XYMove(2, 3, P_BLACK)});
     testAssert(1 == board.numWhiteCaptures);
     auto boardHistory = BoardHistory(board);
-    testAssert(boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK));
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE));
-    testAssert(-1.0f == boardHistory.whiteScoreIfGroundingAlive(board));
+
+    testAssert(boardHistory.isGroundReasonable(board));
+    testAssert(boardHistory.isResignReasonable(board, C_WHITE));
+    testAssert(!boardHistory.isResignReasonable(board, C_BLACK));
 
     boardHistory.rules.komi = +1.0f;
     // Draw by grounding because the komi compensates score and there are no ungrounded dots
     testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board));
-    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, true));
+    testAssert(0.0f == boardHistory.whiteScoreIfAllDotsAreGrounded(board));
 
     boardHistory.rules.komi = +0.5f;
     testAssert(-0.5f == boardHistory.whiteScoreIfGroundingAlive(board));
-    testAssert(-0.5f == boardHistory.whiteScoreIfGroundingAlive(board, true));
+    testAssert(-0.5f == boardHistory.whiteScoreIfAllDotsAreGrounded(board));
 
     boardHistory.rules.komi = -0.5f;
     testAssert(-1.5f == boardHistory.whiteScoreIfGroundingAlive(board));
-    testAssert(-1.5f == boardHistory.whiteScoreIfGroundingAlive(board, true));
+    testAssert(-1.5f == boardHistory.whiteScoreIfAllDotsAreGrounded(board));
   }
 
   {
@@ -853,10 +857,9 @@ xox.x.
 )", {XYMove(2, 3, P_BLACK)});
     testAssert(1 == board.numWhiteCaptures);
     const auto boardHistory = BoardHistory(board);
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_BLACK));
-    testAssert(!boardHistory.winOrEffectiveDrawByGrounding(board, P_WHITE));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+    testAssert(!boardHistory.isGroundReasonable(board));
+    testAssert(!boardHistory.isResignReasonable(board, C_WHITE));
+    testAssert(!boardHistory.isResignReasonable(board, C_BLACK));
   }
 
   {
@@ -867,7 +870,7 @@ xox.x.
 )");
     const auto boardHistory = BoardHistory(board);
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
   }
 
   {
@@ -878,7 +881,7 @@ xox.x.
 )");
     const auto boardHistory = BoardHistory(board);
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
   }
 
   {
@@ -891,7 +894,10 @@ xox...
     const auto boardHistory = BoardHistory(board);
 
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_WHITE)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_BLACK)));
   }
 
   {
@@ -905,8 +911,48 @@ xox.x.
     const auto boardHistory = BoardHistory(board);
 
     testAssert(-1.0f == boardHistory.whiteScoreIfGroundingAlive(board));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_WHITE)));
+    // Ungrounded own dot -> black can't ground without score losing
+    testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_BLACK)));
   }
+
+  {
+    const Board board = parseDotsFieldDefault(R"(
+.x....
+xox...
+xox.o.
+......
+......
+)", {XYMove(1, 3, P_BLACK)});
+    const auto boardHistory = BoardHistory(board);
+
+    testAssert(-2.0f == boardHistory.whiteScoreIfGroundingAlive(board));
+
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_WHITE)));
+    // Ungrounded opponent dot -> Black can ground without score losing
+    testAssert(-2.0f == boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_BLACK));
+  }
+
+    {
+      const Board board = parseDotsFieldDefault(R"(
+.o....
+oxo...
+oxo.x.
+......
+......
+)", {XYMove(1, 3, P_WHITE)});
+      const auto boardHistory = BoardHistory(board);
+
+      testAssert(+2.0f == boardHistory.whiteScoreIfGroundingAlive(board));
+
+      testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
+      testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_BLACK)));
+      // Ungrounded opponent dot -> White can ground without score losing
+      testAssert(2.0f == boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_WHITE));
+    }
 
   {
     const Board board = parseDotsFieldDefault(R"(
@@ -918,7 +964,10 @@ oxo...
     const auto boardHistory = BoardHistory(board);
 
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_WHITE)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_BLACK)));
   }
 
   {
@@ -932,7 +981,29 @@ oxo.o.
     const auto boardHistory = BoardHistory(board);
 
     testAssert(1.0f == boardHistory.whiteScoreIfGroundingAlive(board));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, true)));
+
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
+    // Ungrounded own dot -> White can't ground without score losing
+    testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_WHITE)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_BLACK)));
+  }
+
+  {
+    const Board board = parseDotsFieldDefault(R"(
+.o....
+oxo...
+oxo.x.
+......
+......
+)", {XYMove(1, 3, P_WHITE)});
+    const auto boardHistory = BoardHistory(board);
+
+    testAssert(2.0f == boardHistory.whiteScoreIfGroundingAlive(board));
+
+    testAssert(std::isnan(boardHistory.whiteScoreIfAllDotsAreGrounded(board)));
+    // Ungrounded own dot -> White can't ground without score losing
+    testAssert(2.0f == boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_WHITE));
+    testAssert(std::isnan(boardHistory.whiteScoreIfNotCapturingGroundingAlive(board, P_BLACK)));
   }
 
   {
@@ -978,7 +1049,7 @@ xxx.x
     auto boardHistory = BoardHistory(board);
 
     testAssert(!boardHistory.endGameIfReasonable(board, false, P_BLACK));
-    testAssert(!boardHistory.endGameIfReasonable(board, false, P_WHITE)); // sui allowed -> game is not yet finished for WHITE
+    testAssert(boardHistory.endGameIfReasonable(board, false, P_WHITE)); // sui is never beneficial -> game is finished for WHITE
   }
 
   {
@@ -991,7 +1062,7 @@ xxx.x
 
 
     testAssert(!boardHistory.endGameIfReasonable(board, false, P_BLACK));
-    testAssert(boardHistory.endGameIfReasonable(board, false, P_WHITE)); // sui disallowed -> game is already finished for WHITE
+    testAssert(boardHistory.endGameIfReasonable(board, false, P_WHITE)); // sui is never beneficial -> game is finished for WHITE
     testAssert(P_BLACK == boardHistory.winner);
     testAssert(-1.0f == boardHistory.finalWhiteMinusBlackScore);
   }
@@ -1007,7 +1078,7 @@ xxxxx
     auto boardHistory = BoardHistory(board);
 
     // The field is not grounding alive; however, the game should be finished because there are no legal moves for WHITE
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
+    testAssert(!boardHistory.isGroundReasonable(board));
     testAssert(boardHistory.endGameIfReasonable(board, false, P_WHITE));
     testAssert(C_EMPTY == boardHistory.winner);
     testAssert(0.0f == boardHistory.finalWhiteMinusBlackScore);

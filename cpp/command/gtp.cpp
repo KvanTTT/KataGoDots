@@ -288,7 +288,7 @@ static bool shouldResign(
   const double resignMinScoreDifference,
   const double resignMinMovesPerBoardArea
 ) {
-  if (hist.rules.isDots && hist.winOrEffectiveDrawByGrounding(board, getOpp(pla), false)) {
+  if (hist.rules.isDots && hist.isResignReasonable(board, pla)) {
     return true;
   }
 
@@ -1304,7 +1304,7 @@ struct GTPEngine {
       //Implement cleanupBeforePass hack - if the bot wants to pass, instead cleanup if there is something to clean
       //and we are in a ruleset where this is necessary or the user has configured it.
       moveLoc = PlayUtils::maybeCleanupBeforePass(gargs.cleanupBeforePass, gargs.friendlyPass, pla, moveLoc, bot);
-    } else if (hist.winOrEffectiveDrawByGrounding(search->getRootBoard(), pla)) {
+    } else if (hist.isGroundReasonable(search->getRootBoard())) {
       moveLoc = Board::PASS_LOC;
     }
 
