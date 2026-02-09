@@ -11,10 +11,7 @@ using namespace std::chrono;
 using namespace TestCommon;
 
 static void writeToSgfAndCheckStartPosFromSgfProp(const int startPos, const bool startPosIsRandom, const Board& board) {
-  std::ostringstream sgfStringStream;
-  const BoardHistory boardHistory(board, P_BLACK, board.rules, 0);
-  WriteSgf::writeSgf(sgfStringStream, "black", "white", boardHistory, {});
-  const string sgfString = sgfStringStream.str();
+  const string sgfString = WriteSgf::toSgf(board);
   cout << ";  Sgf: " << sgfString << endl;
 
   const auto deserializedSgf = Sgf::parse(sgfString);

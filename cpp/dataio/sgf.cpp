@@ -1921,6 +1921,19 @@ string WriteSgf::gameResultNoSgfTag(const BoardHistory& hist, double overrideFin
   }
   return "";
 }
+
+string WriteSgf::toSgf(const Board& board) {
+  const BoardHistory boardHistory(board);
+  return toSgf(boardHistory);
+}
+
+std::string WriteSgf::toSgf(const BoardHistory& endHist) {
+  std::ostringstream sgfStringStream;
+  const bool isDots = endHist.rules.isDots;
+  writeSgf(sgfStringStream, PlayerIO::playerToString(C_BLACK, isDots), PlayerIO::playerToString(C_WHITE, isDots), endHist, {});
+  return sgfStringStream.str();
+}
+
 void WriteSgf::writeSgf(
   ostream& out, const string& bName, const string& wName,
   const BoardHistory& endHist,

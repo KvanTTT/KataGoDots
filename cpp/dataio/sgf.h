@@ -287,6 +287,8 @@ namespace WriteSgf {
     double overrideFinishedWhiteScore,
     const std::vector<std::string>& extraComments
   );
+  std::string toSgf(const Board& board);
+  std::string toSgf(const BoardHistory& endHist);
 
   //If hist is a finished game, print the result to out along with SGF tag, else do nothing
   void printGameResult(std::ostream& out, const BoardHistory& hist);
