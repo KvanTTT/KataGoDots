@@ -3064,8 +3064,7 @@ int MainCmds::gtp(const vector<string>& args) {
       if (!responseIsError) {
         if (!engine->undo(undoCount)) {
           responseIsError = true;
-          response = "cannot undo";
-          break;
+          response = "cannot undo (max undo count: " + std::to_string(engine->moveHistory.size()) + ")";
         }
       }
     }
