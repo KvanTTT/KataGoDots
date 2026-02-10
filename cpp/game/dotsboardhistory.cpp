@@ -34,24 +34,24 @@ float BoardHistory::whiteScoreIfNotCapturingGroundingAlive(const Board& board, c
 float BoardHistory::whiteScoreIfGroundingAlive(const Board& board, const Color groundColor) const {
   assert(rules.isDots);
 
-  const auto extraWhiteScore = whiteBonusScore + whiteHandicapBonusScore + rules.komi;
+  const auto completeWhiteBonus = getCompleteWhiteBonus();
 
   const int blackWhiteCapturesDiff = board.numBlackCaptures - board.numWhiteCaptures;
 
   if (board.blackScoreIfWhiteGrounds == -board.whiteScoreIfBlackGrounds) {
     // All dots are grounded -> draw or win by extra bonus
     assert(board.whiteScoreIfBlackGrounds == blackWhiteCapturesDiff);
-    return static_cast<float>(blackWhiteCapturesDiff) + extraWhiteScore;
+    return static_cast<float>(blackWhiteCapturesDiff) + completeWhiteBonus;
   }
 
   // In case of non-capturing grounding, the winner still can ground if only all its dots are grounded (ungrounded opp dots don't matter)
-  if (const float fullWhiteScoreIfBlackGrounds = static_cast<float>(board.whiteScoreIfBlackGrounds) + extraWhiteScore;
+  if (const float fullWhiteScoreIfBlackGrounds = static_cast<float>(board.whiteScoreIfBlackGrounds) + completeWhiteBonus;
      fullWhiteScoreIfBlackGrounds < 0.0F) {
     // Black already won the game by grounding considering white extra bonus
     if (groundColor == C_EMPTY || (blackWhiteCapturesDiff == board.whiteScoreIfBlackGrounds && groundColor == P_BLACK)) {
       return fullWhiteScoreIfBlackGrounds;
     }
-  } else if (const float fullBlackScoreIfWhiteGrounds = static_cast<float>(board.blackScoreIfWhiteGrounds) - extraWhiteScore;
+  } else if (const float fullBlackScoreIfWhiteGrounds = static_cast<float>(board.blackScoreIfWhiteGrounds) - completeWhiteBonus;
      fullBlackScoreIfWhiteGrounds < 0.0F) {
     // White already won the game by grounding considering white extra bonus
     if (groundColor == C_EMPTY || (-blackWhiteCapturesDiff == board.blackScoreIfWhiteGrounds && groundColor == P_WHITE)) {

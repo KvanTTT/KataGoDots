@@ -604,6 +604,10 @@ int BoardHistory::numberOfKoHashOccurrencesInHistory(Hash128 koHash, const KoHas
   return count;
 }
 
+float BoardHistory::getCompleteWhiteBonus() const {
+  return whiteBonusScore + whiteHandicapBonusScore + rules.komi;
+}
+
 float BoardHistory::whiteKomiAdjustmentForDraws(double drawEquivalentWinsForWhite) const {
   //We fold the draw utility into the komi, for input into things like the neural net.
   //Basically we model it as if the final score were jittered by a uniform draw from [-0.5,0.5].
@@ -614,7 +618,7 @@ float BoardHistory::whiteKomiAdjustmentForDraws(double drawEquivalentWinsForWhit
 }
 
 float BoardHistory::currentSelfKomi(Player pla, double drawEquivalentWinsForWhite) const {
-  float whiteKomiAdjusted = whiteBonusScore + whiteHandicapBonusScore + rules.komi + whiteKomiAdjustmentForDraws(drawEquivalentWinsForWhite);
+  float whiteKomiAdjusted = getCompleteWhiteBonus() + whiteKomiAdjustmentForDraws(drawEquivalentWinsForWhite);
 
   if(pla == P_WHITE)
     return whiteKomiAdjusted;
@@ -750,7 +754,7 @@ void BoardHistory::endAndScoreGameNow(const Board& board, Color area[Board::MAX_
     whiteBonusScore += (presumedNextMovePla == P_WHITE ? 0.5f : -0.5f);
   }
 
-  setFinalScoreAndWinner(static_cast<float>(boardScore) + whiteBonusScore + whiteHandicapBonusScore + rules.komi);
+  setFinalScoreAndWinner(static_cast<float>(boardScore) + getCompleteWhiteBonus());
   isScored = true;
   isNoResult = false;
   isResignation = false;
@@ -786,7 +790,7 @@ bool BoardHistory::endGameIfReasonable(const Board& board, const bool checkAllPa
       }
 
       if (!reasonableMoveExist) {
-        finalWhiteScore = board.numBlackCaptures - board.numWhiteCaptures + whiteBonusScore + whiteHandicapBonusScore + rules.komi;
+        finalWhiteScore = board.numBlackCaptures - board.numWhiteCaptures + getCompleteWhiteBonus();
       }
     }
 
@@ -834,7 +838,7 @@ bool BoardHistory::endGameIfReasonable(const Board& board, const bool checkAllPa
       hasButton = false;
       whiteBonusScore += (presumedNextMovePla == P_WHITE ? 0.5f : -0.5f);
     }
-    setFinalScoreAndWinner(boardScore + whiteBonusScore + whiteHandicapBonusScore + rules.komi);
+    setFinalScoreAndWinner(boardScore + getCompleteWhiteBonus());
     isScored = true;
     isNoResult = false;
     isResignation = false;
@@ -1100,7 +1104,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
       isGameFinished = true;
       isPastNormalPhaseEnd = false;
       const auto whiteMinusBlackScore = static_cast<float>(board.numBlackCaptures - board.numWhiteCaptures);
-      setFinalScoreAndWinner(whiteMinusBlackScore + whiteBonusScore + whiteHandicapBonusScore + rules.komi);
+      setFinalScoreAndWinner(whiteMinusBlackScore + getCompleteWhiteBonus());
     }
   } else {
     if(moveLoc != Board::PASS_LOC)

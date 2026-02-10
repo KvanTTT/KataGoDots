@@ -131,7 +131,10 @@ struct BoardHistory {
   //(such as setInitialTurnNumber, setAssumeMultipleStartingBlackMovesAreHandicap) set identically.
   BoardHistory copyToInitial() const;
 
+  float getCompleteWhiteBonus() const;
+
   float whiteKomiAdjustmentForDraws(double drawEquivalentWinsForWhite) const;
+
   float currentSelfKomi(Player pla, double drawEquivalentWinsForWhite) const;
 
   //Returns a reference a recent board state, where 0 is the current board, 1 is 1 move ago, etc.
