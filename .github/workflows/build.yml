@@ -47,6 +47,11 @@ jobs:
       run: |
         make -j$(nproc)
 
+    - name: Print info
+      working-directory: cpp
+      run: |
+        ./katago version
+
     - name: Run tests
       working-directory: cpp
       run: |
@@ -91,6 +96,10 @@ jobs:
         working-directory: cpp
         run: |
           ninja
+      - name: Print info
+        working-directory: cpp
+        run: |
+          ./katago version
       - name: Run tests
         working-directory: cpp
         run: |
@@ -158,6 +167,11 @@ jobs:
       run: |
         $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
         Copy-Item "$vcpkgRoot/installed/x64-windows/bin/*.dll" -Destination "Release/" -ErrorAction SilentlyContinue
+
+    - name: Print info
+      working-directory: cpp
+      run: |
+        Release/katago.exe version
 
     - name: Run tests
       working-directory: cpp
