@@ -58,7 +58,7 @@ jobs:
         ./katago runtests
 
     - name: Upload artifact
-      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      # if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
       with:
         name: katago-linux-${{ matrix.backend }}
