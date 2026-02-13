@@ -307,18 +307,34 @@ static void runDotsStressTestsInternal(
   cout << "    Groundings: " << groundingCount << " (" << static_cast<double>(groundingCount) / gamesCount << ")" << endl;
 }
 
+static void maxTerritory(const Player pla) {
+  const Player opp = getOpp(pla);
+  cout << "  Max territory (" << PlayerIO::playerToString(pla, true) << ")" << endl;
+  auto board = Board(Board::MAX_LEN_X, Board::MAX_LEN_Y, Rules(Rules::START_POS_EMPTY, false, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots));
+  for(int y = 0; y < board.y_size; y++) {
+    for(int x = 0; x < board.x_size; x++) {
+      const Player currentPla = y == 0 || y == board.y_size - 1 || x == 0 || x == board.x_size - 1 ? pla : opp;
+      board.playMoveAssumeLegal(Location::getLoc(x, y, board.x_size), currentPla);
+    }
+  }
+  int maxCaptures;
+  int zeroCaptures;
+  if (pla == P_BLACK) {
+    maxCaptures = board.numWhiteCaptures;
+    zeroCaptures = board.numBlackCaptures;
+  } else {
+    maxCaptures = board.numBlackCaptures;
+    zeroCaptures = board.numWhiteCaptures;
+  }
+  testAssert((board.x_size - 2) * (board.y_size - 2) == maxCaptures);
+  testAssert(0 == zeroCaptures);
+}
+
 void Tests::runDotsStressTests() {
   cout << "Running dots stress tests" << endl;
 
-  cout << "  Max territory" << endl;
-  auto board = Board(39, 32, Rules(Rules::START_POS_EMPTY, false, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots));
-  for(int y = 0; y < board.y_size; y++) {
-    for(int x = 0; x < board.x_size; x++) {
-      const Player pla = y == 0 || y == board.y_size - 1 || x == 0 || x == board.x_size - 1 ? P_BLACK : P_WHITE;
-      board.playMoveAssumeLegal(Location::getLoc(x, y, board.x_size), pla);
-    }
-  }
-  testAssert((board.x_size - 2) * (board.y_size - 2) == board.numWhiteCaptures);
+  maxTerritory(P_BLACK);
+  maxTerritory(P_WHITE);
 
   runDotsStressTestsInternal(39, 32, 3000, true, Rules::START_POS_CROSS, false, false, 0.0f, true, 0.8f, 1.0f, true);
   runDotsStressTestsInternal(39, 32, 3000, true, Rules::START_POS_CROSS_4, true, true, 0.5f, false, 0.8f, 1.0f, true);
