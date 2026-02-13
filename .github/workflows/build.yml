@@ -28,9 +28,8 @@ jobs:
 
     - name: Configure CMake
       working-directory: cpp
-      # Use '-DCMAKE_CXX_FLAGS_RELEASE="-s"' to strip debug symbols. Otherwise, the executable is too big
       run: |
-        cmake . -DUSE_BACKEND=${{ matrix.backend }} -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE="-s"
+        cmake . -DUSE_BACKEND=${{ matrix.backend }} -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       working-directory: cpp
