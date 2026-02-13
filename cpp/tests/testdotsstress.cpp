@@ -273,10 +273,6 @@ static void runDotsStressTestsInternal(
       validateStatesAndCaptures(board, moveRecords);
     }
 
-    if (dotsGame && suicideAllowed && lastLoc != Board::PASS_LOC) {
-      testAssert(0 == board.numLegalMovesIfSuiAllowed);
-    }
-
     movesCount += currentGameMovesCount;
     if (float whiteScore = board.numBlackCaptures - board.numWhiteCaptures + komi; whiteScore > Global::FLOAT_EPS) {
       whiteWinsCount++;
@@ -323,7 +319,6 @@ void Tests::runDotsStressTests() {
     }
   }
   testAssert((board.x_size - 2) * (board.y_size - 2) == board.numWhiteCaptures);
-  testAssert(0 == board.numLegalMovesIfSuiAllowed);
 
   runDotsStressTestsInternal(39, 32, 3000, true, Rules::START_POS_CROSS, false, false, 0.0f, true, 0.8f, 1.0f, true);
   runDotsStressTestsInternal(39, 32, 3000, true, Rules::START_POS_CROSS_4, true, true, 0.5f, false, 0.8f, 1.0f, true);

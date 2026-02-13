@@ -433,8 +433,6 @@ struct Board
   // Offsets to add to get clockwise traverse
   short adj_offsets[8];
 
-  int numLegalMovesIfSuiAllowed;
-
   //Every chain of stones has one of its stones arbitrarily designated as the head.
   std::vector<ChainData> chain_data; //For each head stone, the chaindata for the chain under that head. Undefined otherwise.
   std::vector<Loc> chain_head;       //Where is the head of this chain? Undefined if EMPTY or WALL
