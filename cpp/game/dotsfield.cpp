@@ -284,8 +284,6 @@ void Board::playMoveAssumeLegalDots(const Loc loc, const Player pla) {
     ground(pla, initEmptyBaseInvalidateLocations, bases);
   } else {
     colors[loc] = static_cast<Color>(pla | pla << PLACED_PLAYER_SHIFT);
-    const Hash128 hashValue = ZOBRIST_BOARD_HASH[loc][pla];
-    pos_hash ^= hashValue;
 
     bool atLeastOneRealBaseIsGrounded = false;
     int unconnectedLocationsSize = 0;
@@ -324,6 +322,8 @@ void Board::playMoveAssumeLegalDots(const Loc loc, const Player pla) {
     ) {
       fillGrounding(loc);
     }
+
+    pos_hash ^= ZOBRIST_BOARD_HASH[loc][pla];
   }
 }
 
@@ -339,8 +339,6 @@ Board::MoveRecord Board::tryPlayMoveRecordedDots(Loc loc, Player pla, const bool
     ground(pla, initEmptyBaseInvalidateLocations, bases);
   } else {
     colors[loc] = static_cast<Color>(pla | pla << PLACED_PLAYER_SHIFT);
-    const Hash128 hashValue = ZOBRIST_BOARD_HASH[loc][pla];
-    pos_hash ^= hashValue;
 
     bool atLeastOneRealBaseIsGrounded = false;
     int unconnectedLocationsSize = 0;
@@ -356,7 +354,6 @@ Board::MoveRecord Board::tryPlayMoveRecordedDots(Loc loc, Player pla, const bool
           captureWhenEmptyTerritoryBecomesRealBase(loc, opp, bases, atLeastOneRealBaseIsGrounded);
         } else {
           colors[loc] = originalState;
-          pos_hash ^= hashValue;
           return {};
         }
       }
@@ -382,6 +379,8 @@ Board::MoveRecord Board::tryPlayMoveRecordedDots(Loc loc, Player pla, const bool
     ) {
       newGroundingLocations = fillGrounding(loc);
     }
+
+    pos_hash ^= ZOBRIST_BOARD_HASH[loc][pla];
   }
 
   return {loc, pla, originalState, bases, initEmptyBaseInvalidateLocations, newGroundingLocations};
@@ -422,14 +421,35 @@ void Board::undoDots(MoveRecord& moveRecord) {
   }
 
   for (auto it = moveRecord.bases.rbegin(); it != moveRecord.bases.rend(); ++it) {
-    for (size_t index = 0; index < it->rollback_locations.size(); index++) {
-      const State rollbackState = it->rollback_states[index];
-      const Loc rollbackLocation = it->rollback_locations[index];
-      setState(rollbackLocation, rollbackState);
+    for (const auto& locStateCaptureDiff : it->rollback_locs_states_captures) {
+      const Loc rollbackLoc = locStateCaptureDiff.getLoc();
+      const State prevState = locStateCaptureDiff.getState();
+      setState(rollbackLoc, prevState);
+
       if (it->is_real) {
-        updateScoreAndHashForTerritory(rollbackLocation, rollbackState, it->pla, true);
+        // Simulate unmaking the new captures diff and applying the old one
+        const auto rollbackCapturesDiff = locStateCaptureDiff.getCapturesDiff();
+        const auto currentCapturesDiff = captures_diff_data[rollbackLoc];
+        assert(currentCapturesDiff != UNINITIALIZED_CAPTURES_DIFF_DATA);
+        const auto capturesDiffHash = ZOBRIST_DOTS_CAPTURES_DIFF_HASH[rollbackLoc];
+
+        pos_hash ^= capturesDiffHash[currentCapturesDiff];
+
+        if (rollbackCapturesDiff != UNINITIALIZED_CAPTURES_DIFF_DATA) {
+          pos_hash ^= capturesDiffHash[rollbackCapturesDiff];
+        }
+
+        // Erase the placed dot
+        if (const Color placedColor = getPlacedDotColor(prevState); placedColor != C_EMPTY && !isTerritory(prevState)) {
+          pos_hash ^= ZOBRIST_BOARD_HASH[rollbackLoc][placedColor];
+        }
+
+        captures_diff_data[rollbackLoc] = rollbackCapturesDiff;
       }
     }
+
+    numBlackCaptures -= it->black_captures_diff;
+    numWhiteCaptures -= it->white_captures_diff;
   }
 
   if (!isGroundingMove) {
@@ -575,9 +595,12 @@ void Board::ground(const Player pla, vector<Loc>& emptyBaseInvalidatePositions, 
     for (int x = 0; x < x_size; x++) {
       const Loc loc = Location::getLoc(x, y, x_size);
       if (const State state = getState(loc); !isGrounded(state) && isActive(state, pla)) {
-        bool createRealBase = false;
-        getTerritoryLocations(pla, loc, true, createRealBase);
-        assert(createRealBase);
+        int numCapturedDots, numFreedDots;
+        getTerritoryLocations(opp, loc, true, numCapturedDots, numFreedDots);
+        // In a rare case it's possible to encounter an empty ungrounded loc that should be de-facto grounded (a limitation of grounding algorithm)
+        // In this case we have to ground the dot anyway for correctness.
+        // That's why the assertion is valid *almost* always but not always
+        // assert(numCapturedDots + numFreedDots > 0);
 
         for (const Loc& territoryLoc : territoryLocationsBuffer) {
           invalidateAdjacentEmptyTerritoryIfNeeded(territoryLoc);
@@ -586,7 +609,7 @@ void Board::ground(const Player pla, vector<Loc>& emptyBaseInvalidatePositions, 
           }
         }
 
-        bases.push_back(createBaseAndUpdateStates(opp, true));
+        bases.push_back(createBaseAndUpdateStates(opp, numCapturedDots, numFreedDots));
       }
     }
   }
@@ -713,34 +736,42 @@ Board::Base Board::buildBase(const vector<Loc>& closure, const Player pla) {
   }
 
   const Loc territoryFirstLoc = Location::getNextLocCW(closure.at(1), closure.at(0), x_size);
-  bool createRealBase;
-  getTerritoryLocations(pla, territoryFirstLoc, false, createRealBase);
+  int numCapturedDots, numFreeDots;
+  getTerritoryLocations(pla, territoryFirstLoc, false, numCapturedDots, numFreeDots);
   clearVisited(closure);
 
-  return createBaseAndUpdateStates(pla, createRealBase);
+  return createBaseAndUpdateStates(pla, numCapturedDots, numFreeDots);
 }
 
-void Board::getTerritoryLocations(const Player pla, const Loc firstLoc, const bool grounding, bool& createRealBase) const {
+void Board::getTerritoryLocations(const Player pla,
+                                  const Loc firstLoc,
+                                  const bool grounding,
+                                  int &numCapturedDots, int &numFreedDots
+) const {
   walkStack.clear();
   territoryLocationsBuffer.clear();
+  numCapturedDots = 0;
+  numFreedDots = 0;
 
-  createRealBase = grounding ? false : rules.dotsCaptureEmptyBases;
   const Player opp = getOpp(pla);
 
-  State state = getState(firstLoc);
-  Color activeColor = getActiveColor(state);
+  State adjState = getState(firstLoc);
+  Color activeColor = getActiveColor(adjState);
   assert(activeColor != C_WALL);
 
   bool legalLoc = false;
-  if (grounding) {
-    createRealBase = true;
+  if (activeColor == opp) {
     // In a rare case it's possible to encounter an empty ungrounded loc that should be de-facto grounded.
-    // However, currently it's to set up its grounding due to limitations of the grounding algorithm that doesn't traverse diagonals.
-    // That's why we have to check adj locs on grounding to prevent adding incorrect locs and causing out of bounds exception.
-    legalLoc = activeColor == pla && !isGroundedOrWall(state, pla);
-  } else if (activeColor != pla || !isTerritory(state)) {  // Ignore already captured territory
-    createRealBase = createRealBase || isPlaced(state, opp);
-    legalLoc = true; // If no grounding, empty locations can be handled as well
+    // However, currently it's not possible to set up its grounding because of limitations of the grounding algorithm that doesn't traverse diagonals.
+    // That's why we have to check adj locs on grounding to prevent adding incorrect locs and causing out-of-bounds exception.
+    legalLoc = !grounding || !isGroundedOrWall(adjState, opp);
+    if (const Color placedDotColor = getPlacedDotColor(adjState); legalLoc && placedDotColor == opp) {
+      numCapturedDots++;
+    } else if (placedDotColor == pla) {
+      numFreedDots++;
+    }
+  } else {
+    legalLoc = !grounding;
   }
 
   if (legalLoc) {
@@ -756,19 +787,19 @@ void Board::getTerritoryLocations(const Player pla, const Loc firstLoc, const bo
     forEachAdjacent(loc, [&](const Loc adj) {
       if (isVisited(adj)) return;
 
-      state = getState(adj);
-      activeColor = getActiveColor(state);
+      adjState = getState(adj);
+      activeColor = getActiveColor(adjState);
 
       bool isAdjLegal = false;
-      if (grounding) {
-        createRealBase = true;
-        isAdjLegal = activeColor == pla && !isGroundedOrWall(state, pla);
-      } else {
-        assert(activeColor != C_WALL);
-        if (activeColor != pla || !isTerritory(state)) {  // Ignore already captured territory
-          createRealBase = createRealBase || isPlaced(state, opp);
-          isAdjLegal = true; // If no grounding, empty locations can be handled as well
+      if (activeColor == opp) {
+        isAdjLegal = !grounding || !isGroundedOrWall(adjState, opp);
+        if (const Color placedDotColor = getPlacedDotColor(adjState); isAdjLegal && placedDotColor == opp) {
+          numCapturedDots++;
+        } else if (placedDotColor == pla) {
+          numFreedDots++;
         }
+      } else {
+        isAdjLegal = !grounding;
       }
 
       if (isAdjLegal) {
@@ -782,78 +813,69 @@ void Board::getTerritoryLocations(const Player pla, const Loc firstLoc, const bo
   clearVisited(territoryLocationsBuffer);
 }
 
-Board::Base Board::createBaseAndUpdateStates(Player basePla, bool isReal) {
-  auto rollbackLocations = vector<Loc>();
-  rollbackLocations.reserve(territoryLocationsBuffer.size());
-  auto rollbackStates = vector<State>();
-  rollbackStates.reserve(territoryLocationsBuffer.size());
+Board::Base Board::createBaseAndUpdateStates(const Player basePla, const int numCapturedDots, const int numFreedDots) {
+  auto locStateAndCapturesDiffs = vector<LocStateAndCapturesDiff>();
+  locStateAndCapturesDiffs.reserve(territoryLocationsBuffer.size());
+
+  const int capturesDiff = numCapturedDots + numFreedDots;
+  assert(capturesDiff >= 0);
+
+  int blackCapturesDiff;
+  int whiteCapturesDiff;
+
+  if (basePla == P_BLACK) {
+    blackCapturesDiff = -numFreedDots;
+    whiteCapturesDiff = numCapturedDots;
+  } else if (basePla == P_WHITE) {
+    blackCapturesDiff = numCapturedDots;
+    whiteCapturesDiff = -numFreedDots;
+  } else {
+    blackCapturesDiff = 0;
+    whiteCapturesDiff = 0;
+    assert(false && "Invalid base player");
+  }
+
+  numBlackCaptures += blackCapturesDiff;
+  numWhiteCaptures += whiteCapturesDiff;
+  const bool isReal = capturesDiff > 0 || rules.dotsCaptureEmptyBases;
 
   for (const Loc& territoryLoc : territoryLocationsBuffer) {
-    State state = getState(territoryLoc);
+    const State prevState = getState(territoryLoc);
+    uint16_t prevCapturesDiff = 0;
+    const Color placedColor = getPlacedDotColor(prevState);
 
-    if (Player activePlayer = getActiveColor(state); activePlayer != basePla) {
-      State newState;
-      if (isReal) {
-        updateScoreAndHashForTerritory(territoryLoc, state, basePla, false);
-        newState = setTerritoryAndActivePlayer(state, basePla);
-      } else {
-        newState = static_cast<State>(basePla << EMPTY_TERRITORY_SHIFT);
+    State newState;
+    if (isReal) {
+      if (placedColor != C_EMPTY && !isTerritory(prevState)) {
+        pos_hash ^= ZOBRIST_BOARD_HASH[territoryLoc][placedColor];
       }
 
-      rollbackLocations.push_back(territoryLoc);
-      rollbackStates.push_back(state);
-      setState(territoryLoc, newState);
-    }
-  }
+      prevCapturesDiff = captures_diff_data[territoryLoc];
 
-  return {basePla, rollbackLocations, rollbackStates, isReal};
-}
+      // Simulate unmaking the previous captures diff and applying the new one
+      const auto capturesDiffHash = ZOBRIST_DOTS_CAPTURES_DIFF_HASH[territoryLoc];
 
-void Board::updateScoreAndHashForTerritory(const Loc loc, const State state, const Player basePla, const bool rollback) {
-  const Color currentColor = getActiveColor(state);
-  const Player baseOppPla = getOpp(basePla);
+      // Ignore uninitialized diffs (it allows handling empty bases properly)
+      if (prevCapturesDiff != UNINITIALIZED_CAPTURES_DIFF_DATA)
+        pos_hash ^= capturesDiffHash[prevCapturesDiff];
 
-  if (isPlaced(state, baseOppPla)) {
-    // The `getTerritoryPositions` never returns positions inside already owned territory,
-    // so there is no need to check for the territory flag.
-    if (basePla == P_BLACK) {
-      if (!rollback) {
-        numWhiteCaptures++;
-      } else {
-        numWhiteCaptures--;
-      }
+      pos_hash ^= capturesDiffHash[capturesDiff];
+
+      captures_diff_data[territoryLoc] = static_cast<uint16_t>(capturesDiff);
+
+      newState = setTerritoryAndActivePlayer(prevState, basePla);
+    } else if (placedColor == C_EMPTY) {
+      newState = static_cast<State>(basePla << EMPTY_TERRITORY_SHIFT);
     } else {
-      if (!rollback) {
-        numBlackCaptures++;
-      } else {
-        numBlackCaptures--;
-      }
+      continue;
     }
-  } else if (isPlaced(state, basePla) && isActive(state, baseOppPla)) {
-    // No diff for the territory of the current player
-    if (basePla == P_BLACK) {
-      if (!rollback) {
-        numBlackCaptures--;
-      } else {
-        numBlackCaptures++;
-      }
-    } else {
-      if (!rollback) {
-        numWhiteCaptures--;
-      } else {
-        numWhiteCaptures++;
-      }
-    }
+
+    locStateAndCapturesDiffs.emplace_back(territoryLoc, prevState, prevCapturesDiff);
+
+    setState(territoryLoc, newState);
   }
 
-  if (currentColor == C_EMPTY) {
-    pos_hash ^= ZOBRIST_BOARD_HASH[loc][basePla];
-  } else if (currentColor == baseOppPla) {
-    // Simulate unmaking the opponent move and making the player's move
-    const auto positionsHash = ZOBRIST_BOARD_HASH[loc];
-    pos_hash ^= positionsHash[baseOppPla];
-    pos_hash ^= positionsHash[basePla];
-  }
+  return Base(basePla, isReal, blackCapturesDiff, whiteCapturesDiff, locStateAndCapturesDiffs);
 }
 
 void Board::invalidateAdjacentEmptyTerritoryIfNeeded(const Loc loc) {
@@ -894,7 +916,8 @@ void Board::makeMoveAndCalculateCapturesAndBases(
       if (base.is_real && base.pla == pla) {
         captures[loc] = static_cast<Color>(captures[loc] | base.pla);
 
-        for(const Loc& rollbackLoc: base.rollback_locations) {
+        for(const LocStateAndCapturesDiff& loc_state_and_captures_diff: base.rollback_locs_states_captures) {
+          const Loc rollbackLoc = loc_state_and_captures_diff.getLoc();
           bases[rollbackLoc] = static_cast<Color>(bases[rollbackLoc] | base.pla);
         }
       }
@@ -938,3 +961,26 @@ std::pair<float, float> Board::getAcceptableKomiRange(const bool allowDraw, cons
   auto upperBound = static_cast<float>(blackScoreIfWhiteGrounds) + (allowDraw ? 0.0f : -0.5f);
   return {lowerBound, upperBound};
 }
+
+Board::LocStateAndCapturesDiff::LocStateAndCapturesDiff(const Loc newLoc, const State newState, const uint16_t newCapturesDiff) {
+  packed = (static_cast<uint32_t>(newLoc) & LOC_BITS_MASK) |
+           (static_cast<uint32_t>(newState) & STATE_BITS_MASK) << LOC_BITS_COUNT |
+           (static_cast<uint32_t>(newCapturesDiff) & CAPTURES_BITS_MASK) << (LOC_BITS_COUNT + STATE_BITS_COUNT);
+}
+
+Loc Board::LocStateAndCapturesDiff::getLoc() const {
+  return static_cast<Loc>(packed & LOC_BITS_MASK);
+}
+
+State Board::LocStateAndCapturesDiff::getState() const {
+  return static_cast<State>((packed >> LOC_BITS_COUNT) & STATE_BITS_MASK);
+}
+
+uint16_t Board::LocStateAndCapturesDiff::getCapturesDiff() const {
+  return static_cast<uint16_t>((packed >> (LOC_BITS_COUNT + STATE_BITS_COUNT)) & CAPTURES_BITS_MASK);
+}
+
+Board::Base::Base(const Player newPla, const bool newIsReal, const short newBlackCapturesDiff, const short newWhiteCapturesDiff, const std::vector<LocStateAndCapturesDiff>& newRollbackLocStateCapturesDiff) :
+pla(newPla), is_real(newIsReal), black_captures_diff(newBlackCapturesDiff), white_captures_diff(newWhiteCapturesDiff), rollback_locs_states_captures(newRollbackLocStateCapturesDiff) {
+}
+

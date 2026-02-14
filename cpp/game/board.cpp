@@ -25,6 +25,7 @@ Hash128 Board::ZOBRIST_KO_MARK_HASH[MAX_ARR_SIZE][4];
 Hash128 Board::ZOBRIST_ENCORE_HASH[3];
 Hash128 Board::ZOBRIST_BOARD_HASH2[MAX_ARR_SIZE][4];
 Hash128 Board::ZOBRIST_SECOND_ENCORE_START_HASH[MAX_ARR_SIZE][4];
+Hash128 Board::ZOBRIST_DOTS_CAPTURES_DIFF_HASH[MAX_ARR_SIZE][MAX_CAPTURES_COUNT];
 const Hash128 Board::ZOBRIST_PASS_ENDS_PHASE = //Based on sha256 hash of Board::ZOBRIST_PASS_ENDS_PHASE
   Hash128(0x853E097C279EBF4EULL, 0xE3153DEF9E14A62CULL);
 const Hash128 Board::ZOBRIST_GAME_IS_OVER = //Based on sha256 hash of Board::ZOBRIST_GAME_IS_OVER
@@ -106,17 +107,6 @@ bool Location::isNearCentral(Loc loc, int x_size, int y_size) {
 
 // CONSTRUCTORS AND INITIALIZATION----------------------------------------------------------
 
-Board::Base::Base(Player newPla,
-  const std::vector<Loc>& rollbackLocations,
-  const std::vector<State>& rollbackStates,
-  const bool isReal
-) {
-  pla = newPla;
-  rollback_locations = rollbackLocations;
-  rollback_states = rollbackStates;
-  is_real = isReal;
-}
-
 Board::Board() : Board(Rules::DEFAULT_GO) {}
 
 Board::Board(const Rules& newRules) {
@@ -148,6 +138,7 @@ Board::Board(const Board& other) {
   start_pos_moves = other.start_pos_moves;
   memcpy(adj_offsets, other.adj_offsets, sizeof(short)*8);
   visited_data.resize(other.visited_data.size(), false);
+  captures_diff_data = other.captures_diff_data;
 }
 
 void Board::init(const int xS, const int yS, const Rules& initRules)
@@ -190,6 +181,7 @@ void Board::init(const int xS, const int yS, const Rules& initRules)
     next_in_chain.resize(MAX_ARR_SIZE);
   } else {
     visited_data.resize(getMaxArrSize(x_size, y_size), false);
+    captures_diff_data.resize(getMaxArrSize(x_size, y_size), UNINITIALIZED_CAPTURES_DIFF_DATA);
   }
 
   Location::getAdjacentOffsets(adj_offsets, x_size, isDots());
@@ -258,6 +250,15 @@ void Board::initHash()
       ZOBRIST_BOARD_HASH2[i][j] = nextHash();
       ZOBRIST_BOARD_HASH2[i][j].hash0 = Hash::murmurMix(ZOBRIST_BOARD_HASH2[i][j].hash0);
       ZOBRIST_BOARD_HASH2[i][j].hash1 = Hash::splitMix64(ZOBRIST_BOARD_HASH2[i][j].hash1);
+    }
+  }
+
+  //Reseed the random number generator so that these hashes are also
+  //not affected by the size of the board we compile with
+  rand.init("Board::initHash() for ZOBRIST_DOTS_CAPTURES_DIFF_HASH hashes");
+  for (const auto secondArray : ZOBRIST_DOTS_CAPTURES_DIFF_HASH) {
+    for (int j = 0; j < MAX_CAPTURES_COUNT; j++) {
+      secondArray[j] = nextHash();
     }
   }
 
@@ -2448,7 +2449,8 @@ void Board::checkConsistency() const {
   Hash128 tmp_pos_hash = ZOBRIST_SIZE_X_HASH[x_size] ^ ZOBRIST_SIZE_Y_HASH[y_size];
   int emptyCount = 0;
   for(Loc loc = 0; loc < MAX_ARR_SIZE; loc++) {
-    const Color color = getColor(loc);
+    const State state = getState(loc);
+    const Color color = getActiveColor(state);
     int x = Location::getX(loc,x_size);
     int y = Location::getY(loc,x_size);
     if(x < 0 || x >= x_size || y < 0 || y >= y_size) {
@@ -2462,10 +2464,16 @@ void Board::checkConsistency() const {
             checkChainConsistency(loc);
           // if(empty_list.contains(loc))
           //   throw StringError(errLabel + "Empty list contains filled location");
-        }
+          tmp_pos_hash ^= ZOBRIST_BOARD_HASH[loc][color];
+        } else {
+          if (const Color placedColor = getPlacedDotColor(state); placedColor != C_EMPTY && !isTerritory(state)) {
+            tmp_pos_hash ^= ZOBRIST_BOARD_HASH[loc][placedColor];
+          }
 
-        tmp_pos_hash ^= ZOBRIST_BOARD_HASH[loc][color];
-        tmp_pos_hash ^= ZOBRIST_BOARD_HASH[loc][C_EMPTY];
+          if (const auto capturesDiffAtLoc = captures_diff_data[loc]; capturesDiffAtLoc != UNINITIALIZED_CAPTURES_DIFF_DATA) {
+            tmp_pos_hash ^= ZOBRIST_DOTS_CAPTURES_DIFF_HASH[loc][capturesDiffAtLoc];
+          }
+        }
       }
       else if(color== C_EMPTY) {
         // if(!empty_list.contains(loc))
@@ -2477,7 +2485,7 @@ void Board::checkConsistency() const {
     }
   }
 
-  if(pos_hash != tmp_pos_hash)
+  if (pos_hash != tmp_pos_hash)
     throw StringError(errLabel + "Pos hash does not match expected");
 
   // if(empty_list.size_ != emptyCount)
@@ -2551,6 +2559,14 @@ bool Board::isEqualForTesting(const Board& other, const bool checkNumCaptures,
   }
   if (checkRules && rules != other.rules) {
     return false;
+  }
+  if (captures_diff_data.size() != other.captures_diff_data.size()) {
+    return false;
+  }
+  for (int i = 0; i < captures_diff_data.size(); i++) {
+    if (captures_diff_data[i] != other.captures_diff_data[i]) {
+      return false;
+    }
   }
   //We don't require that the chain linked lists are in the same order.
   //Consistency check ensures that all the linked lists are consistent with colors array, which we checked.
@@ -2887,28 +2903,36 @@ Board Board::parseBoard(const int xSize,
     if(line.length() != xSize && line.length() != 2*xSize-1)
       throw StringError("Board::parseBoard - line length not compatible with xSize");
 
-    for(int x = 0; x<xSize; x++) {
-      char c;
-      if(line.length() == xSize)
-        c = line[x];
-      else
-        c = line[x*2];
+    for (int x = 0; x < xSize; x++) {
+      const char c = line[(line.length() == xSize ? x : x*2)];
 
-      Loc loc = Location::getLoc(x,y,board.x_size);
-      if(c == '.' || c == ' ' || c == '*' || c == ',' || c == '`')
-        continue;
-      else if(c == 'o' || c == 'O') {
-        bool suc = board.setStoneFailIfNoLibs(loc,P_WHITE);
-        if(!suc)
-          throw StringError(string("Board::parseBoard - zero-liberty group near ") + Location::toString(loc,board));
+      Color stoneColor;
+      switch (c) {
+        case '.':
+        case ' ':
+        case '*':
+        case ',':
+        case '`':
+          continue;
+        case 'o':
+        case 'O':
+          stoneColor = C_WHITE;
+          break;
+        case 'x':
+        case 'X':
+          stoneColor = C_BLACK;
+          break;
+        default:
+          throw StringError(string("Board::parseBoard - could not parse board character: ") + c);
       }
-      else if(c == 'x' || c == 'X') {
-        bool suc = board.setStoneFailIfNoLibs(loc,P_BLACK);
-        if(!suc)
-          throw StringError(string("Board::parseBoard - zero-liberty group near ") + Location::toString(loc,board));
+
+      const Loc loc = Location::getLoc(x,y,board.x_size);
+      if (const bool suc = board.setStoneFailIfNoLibs(loc, stoneColor); !suc) {
+        const string message = rules.isDots
+          ? "Capturing is disallowed in raw fields (at " + Location::toString(loc, board) + ")"
+          : "Board::parseBoard - zero-liberty group near " + Location::toString(loc, board);
+        throw StringError(message);
       }
-      else
-        throw StringError(string("Board::parseBoard - could not parse board character: ") + c);
     }
   }
   return board;

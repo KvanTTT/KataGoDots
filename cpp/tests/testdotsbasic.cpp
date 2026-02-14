@@ -18,9 +18,9 @@ static void checkDotsField(const string& description, const string& input,
 
   Board initialBoard = parseDotsField(input, false, suicide, captureEmptyBases, freeCapturedDots, {});
 
-  Board board = Board(initialBoard);
+  auto board = Board(initialBoard);
 
-  BoardWithMoveRecords boardWithMoveRecords = BoardWithMoveRecords(board, moveRecords);
+  auto boardWithMoveRecords = BoardWithMoveRecords(board, moveRecords);
   check(boardWithMoveRecords);
 
   while (!moveRecords.empty()) {
@@ -189,8 +189,10 @@ x..x..x.
 x.x.x..x
 x..x..x.
 .x...x..
-..xxx...
+..x.x...
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
+    boardWithMoveRecords.playMove(3, 6, P_BLACK);
+
     boardWithMoveRecords.playMove(3, 3, P_WHITE);
     testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
 
@@ -1041,27 +1043,235 @@ xxxxx
   }
 }
 
-void Tests::runDotsPosHashTests() {
-   cout << "Running dots pos hash tests" << endl;
+// We need to check both playMoveRecorded and playMoveAssumeLegal because they have different implementations
+// playMoveAssumeLegal is faster but doesn't return move records.
+static void checkHashAfterMovesAndRollback(
+  const string& description,
+  const string& field1Str,
+  const string& field2Str,
+  const vector<XYMove>& field1Moves,
+  const vector<XYMove>& field2Moves,
+  const bool hashIsEqualAfterMoves,
+  const bool captureEmptyBase1 = false,
+  const bool captureEmptyBase2 = false
+  ) {
+  cout << "  " << description << endl;
 
-  {
-    Board dotsFieldWithEmptyBase = parseDotsFieldDefault(R"(
+  Board field1 = parseDotsField(field1Str, Rules::DEFAULT_DOTS.startPosIsRandom, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, captureEmptyBase1, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, {});
+  Board field2 = parseDotsField(field2Str, Rules::DEFAULT_DOTS.startPosIsRandom, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, captureEmptyBase2, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, {});
+
+  const auto origField1 = field1;
+  const auto origField2 = field2;
+
+  vector<Board::MoveRecord> field1MovesRecords;
+  vector<Board::MoveRecord> field2MovesRecords;
+
+  field1MovesRecords.reserve(field1Moves.size());
+  for (const auto move : field1Moves) {
+    field1MovesRecords.push_back(field1.playMoveRecorded(Location::getLoc(move.x, move.y, field1.x_size), move.player));
+  }
+
+  field2MovesRecords.reserve(field2Moves.size());
+  for (const auto move : field2Moves) {
+    field2MovesRecords.push_back(field2.playMoveRecorded(Location::getLoc(move.x, move.y, field2.x_size), move.player));
+  }
+
+  const auto field1HashAfterMoveRecords = field1.pos_hash;
+  const auto field2HashAfterMoveRecords = field2.pos_hash;
+  testAssert(hashIsEqualAfterMoves == (field1HashAfterMoveRecords == field2HashAfterMoveRecords));
+
+  for (auto it = field1MovesRecords.rbegin(); it != field1MovesRecords.rend(); ++it) {
+    field1.undo(*it);
+  }
+
+  for (auto it = field2MovesRecords.rbegin(); it != field2MovesRecords.rend(); ++it) {
+    field2.undo(*it);
+  }
+
+  testAssert(origField1.isEqualForTesting(field1));
+  testAssert(origField2.isEqualForTesting(field2));
+
+  for (const auto move : field1Moves) {
+    field1.playMoveAssumeLegal(Location::getLoc(move.x, move.y, field1.x_size), move.player);
+  }
+
+  for (const auto move : field2Moves) {
+    field2.playMoveAssumeLegal(Location::getLoc(move.x, move.y, field2.x_size), move.player);
+  }
+
+  testAssert(field1HashAfterMoveRecords == field1.pos_hash);
+  testAssert(field2HashAfterMoveRecords == field2.pos_hash);
+  testAssert(hashIsEqualAfterMoves == (field1.pos_hash == field2.pos_hash));
+}
+
+void Tests::runDotsPosHashTests() {
+  cout << "Running dots pos hashes tests:" << endl;
+
+  checkHashAfterMovesAndRollback(
+     "Simple",
+     R"(
+...
+.x.
+...
+)",
+     R"(
+...
+.o.
+...
+)",
+     {},
+     {},
+     false
+);
+
+  checkHashAfterMovesAndRollback(
+   "Different moves order doesn't affect hash",
+   R"(
+...
+...
+...
+)",
+   R"(
+...
+...
+...
+)",
+   {
+     XYMove(0, 1, P_WHITE),
+     XYMove(1, 0, P_WHITE),
+     XYMove(1, 1, P_WHITE),
+     XYMove(2, 1, P_WHITE),
+     XYMove(1, 2, P_WHITE)
+   },
+   {
+     XYMove(1, 2, P_WHITE),
+     XYMove(0, 1, P_WHITE),
+     XYMove(1, 0, P_WHITE),
+     XYMove(1, 1, P_WHITE),
+     XYMove(2, 1, P_WHITE),
+   },
+   true
+);
+
+  checkHashAfterMovesAndRollback(
+       "Capturing order doesn't affect hash",
+       R"(
 .x.
 x.x
 .x.
-)", { XYMove(1, 1, P_WHITE) });
-
-    Board dotsFieldWithRealBase = parseDotsFieldDefault(R"(
+)",
+       R"(
 .x.
 xox
 ...
-)", { XYMove(1, 2, P_BLACK) });
+)",
+       { XYMove(1, 1, P_WHITE)},
+       { XYMove(1, 2, P_BLACK) },
+       true
+);
 
-    testAssert(dotsFieldWithEmptyBase.pos_hash == dotsFieldWithRealBase.pos_hash);
-  }
+  checkHashAfterMovesAndRollback(
+     "Field with different sizes have different hashes",
+     R"(
+...
+.x.
+...
+)",
+     R"(
+....
+.x..
+....
+....
+)",
+     {},
+     {},
+     false
+);
 
-  {
-    Board dotsFieldWithSurrounding = parseDotsFieldDefault(R"(
+  checkHashAfterMovesAndRollback(
+"Same shape and same captures but different captures locations",
+R"(
+.xx.
+xo..
+.xx.
+)",
+R"(
+.xx.
+x.o.
+.xx.
+)",
+{ XYMove(3, 1, P_BLACK) },
+{ XYMove(3, 1, P_BLACK) },
+true
+);
+
+  checkHashAfterMovesAndRollback(
+    "Field captures affects hash (https://github.com/KvanTTT/KataGoDots/issues/45)",
+    R"(
+.xxx.
+.o..x
+.xxx.
+)",
+    R"(
+.xxx.
+.ooxx
+.xxx.
+)",
+{ XYMove(0, 1, P_BLACK) },
+{ XYMove(0, 1, P_BLACK) },
+false
+    );
+
+  checkHashAfterMovesAndRollback(
+  "Equal captures diff affects hash (https://github.com/KvanTTT/KataGoDots/issues/45)",
+  R"(
+.xx..oo.
+xo....xo
+.xx..oo.
+)",
+  R"(
+.xx..oo.
+xoo..xxo
+.xx..oo.
+)",
+{ XYMove(3, 1, P_BLACK), XYMove(4, 1, P_WHITE) },
+{ XYMove(3, 1, P_BLACK), XYMove(4, 1, P_WHITE) },
+false
+  );
+
+  const string& fieldForSameShapeButDifferentCaptures = R"(
+.xx.
+xo..
+.xx.
+)";
+  checkHashAfterMovesAndRollback(
+"Different hashes when same shape but different captures",
+fieldForSameShapeButDifferentCaptures,
+fieldForSameShapeButDifferentCaptures,
+{ XYMove(3, 1, P_BLACK) },
+{ XYMove(2, 1, P_BLACK), XYMove(3, 1, P_BLACK) },
+false
+);
+
+  const string& fieldForSameShapeButDifferentCapturesWithFree = R"(
+..oooo..
+.oxxxxo.
+ox.o....
+.oxxxxo.
+..oooo..
+)";
+  checkHashAfterMovesAndRollback(
+"Different hashes when for same shape but different captures with free",
+fieldForSameShapeButDifferentCapturesWithFree,
+fieldForSameShapeButDifferentCapturesWithFree,
+{ XYMove(6, 2, P_BLACK), XYMove(7, 2, P_WHITE) },
+{ XYMove(4, 2, P_WHITE), XYMove(6, 2, P_BLACK), XYMove(7, 2, P_WHITE) },
+false
+);
+
+  checkHashAfterMovesAndRollback(
+  "Surrounding locations (first) doesn't affect hash (it's erased)",
+  R"(
 ..xxxxxx..
 .x......x.
 x..x..o..x
@@ -1069,20 +1279,121 @@ x.xoxoxo.x
 x........x
 .x......x.
 ..xxx.xx..
-)", { XYMove(3, 4, P_BLACK), XYMove(6, 4, P_WHITE), XYMove(5, 6, P_BLACK) });
-    testAssert(5 == dotsFieldWithSurrounding.numWhiteCaptures);
-    testAssert(0 == dotsFieldWithSurrounding.numBlackCaptures);
-
-    Board dotsFieldWithErasedTerritory = parseDotsFieldDefault(R"(
+)",
+  R"(
 ..xxxxxx..
-.xxxxxxxx.
-xxxxxxxxxx
-xxxxxxxxxx
-xxxxxxxxxx
-.xxxxxxxx.
-..xxxxxx..
-)");
+.x......x.
+x..o..x..x
+x.oxoxox.x
+x........x
+.x......x.
+..xxx.xx..
+)",
+{ XYMove(3, 4, P_BLACK), XYMove(6, 4, P_WHITE), XYMove(5, 6, P_BLACK) },
+{ XYMove(3, 4, P_WHITE), XYMove(6, 4, P_BLACK), XYMove(5, 6, P_BLACK) },
+true
+  );
 
-    testAssert(dotsFieldWithErasedTerritory.pos_hash == dotsFieldWithSurrounding.pos_hash);
-  }
+  checkHashAfterMovesAndRollback(
+  "Surrounding locations (second) doesn't affect hash (it's erased)",
+  R"(
+..oooooo..
+.o......o.
+o..o..x..o
+o.oxoxox.o
+o........o
+.o......o.
+..ooo.oo..
+)",
+  R"(
+..oooooo..
+.o......o.
+o..x..o..o
+o.xoxoxo.o
+o........o
+.o......o.
+..ooo.oo..
+)",
+{ XYMove(3, 4, P_WHITE), XYMove(6, 4, P_BLACK), XYMove(5, 6, P_WHITE) },
+{ XYMove(3, 4, P_BLACK), XYMove(6, 4, P_WHITE), XYMove(5, 6, P_WHITE) },
+true
+  );
+
+  const string fieldWithAllGroundedDots = R"(
+.xo.
+.xo.
+.ox.
+.ox.
+)";
+  checkHashAfterMovesAndRollback(
+  "Grounding with all grounded dots doesn't affect hash",
+  fieldWithAllGroundedDots,
+  fieldWithAllGroundedDots,
+{ XYMove::getGroundMove(P_BLACK) },
+{ },
+true
+  );
+
+  const string fieldWithSomeUngroundedDots = R"(
+....
+.xo.
+.ox.
+....
+)";
+  checkHashAfterMovesAndRollback(
+  "Grounding with some ungrounded dots affects hash",
+  fieldWithSomeUngroundedDots,
+  fieldWithSomeUngroundedDots,
+{ XYMove::getGroundMove(P_BLACK) },
+{ },
+false
+  );
+
+  const string emptyBaseField = R"(
+.o.
+o.o
+...
+)";
+  checkHashAfterMovesAndRollback(
+    "Different hash for empty base when it's enabled and not",
+    emptyBaseField,
+    emptyBaseField,
+{ XYMove(1, 2, P_WHITE) },
+{ XYMove(1, 2, P_WHITE) },
+false,
+false,
+true
+    );
+
+  checkHashAfterMovesAndRollback(
+  "Different hash for empty base and non-empty base",
+  emptyBaseField,
+  R"(
+.o.
+oxo
+...
+)",
+{ XYMove(1, 2, P_WHITE) },
+{ XYMove(1, 2, P_WHITE) },
+false,
+true,
+true
+  );
+
+  checkHashAfterMovesAndRollback(
+  "Expected false negative (limitation of current hashing approach)",
+  R"(
+.x..
+xxox
+.xx.
+)",
+  R"(
+..x.
+xoxx
+.xx.
+)",
+{ XYMove(2, 0, P_BLACK) },
+{ XYMove(1, 0, P_BLACK) },
+false
+  );
 }

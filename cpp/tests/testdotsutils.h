@@ -13,6 +13,10 @@ struct XYMove {
 
   XYMove(const int newX, const int newY, const Player newPlayer) : x(newX), y(newY), player(newPlayer) {}
 
+  static XYMove getGroundMove(const Player pla) {
+    return XYMove(0, -1, pla);
+  }
+
   [[nodiscard]] std::string toString() const {
     return "(" + to_string(x) + "," + to_string(y) + "," + PlayerIO::colorToChar(player) + ")";
   }

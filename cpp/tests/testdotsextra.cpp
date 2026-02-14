@@ -8,12 +8,15 @@ using namespace std;
 using namespace TestCommon;
 
 static void checkSymmetry(const Board& initBoard, const string& expectedSymmetryBoardInput, const vector<XYMove>& extraMoves, const int symmetry) {
+  const string symmetryString = SymmetryHelpers::symmetryToString(symmetry);
+  cout << "  Check field consistency for symmetry " + symmetryString << endl;
+
   const Board transformedBoard = SymmetryHelpers::getSymBoard(initBoard, symmetry);
   Board expectedBoard = parseDotsFieldDefault(expectedSymmetryBoardInput);
   for (const XYMove& extraMove : extraMoves) {
     expectedBoard.playMoveAssumeLegal(SymmetryHelpers::getSymLoc(extraMove.x, extraMove.y, initBoard, symmetry), extraMove.player);
   }
-  expect(SymmetryHelpers::symmetryToString(symmetry).c_str(), Board::toStringSimple(transformedBoard), Board::toStringSimple(expectedBoard));
+  expect(symmetryString.c_str(), Board::toStringSimple(transformedBoard), Board::toStringSimple(expectedBoard));
   testAssert(transformedBoard.isEqualForTesting(expectedBoard));
 }
 
@@ -105,7 +108,7 @@ xo..
 { XYMove(4, 1, P_WHITE)},
 SymmetryHelpers::SYMMETRY_TRANSPOSE_FLIP_Y_X);
 
-  cout << "Check dots symmetry with start pos" << endl;
+  cout << "  Check dots symmetry with start pos" << endl;
   const auto originalRules = Rules(Rules::DEFAULT_DOTS.startPos, false, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots);
   auto board = Board(5, 4, originalRules);
   const Player pla = board.setStartPos(DOTS_RANDOM);
@@ -159,11 +162,12 @@ static void expect(
   const int expectedWhiteScore,
   const vector<XYMove>& extraMoves = {}
 ) {
-  cout << "    " << name << ", Grounding Player: " << PlayerIO::colorToChar(groundingPlayer) << endl;
+  cout << "  " << name << ", Grounding Player: " << PlayerIO::colorToChar(groundingPlayer) << endl;
   expect(name, getOwnership(actualField, groundingPlayer, expectedWhiteScore, extraMoves), expectedOwnership);
 }
 
 void Tests::runDotsOwnershipTests() {
+  cout << "Running dots ownership tests" << endl;
   expect("Start Cross", C_EMPTY, R"(
 ......
 ......

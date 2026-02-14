@@ -142,6 +142,8 @@ struct Board
   static constexpr int DEFAULT_LEN_Y_DOTS = std::min(MAX_LEN_Y, 32);
   static constexpr int MAX_PLAY_SIZE = MAX_LEN_X * MAX_LEN_Y;  //Maximum number of playable spaces
   static constexpr int MAX_ARR_SIZE = getMaxArrSize(MAX_LEN_X, MAX_LEN_Y); //Maximum size of arrays needed
+  // The max captures count is when a field is filled with all dots except sides and +1 for storing zero captures (used for empty surroundings)
+  static constexpr int MAX_CAPTURES_COUNT = (MAX_LEN_X - 2) * (MAX_LEN_Y - 2) + 1;
 
   // Location used to indicate an invalid spot on the board.
   static constexpr Loc NULL_LOC = 0;
@@ -161,6 +163,9 @@ struct Board
   static Hash128 ZOBRIST_KO_MARK_HASH[MAX_ARR_SIZE][4];
   static Hash128 ZOBRIST_ENCORE_HASH[3];
   static Hash128 ZOBRIST_SECOND_ENCORE_START_HASH[MAX_ARR_SIZE][4];
+  // Hash for considering surrounding shapes
+  // Shape matters, but not its content (number of diffs between black and white captures)
+  static Hash128 ZOBRIST_DOTS_CAPTURES_DIFF_HASH[MAX_ARR_SIZE][MAX_CAPTURES_COUNT];
   static const Hash128 ZOBRIST_PASS_ENDS_PHASE;
   static const Hash128 ZOBRIST_GAME_IS_OVER;
 
@@ -189,14 +194,41 @@ struct Board
   /*   int size_; */
   /* }; */
 
-  struct Base {
-    std::vector<Loc> rollback_locations;
-    std::vector<State> rollback_states;
-    Player pla{};
-    bool is_real{};
+  struct LocStateAndCapturesDiff {
+    LocStateAndCapturesDiff(Loc newLoc, State newState, uint16_t newCapturesDiff);
 
-    Base() = default;
-    Base(Player newPla, const std::vector<Loc>& rollbackLocations, const std::vector<State>& rollbackStates, bool isReal);
+    Loc getLoc() const;
+    State getState() const;
+    uint16_t getCapturesDiff() const;
+
+    static constexpr int LOC_BITS_COUNT = 12;
+    static constexpr int LOC_BITS_MASK = (1 << LOC_BITS_COUNT) - 1;
+    static constexpr int STATE_BITS_COUNT = sizeof(State) * 8;
+    static constexpr int STATE_BITS_MASK = (1 << STATE_BITS_COUNT) - 1;
+    static constexpr int CAPTURES_BITS_COUNT = 12;
+    static constexpr int CAPTURES_BITS_MASK = (1 << CAPTURES_BITS_COUNT) - 1;
+
+    // Maximum number of locs and captures that must be representable in the packed field
+    // based on the compile-time maximum board dimensions.
+    static_assert(
+       MAX_ARR_SIZE <= (LOC_BITS_MASK + 1) && MAX_CAPTURES_COUNT <= CAPTURES_BITS_MASK,
+      "LocStateAndCapturesDiff: combination of COMPILE_MAX_BOARD_LEN_X and COMPILE_MAX_BOARD_LEN_Y is too large for "
+      "the configured LOC_BITS_COUNT or CAPTURES_BITS_COUNT;"
+      "reduce both values or one of them."
+    );
+
+  private:
+    uint32_t packed;
+  };
+
+  struct Base {
+    Player pla;
+    bool is_real;
+    short black_captures_diff;
+    short white_captures_diff;
+    std::vector<LocStateAndCapturesDiff> rollback_locs_states_captures;
+
+    Base(Player newPla, bool newIsReal, short newBlackCapturesDiff, short newWhiteCapturesDiff, const std::vector<LocStateAndCapturesDiff>& newRollbackLocStateCapturesDiff);
   };
 
   //Move data passed back when moves are made to allow for undos
@@ -438,6 +470,11 @@ struct Board
   std::vector<Loc> chain_head;       //Where is the head of this chain? Undefined if EMPTY or WALL
   std::vector<Loc> next_in_chain;    //Location of next stone in chain. Circular linked list. Undefined if EMPTY or WALL
   std::vector<Move> start_pos_moves; //Moves that are played at the very beginning of the game
+  // Diff between black and white captures bound to locs (for Dots game)
+  // Initialize it with a special UNINITIALIZED_CAPTURES_DIFF_DATA value
+  // To make it work in when empty bases are enabled
+  std::vector<uint16_t> captures_diff_data;
+  constexpr static uint16_t UNINITIALIZED_CAPTURES_DIFF_DATA = LocStateAndCapturesDiff::CAPTURES_BITS_MASK;
 
   private:
 
@@ -474,9 +511,8 @@ struct Board
     Loc addLoc2) const;
   void tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
   Base buildBase(const std::vector<short>& closure, Player pla);
-  void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, bool& createRealBase) const;
-  Base createBaseAndUpdateStates(Player basePla, bool isReal);
-  void updateScoreAndHashForTerritory(Loc loc, State state, Player basePla, bool rollback);
+  void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, int &numCapturedDots, int &numFreedDots) const;
+  Base createBaseAndUpdateStates(Player basePla, int numCapturedDots, int numFreedDots);
   void invalidateAdjacentEmptyTerritoryIfNeeded(Loc loc);
   void makeMoveAndCalculateCapturesAndBases(
     Player pla,

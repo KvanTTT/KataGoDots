@@ -728,8 +728,19 @@ Board SymmetryHelpers::getSymBoard(const Board& board, int symmetry) {
           if(loc == board.ko_loc)
             symKoLoc = symLoc;
         } else {
-          symBoard.setState(symLoc, board.getState(loc));
-          symBoard.pos_hash ^= Board::ZOBRIST_BOARD_HASH[symLoc][color];
+          const State state = board.getState(loc);
+          symBoard.setState(symLoc, state);
+
+          if (const Color placedColor = getPlacedDotColor(state); placedColor != C_EMPTY && !isTerritory(state)) {
+            symBoard.pos_hash ^= Board::ZOBRIST_BOARD_HASH[symLoc][placedColor];
+          }
+
+          const auto capturesDiffAtLoc = board.captures_diff_data[loc];
+          if (capturesDiffAtLoc != Board::UNINITIALIZED_CAPTURES_DIFF_DATA) {
+            symBoard.pos_hash ^= Board::ZOBRIST_DOTS_CAPTURES_DIFF_HASH[symLoc][capturesDiffAtLoc];
+          }
+
+          symBoard.captures_diff_data[symLoc] = capturesDiffAtLoc;
         }
       }
     }
