@@ -189,34 +189,36 @@ void Board::init(const int xS, const int yS, const Rules& initRules)
 
 void Board::initHash()
 {
-  if(IS_ZOBRIST_INITALIZED)
+  if (IS_ZOBRIST_INITALIZED) {
     return;
+  }
+
   Rand rand("Board::initHash()");
 
-  auto nextHash = [&rand]() {
-    uint64_t h0 = rand.nextUInt64();
-    uint64_t h1 = rand.nextUInt64();
+  auto nextHash = [&rand]{
+    const uint64_t h0 = rand.nextUInt64();
+    const uint64_t h1 = rand.nextUInt64();
     return Hash128(h0,h1);
   };
 
-  for(int i = 0; i<4; i++)
-    ZOBRIST_PLAYER_HASH[i] = nextHash();
-  for(int i = 0; i<3; i++)
-    ZOBRIST_ENCORE_HASH[i] = nextHash();
+  for(auto &item : ZOBRIST_PLAYER_HASH)
+    item = nextHash();
+  for(auto &item : ZOBRIST_ENCORE_HASH)
+    item = nextHash();
 
   //Do this second so that the player and encore hashes are not
   //afffected by the size of the board we compile with.
-  for(int i = 0; i<MAX_ARR_SIZE; i++) {
-    for(Color j = 0; j<4; j++) {
-      if(j == C_EMPTY || j == C_WALL)
-        ZOBRIST_BOARD_HASH[i][j] = Hash128();
-      else
-        ZOBRIST_BOARD_HASH[i][j] = nextHash();
-
-      if(j == C_EMPTY || j == C_WALL)
-        ZOBRIST_KO_MARK_HASH[i][j] = Hash128();
-      else
-        ZOBRIST_KO_MARK_HASH[i][j] = nextHash();
+  for(int i = 0; i < MAX_ARR_SIZE; i++) {
+    auto *const boardHashSecondArray = ZOBRIST_BOARD_HASH[i];
+    auto *const koMarkHashSecondArray = ZOBRIST_KO_MARK_HASH[i];
+    for(Color j = 0; j < 4; j++) {
+      if (j == C_EMPTY || j == C_WALL) {
+        boardHashSecondArray[j] = Hash128();
+        koMarkHashSecondArray[j] = Hash128();
+      } else {
+        boardHashSecondArray[j] = nextHash();
+        koMarkHashSecondArray[j] = nextHash();
+      }
     }
     ZOBRIST_KO_LOC_HASH[i] = nextHash();
   }
@@ -224,12 +226,9 @@ void Board::initHash()
   //Reseed the random number generator so that these hashes are also
   //not affected by the size of the board we compile with
   rand.init("Board::initHash() for ZOBRIST_SECOND_ENCORE_START hashes");
-  for(int i = 0; i<MAX_ARR_SIZE; i++) {
-    for(Color j = 0; j<4; j++) {
-      if(j == C_EMPTY || j == C_WALL)
-        ZOBRIST_SECOND_ENCORE_START_HASH[i][j] = Hash128();
-      else
-        ZOBRIST_SECOND_ENCORE_START_HASH[i][j] = nextHash();
+  for (auto *const secondArray : ZOBRIST_SECOND_ENCORE_START_HASH) {
+    for(Color j = 0; j < 4; j++) {
+      secondArray[j] = j == C_EMPTY || j == C_WALL ? Hash128() : nextHash();
     }
   }
 
@@ -245,18 +244,18 @@ void Board::initHash()
 
   //Reseed and compute one more set of zobrist hashes, mixed a bit differently
   rand.init("Board::initHash() for second set of ZOBRIST hashes");
-  for(int i = 0; i<MAX_ARR_SIZE; i++) {
-    for(Color j = 0; j<4; j++) {
-      ZOBRIST_BOARD_HASH2[i][j] = nextHash();
-      ZOBRIST_BOARD_HASH2[i][j].hash0 = Hash::murmurMix(ZOBRIST_BOARD_HASH2[i][j].hash0);
-      ZOBRIST_BOARD_HASH2[i][j].hash1 = Hash::splitMix64(ZOBRIST_BOARD_HASH2[i][j].hash1);
+  for (auto *const boardHash2SecondArray : ZOBRIST_BOARD_HASH2) {
+    for(Color j = 0; j < 4; j++) {
+      boardHash2SecondArray[j] = nextHash();
+      boardHash2SecondArray[j].hash0 = Hash::murmurMix(boardHash2SecondArray[j].hash0);
+      boardHash2SecondArray[j].hash1 = Hash::splitMix64(boardHash2SecondArray[j].hash1);
     }
   }
 
   //Reseed the random number generator so that these hashes are also
   //not affected by the size of the board we compile with
   rand.init("Board::initHash() for ZOBRIST_DOTS_CAPTURES_DIFF_HASH hashes");
-  for (const auto secondArray : ZOBRIST_DOTS_CAPTURES_DIFF_HASH) {
+  for (auto *const secondArray : ZOBRIST_DOTS_CAPTURES_DIFF_HASH) {
     for (int j = 0; j < MAX_CAPTURES_COUNT; j++) {
       secondArray[j] = nextHash();
     }
