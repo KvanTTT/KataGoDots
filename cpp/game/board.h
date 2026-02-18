@@ -492,6 +492,19 @@ struct Board
   MoveRecord tryPlayMoveRecordedDots(Loc loc, Player pla, bool isSuicideLegal);
   void undoDots(MoveRecord& moveRecord);
   std::vector<short> fillGrounding(Loc loc);
+  // We need to finish marking grounded locations
+  // Because in rare cases a grounding wave doesn't traverse all necessary locs:
+  // .........
+  // ..xxx....
+  // .x....x..
+  // .x.xx..x.
+  // .x.x.x.x.
+  // .x.xxx.x.
+  // .x..xo.x.
+  // ..xxxxx..
+  // The loc 4-4 can't be marked by a grounding wave, and we have to perform an extra step to ground it.
+  void finishBaseGrounding(const std::vector<Base>& bases);
+  bool setGroundedAndUpdateGroundingScore(Loc loc, Player pla);
   void captureWhenEmptyTerritoryBecomesRealBase(Loc initLoc, Player opp, std::vector<Base>& bases, bool& isGrounded);
   void tryCapture(
     Loc loc,

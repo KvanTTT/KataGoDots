@@ -29,7 +29,7 @@ static void validateGrounding(
   const Player pla,
   const vector<Board::MoveRecord>& moveRecords) {
   unordered_set<Loc> visited_locs;
-  assert(pla == P_BLACK || pla == P_WHITE);
+  testAssert(pla == P_BLACK || pla == P_WHITE);
 
   int expectedNumBlackCaptures = 0;
   int expectedNumWhiteCaptures = 0;
@@ -81,11 +81,7 @@ static void validateGrounding(
               }
             }
           } else {
-            State baseLocState = boardAfterGrounding.getState(baseLoc);
-            // This check on placed dot color is redundant.
-            // However, currently it's not possible to always ground empty locs in some rare cases due to limitations of incremental grounding algorithm.
-            // Fortunately, they don't affect the resulting score.
-            if (!isGrounded(baseLocState) && getPlacedDotColor(baseLocState) != C_EMPTY) {
+            if (const State baseLocState = boardAfterGrounding.getState(baseLoc); !isGrounded(baseLocState)) {
               Global::fatalError("Loc (" + to_string(Location::getX(baseLoc, boardBeforeGrounding.x_size)) + "; " +
                  to_string(Location::getY(baseLoc, boardBeforeGrounding.x_size)) + ") " +
                 " should be grounded. Sgf: " + moveRecordsToSgf(boardBeforeGrounding, moveRecords));
@@ -139,18 +135,17 @@ static void validateStatesAndCaptures(const Board& board, const vector<Board::Mo
       }
 
       if (activeColor == C_BLACK) {
-        assert(C_EMPTY == emptyTerritoryColor);
+        testAssert(C_EMPTY == emptyTerritoryColor);
         if (placedDotColor == C_WHITE) {
           expectedNumWhiteCaptures++;
         }
       } else if (activeColor == C_WHITE) {
-        assert(C_EMPTY == emptyTerritoryColor);
+        testAssert(C_EMPTY == emptyTerritoryColor);
         if (placedDotColor == C_BLACK) {
           expectedNumBlackCaptures++;
         }
       } else {
-        assert(placedDotColor == C_EMPTY);
-        //assert(!isTerritory(state));
+        testAssert(C_EMPTY == placedDotColor);
       }
     }
   }
@@ -174,9 +169,9 @@ static void runDotsStressTestsInternal(
   float groundingStartCoef,
   float groundingEndCoef,
   bool performExtraChecks) {
-  assert(groundingStartCoef >= 0 && groundingStartCoef <= 1);
-  assert(groundingEndCoef >= 0 && groundingEndCoef <= 1);
-  assert(groundingEndCoef >= groundingStartCoef);
+  testAssert(groundingStartCoef >= 0 && groundingStartCoef <= 1);
+  testAssert(groundingEndCoef >= 0 && groundingEndCoef <= 1);
+  testAssert(groundingEndCoef >= groundingStartCoef);
 
   cout << "  Random games" <<  endl;
   cout << "    Game type: " << (dotsGame ? "Dots" : "Go") << endl;

@@ -70,7 +70,13 @@ static void checkRecognition(const vector<XYMove>& xyMoves, const int x_size, co
 }
 
 static void checkStartPosRecognition(const string& description, const int expectedStartPos, const bool startPosIsRandom, const string& inputBoard) {
-  const Board board = parseDotsField(inputBoard, startPosIsRandom, Rules::DEFAULT_DOTS.multiStoneSuicideLegal, Rules::DEFAULT_DOTS.dotsCaptureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, {});
+  const Board board = parseDotsField(
+    inputBoard,
+    startPosIsRandom,
+    Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
+    Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
+    Rules::DEFAULT_DOTS.dotsFreeCapturedDots,
+    {});
 
   cout << "  " << description << " (" << to_string(board.x_size) << "," << to_string(board.y_size) << ")";
 

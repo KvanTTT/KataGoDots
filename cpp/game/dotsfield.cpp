@@ -289,8 +289,9 @@ void Board::playMoveAssumeLegalDots(const Loc loc, const Player pla) {
     int unconnectedLocationsSize = 0;
     const std::array<Loc, 4> unconnectedLocations = getUnconnectedLocations(loc, pla, unconnectedLocationsSize);
     bool capturing = false;
+
+    vector<Base> bases;
     if (unconnectedLocationsSize >= 2) {
-      auto bases = vector<Base>();
       tryCapture(loc, pla, unconnectedLocations, unconnectedLocationsSize, atLeastOneRealBaseIsGrounded, bases);
       capturing = !bases.empty();
     }
@@ -313,6 +314,7 @@ void Board::playMoveAssumeLegalDots(const Loc loc, const Player pla) {
 
     if (atLeastOneRealBaseIsGrounded) {
       fillGrounding(loc);
+      finishBaseGrounding(bases);
     } else if(
         const Player locActivePlayer = getColor(loc); // Can't use pla because of a possible suicidal move
         isGroundedOrWall(getState(Location::xm1y(loc)), locActivePlayer) ||
@@ -370,6 +372,7 @@ Board::MoveRecord Board::tryPlayMoveRecordedDots(Loc loc, Player pla, const bool
 
     if (atLeastOneRealBaseIsGrounded) {
       newGroundingLocations = fillGrounding(loc);
+      finishBaseGrounding(bases);
     } else if(
         const Player locActivePlayer = getColor(loc); // Can't use pla because of a possible suicidal move
         isGroundedOrWall(getState(Location::xm1y(loc)), locActivePlayer) ||
@@ -394,10 +397,8 @@ void Board::undoDots(MoveRecord& moveRecord) {
   const bool isGroundingMove = moveRecord.loc == PASS_LOC;
 
   for (const Loc& loc : moveRecord.groundingLocations) {
-    const State state = getState(loc);
-    const Player mainPla = getActiveColor(state);
-    if (getPlacedDotColor(state) != C_EMPTY) {
-      if (mainPla == P_BLACK) {
+    if (const State state = getState(loc); getPlacedDotColor(state) != C_EMPTY) {
+      if (getActiveColor(state) == P_BLACK) {
         whiteScoreIfBlackGrounds++;
       } else {
         blackScoreIfWhiteGrounds++;
@@ -424,9 +425,23 @@ void Board::undoDots(MoveRecord& moveRecord) {
     for (const auto& locStateCaptureDiff : it->rollback_locs_states_captures) {
       const Loc rollbackLoc = locStateCaptureDiff.getLoc();
       const State prevState = locStateCaptureDiff.getState();
+
+      const State currentState = getState(rollbackLoc);
       setState(rollbackLoc, prevState);
 
       if (it->is_real) {
+        // Restore dangling grounded locations that were previously ungrounded
+        if (isGrounded(currentState) && !isGrounded(prevState)) {
+          if (getPlacedDotColor(currentState) != C_EMPTY) {
+            if (getActiveColor(currentState) == P_BLACK) {
+              whiteScoreIfBlackGrounds++;
+            } else {
+              blackScoreIfWhiteGrounds++;
+            }
+          }
+          clearGrounded(rollbackLoc);
+        }
+
         // Simulate unmaking the new captures diff and applying the old one
         const auto rollbackCapturesDiff = locStateCaptureDiff.getCapturesDiff();
         const auto currentCapturesDiff = captures_diff_data[rollbackLoc];
@@ -465,35 +480,55 @@ vector<Loc> Board::fillGrounding(const Loc loc) {
   walkStack.push_back(loc);
   const Player pla = getColor(loc);
   assert(pla != C_EMPTY && pla != C_WALL);
-  setGrounded(loc);
-  if (pla == P_BLACK) {
-    whiteScoreIfBlackGrounds--;
-  } else {
-    blackScoreIfWhiteGrounds--;
-  }
+  [[maybe_unused]] const bool result = setGroundedAndUpdateGroundingScore(loc, pla);
+  assert(result);
   groundedLocs.push_back(loc);
 
   while (!walkStack.empty()) {
     const Loc currentLoc = walkStack.back();
     walkStack.pop_back();
 
-    forEachAdjacent(currentLoc, [&](const Loc adj) {
-      if (const State state = getState(adj); !isGrounded(state) && isActive(state, pla)) {
-        setGrounded(adj);
-        if (const Player placedColor = getPlacedDotColor(state); placedColor != C_EMPTY) {
-          if (pla == P_BLACK) {
-            whiteScoreIfBlackGrounds--;
-          } else {
-            blackScoreIfWhiteGrounds--;
-          }
-        }
-        groundedLocs.push_back(adj);
-        walkStack.push_back(adj);
+    forEachAdjacent(currentLoc, [&](const Loc adjLoc) {
+      if (setGroundedAndUpdateGroundingScore(adjLoc, pla)) {
+        groundedLocs.push_back(adjLoc);
+        walkStack.push_back(adjLoc);
       }
     });
   }
 
   return groundedLocs;
+}
+
+void Board::finishBaseGrounding(const vector<Base>& bases) {
+  for(const auto& base: bases) {
+    if (!base.is_real) {
+      continue;
+    }
+
+    const Player pla = base.pla;
+    for(const auto& rollback_locs_states_capture: base.rollback_locs_states_captures) {
+      setGroundedAndUpdateGroundingScore(rollback_locs_states_capture.getLoc(), pla);
+    }
+  }
+}
+
+bool Board::setGroundedAndUpdateGroundingScore(const Loc loc, const Player pla) {
+  const State state = getState(loc);
+  if (isGrounded(state) || !isActive(state, pla)) {
+    return false;
+  }
+
+  setGrounded(loc);
+
+  if (const Player placedColor = getPlacedDotColor(state); placedColor != C_EMPTY) {
+    if (pla == P_BLACK) {
+      whiteScoreIfBlackGrounds--;
+    } else {
+      blackScoreIfWhiteGrounds--;
+    }
+  }
+
+  return true;
 }
 
 void Board::captureWhenEmptyTerritoryBecomesRealBase(
@@ -597,10 +632,8 @@ void Board::ground(const Player pla, vector<Loc>& emptyBaseInvalidatePositions, 
       if (const State state = getState(loc); !isGrounded(state) && isActive(state, pla)) {
         int numCapturedDots, numFreedDots;
         getTerritoryLocations(opp, loc, true, numCapturedDots, numFreedDots);
-        // In a rare case it's possible to encounter an empty ungrounded loc that should be de-facto grounded (a limitation of grounding algorithm)
-        // In this case we have to ground the dot anyway for correctness.
-        // That's why the assertion is valid *almost* always but not always
-        // assert(numCapturedDots + numFreedDots > 0);
+        // Since we are starting from an active dot, at least one captured dot is expected even if dotsCaptureEmptyBases is true
+        assert(numCapturedDots > 0);
 
         for (const Loc& territoryLoc : territoryLocationsBuffer) {
           invalidateAdjacentEmptyTerritoryIfNeeded(territoryLoc);
@@ -755,30 +788,22 @@ void Board::getTerritoryLocations(const Player pla,
 
   const Player opp = getOpp(pla);
 
-  State adjState = getState(firstLoc);
-  Color activeColor = getActiveColor(adjState);
+  State state = getState(firstLoc);
+  Color activeColor = getActiveColor(state);
   assert(activeColor != C_WALL);
+  assert(!grounding || (activeColor == opp && !isGrounded(state)));
 
-  bool legalLoc = false;
   if (activeColor == opp) {
-    // In a rare case it's possible to encounter an empty ungrounded loc that should be de-facto grounded.
-    // However, currently it's not possible to set up its grounding because of limitations of the grounding algorithm that doesn't traverse diagonals.
-    // That's why we have to check adj locs on grounding to prevent adding incorrect locs and causing out-of-bounds exception.
-    legalLoc = !grounding || !isGroundedOrWall(adjState, opp);
-    if (const Color placedDotColor = getPlacedDotColor(adjState); legalLoc && placedDotColor == opp) {
+    if (const Color placedDotColor = getPlacedDotColor(state); placedDotColor == opp) {
       numCapturedDots++;
     } else if (placedDotColor == pla) {
       numFreedDots++;
     }
-  } else {
-    legalLoc = !grounding;
   }
 
-  if (legalLoc) {
-    territoryLocationsBuffer.push_back(firstLoc);
-    setVisited(firstLoc);
-    walkStack.push_back(firstLoc);
-  }
+  territoryLocationsBuffer.push_back(firstLoc);
+  setVisited(firstLoc);
+  walkStack.push_back(firstLoc);
 
   while (!walkStack.empty()) {
     const Loc loc = walkStack.back();
@@ -787,13 +812,14 @@ void Board::getTerritoryLocations(const Player pla,
     forEachAdjacent(loc, [&](const Loc adj) {
       if (isVisited(adj)) return;
 
-      adjState = getState(adj);
-      activeColor = getActiveColor(adjState);
+      state = getState(adj);
+      activeColor = getActiveColor(state);
 
       bool isAdjLegal = false;
       if (activeColor == opp) {
-        isAdjLegal = !grounding || !isGroundedOrWall(adjState, opp);
-        if (const Color placedDotColor = getPlacedDotColor(adjState); isAdjLegal && placedDotColor == opp) {
+        assert(!grounding || !isGrounded(state));
+        isAdjLegal = true;
+        if (const Color placedDotColor = getPlacedDotColor(state); placedDotColor == opp) {
           numCapturedDots++;
         } else if (placedDotColor == pla) {
           numFreedDots++;
@@ -820,8 +846,8 @@ Board::Base Board::createBaseAndUpdateStates(const Player basePla, const int num
   const int capturesDiff = numCapturedDots + numFreedDots;
   assert(capturesDiff >= 0);
 
-  int blackCapturesDiff;
-  int whiteCapturesDiff;
+  int blackCapturesDiff = 0;
+  int whiteCapturesDiff = 0;
 
   if (basePla == P_BLACK) {
     blackCapturesDiff = -numFreedDots;
@@ -830,8 +856,6 @@ Board::Base Board::createBaseAndUpdateStates(const Player basePla, const int num
     blackCapturesDiff = numCapturedDots;
     whiteCapturesDiff = -numFreedDots;
   } else {
-    blackCapturesDiff = 0;
-    whiteCapturesDiff = 0;
     assert(false && "Invalid base player");
   }
 
