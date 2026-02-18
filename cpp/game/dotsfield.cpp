@@ -908,12 +908,14 @@ void Board::makeMoveAndCalculateCapturesAndBases(
   const Loc loc,
   vector<Color>& captures,
   vector<Color>& bases) const {
-  if(isLegal(loc, pla, rules.multiStoneSuicideLegal, false)) {
+  // Completely ignore suicide locations because they differ from one-move captures
+  if(isLegal(loc, pla, false, false)) {
     MoveRecord moveRecord = const_cast<Board*>(this)->playMoveRecordedDots(loc, pla);
 
     for(Base const& base: moveRecord.bases) {
-      // Completely ignore empty bases and suicide locations because they differ from one-move captures
-      if (base.is_real && base.pla == pla) {
+      assert(base.pla == pla);
+      // Completely ignore empty bases because they differ from one-move captures
+      if (base.is_real) {
         captures[loc] = static_cast<Color>(captures[loc] | base.pla);
 
         for(const LocStateAndCapturesDiff& loc_state_and_captures_diff: base.rollback_locs_states_captures) {
