@@ -264,9 +264,7 @@ static std::pair<string, string> getCapturingAndBases(
 
   const Board& copy(board);
 
-  vector<Player> captures;
-  vector<Player> bases;
-  copy.calculateOneMoveCaptureAndBasePositionsForDots(captures, bases);
+  const auto capturesAndBasesColors = copy.calculateOneMoveCaptureAndBasePositionsForDots();
 
   std::ostringstream capturesStringStream;
   std::ostringstream basesStringStream;
@@ -274,15 +272,15 @@ static std::pair<string, string> getCapturingAndBases(
   for (int y = 0; y < copy.y_size; y++) {
     for (int x = 0; x < copy.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, copy.x_size);
-      const Color captureColor = captures[loc];
-      if (captureColor == C_WALL) {
+      const auto captureAndBaseColors = capturesAndBasesColors[loc];
+
+      if (const Color captureColor = captureAndBaseColors.getCaptureColor(); captureColor == C_WALL) {
         capturesStringStream << PlayerIO::colorToChar(P_BLACK) << PlayerIO::colorToChar(P_WHITE);
       } else {
         capturesStringStream << PlayerIO::colorToChar(captureColor) << " ";
       }
 
-      Color baseColor = bases[loc];
-      if (baseColor == C_WALL) {
+      if (const Color baseColor = captureAndBaseColors.getBaseColor(); baseColor == C_WALL) {
         basesStringStream << PlayerIO::colorToChar(P_BLACK) << PlayerIO::colorToChar(P_WHITE);
       } else {
         basesStringStream << PlayerIO::colorToChar(baseColor) << " ";

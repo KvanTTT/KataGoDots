@@ -927,11 +927,26 @@ void Board::invalidateAdjacentEmptyTerritoryIfNeeded(const Loc loc) {
   clearVisited(closureOrInvalidateLocsBuffer);
 }
 
+Color Board::CapturingAndBaseColors::getCaptureColor() const {
+  return static_cast<Color>(packed & 0b11);
+}
+
+Color Board::CapturingAndBaseColors::getBaseColor() const {
+  return static_cast<Color>((packed >> 2) & 0b11);
+}
+
+void Board::CapturingAndBaseColors::addCaptureColor(const Color captureColor) {
+  packed = static_cast<int8_t>(packed | captureColor);
+}
+
+void Board::CapturingAndBaseColors::addBaseColor(const Color baseColor) {
+  packed = static_cast<int8_t>(packed | (baseColor << 2));
+}
+
 void Board::makeMoveAndCalculateCapturesAndBases(
   const Player pla,
   const Loc loc,
-  vector<Color>& captures,
-  vector<Color>& bases) const {
+  vector<CapturingAndBaseColors>& capturesAndBasesColors) const {
   // Completely ignore suicide locations because they differ from one-move captures
   if(isLegal(loc, pla, false, false)) {
     MoveRecord moveRecord = const_cast<Board*>(this)->playMoveRecordedDots(loc, pla);
@@ -940,11 +955,11 @@ void Board::makeMoveAndCalculateCapturesAndBases(
       assert(base.pla == pla);
       // Completely ignore empty bases because they differ from one-move captures
       if (base.is_real) {
-        captures[loc] = static_cast<Color>(captures[loc] | base.pla);
+        capturesAndBasesColors[loc].addCaptureColor(base.pla);
 
         for(const LocStateAndCapturesDiff& loc_state_and_captures_diff: base.rollback_locs_states_captures) {
           const Loc rollbackLoc = loc_state_and_captures_diff.getLoc();
-          bases[rollbackLoc] = static_cast<Color>(bases[rollbackLoc] | base.pla);
+          capturesAndBasesColors[rollbackLoc].addBaseColor(base.pla);
         }
       }
     }
@@ -953,10 +968,9 @@ void Board::makeMoveAndCalculateCapturesAndBases(
   }
 }
 
-void Board::calculateOneMoveCaptureAndBasePositionsForDots(vector<Color>& captures, vector<Color>& bases) const {
+vector<Board::CapturingAndBaseColors> Board::calculateOneMoveCaptureAndBasePositionsForDots() const {
   const int fieldSize = (x_size + 1) * (y_size + 1);
-  captures.resize(fieldSize);
-  bases.resize(fieldSize);
+  vector<CapturingAndBaseColors> capturesAndBasesColors(fieldSize);
 
   for (int y = 0; y < y_size; y++) {
     for (int x = 0; x < x_size; x++) {
@@ -971,14 +985,16 @@ void Board::calculateOneMoveCaptureAndBasePositionsForDots(vector<Color>& captur
 
       // It doesn't make sense to calculate capturing when the dot placed into own empty territory
       if (emptyTerritoryColor != P_BLACK) {
-        makeMoveAndCalculateCapturesAndBases(P_BLACK, loc, captures, bases);
+        makeMoveAndCalculateCapturesAndBases(P_BLACK, loc, capturesAndBasesColors);
       }
 
       if (emptyTerritoryColor != P_WHITE) {
-        makeMoveAndCalculateCapturesAndBases(P_WHITE, loc, captures, bases);
+        makeMoveAndCalculateCapturesAndBases(P_WHITE, loc, capturesAndBasesColors);
       }
     }
   }
+
+  return capturesAndBasesColors;
 }
 
 std::pair<float, float> Board::getAcceptableKomiRange(const bool allowDraw, const int extraBlack) const {
