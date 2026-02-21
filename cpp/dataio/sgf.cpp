@@ -131,12 +131,13 @@ static void writeSgfLoc(ostream& out, Loc loc, int xSize, int ySize) {
     return;
   if (loc == Board::RESIGN_LOC) {
     out << RESIGN_STR;
+  } else {
+    const int x = Location::getX(loc,xSize);
+    const int y = Location::getY(loc,xSize);
+    const auto chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    out << chars[x];
+    out << chars[y];
   }
-  int x = Location::getX(loc,xSize);
-  int y = Location::getY(loc,xSize);
-  const char* chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  out << chars[x];
-  out << chars[y];
 }
 
 static Rules getRulesFromSgf(const SgfNode& rootNode, const int xSize, const int ySize, const Rules* defaultRules) {
