@@ -5,6 +5,7 @@
 class TimeStampHandler {
 public:
     explicit TimeStampHandler(Rand& rand);
+    explicit TimeStampHandler(uint64_t randSeed);
     [[nodiscard]] std::string generateFileName(const std::string& path, const std::string& ext) const;
     [[nodiscard]] std::string getCurrentRandSeed() const;
 
