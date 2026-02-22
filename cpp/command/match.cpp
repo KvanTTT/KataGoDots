@@ -4,7 +4,6 @@
 #include "../core/config_parser.h"
 #include "../core/timer.h"
 #include "../dataio/sgf.h"
-#include "../search/asyncbot.h"
 #include "../search/patternbonustable.h"
 #include "../program/setup.h"
 #include "../program/play.h"
@@ -16,9 +15,9 @@
 using namespace std;
 
 
-static std::atomic<bool> sigReceived(false);
-static std::atomic<bool> shouldStop(false);
-static void signalHandler(int signal)
+static std::atomic sigReceived(false);
+static std::atomic shouldStop(false);
+static void signalHandler(const int signal)
 {
   if(signal == SIGINT || signal == SIGTERM) {
     sigReceived.store(true);
@@ -38,8 +37,8 @@ int MainCmds::match(const vector<string>& args) {
     KataGoCommandLine cmd("Play different nets against each other with different search settings in a match or tournament.");
     cmd.addConfigFileArg("","match_example.cfg");
 
-    TCLAP::ValueArg<string> logFileArg("","log-file","Log file to output to",false,string(),"FILE");
-    TCLAP::ValueArg<string> sgfOutputDirArg("","sgf-output-dir","Dir to output sgf files",false,string(),"DIR");
+    TCLAP::ValueArg logFileArg("","log-file","Log file to output to",false,string(),"FILE");
+    TCLAP::ValueArg sgfOutputDirArg("","sgf-output-dir","Dir to output sgf files",false,string(),"DIR");
 
     cmd.add(logFileArg);
     cmd.add(sgfOutputDirArg);
@@ -67,8 +66,8 @@ int MainCmds::match(const vector<string>& args) {
 
   //Load per-bot search config, first, which also tells us how many bots we're running
   vector<SearchParams> paramss = Setup::loadParams(cfg,Setup::SETUP_FOR_MATCH);
-  assert(paramss.size() > 0);
-  int numBots = (int)paramss.size();
+  assert(!paramss.empty());
+  int numBots = static_cast<int>(paramss.size());
 
   //Figure out all pairs of bots that will be playing.
   std::vector<std::pair<int,int>> matchupsPerRound;
@@ -90,8 +89,8 @@ int MainCmds::match(const vector<string>& args) {
     std::vector<int> secondaryBotIdxs;
     cfg.tryGetInts("secondaryBots", secondaryBotIdxs, 0,Setup::MAX_BOT_PARAMS_FROM_CFG);
 
-    for(int i = 0; i<secondaryBotIdxs.size(); i++)
-      assert(secondaryBotIdxs[i] >= 0 && secondaryBotIdxs[i] < numBots);
+    for(int secondaryBotIdx : secondaryBotIdxs)
+      assert(secondaryBotIdx >= 0 && secondaryBotIdx < numBots);
 
     for(int i = 0; i<numBots; i++) {
       if(!includeBot[i])
@@ -99,9 +98,9 @@ int MainCmds::match(const vector<string>& args) {
       for(int j = 0; j<numBots; j++) {
         if(!includeBot[j])
           continue;
-        if(i < j && !(contains(secondaryBotIdxs,i) && contains(secondaryBotIdxs,j))) {
-          matchupsPerRound.push_back(make_pair(i,j));
-          matchupsPerRound.push_back(make_pair(j,i));
+        if (i < j && !(contains(secondaryBotIdxs,i) && contains(secondaryBotIdxs,j))) {
+          matchupsPerRound.emplace_back(i,j);
+          matchupsPerRound.emplace_back(j,i);
         }
       }
     }
@@ -109,11 +108,8 @@ int MainCmds::match(const vector<string>& args) {
     if(std::vector<std::pair<int, int>> pairs;
        cfg.tryGetNonNegativeIntDashedPairs("extraPairs", pairs, 0, 0, numBots - 1, numBots - 1)) {
       for(const auto& [p0, p1]: pairs) {
-        if(cfg.getOrDefaultBool("extraPairsAreOneSidedBW", false)) {
-          matchupsPerRound.emplace_back(p0,p1);
-        }
-        else {
-          matchupsPerRound.emplace_back(p0,p1);
+        matchupsPerRound.emplace_back(p0,p1);
+        if (!cfg.getOrDefaultBool("extraPairsAreOneSidedBW", false)) {
           matchupsPerRound.emplace_back(p1,p0);
         }
       }
@@ -144,9 +140,9 @@ int MainCmds::match(const vector<string>& args) {
   }
 
   vector<bool> botIsUsed(numBots);
-  for(const std::pair<int,int>& pair : matchupsPerRound) {
-    botIsUsed[pair.first] = true;
-    botIsUsed[pair.second] = true;
+  for(const auto& [fst, snd] : matchupsPerRound) {
+    botIsUsed[fst] = true;
+    botIsUsed[snd] = true;
   }
 
   //Dedup and load each necessary model exactly once
@@ -167,7 +163,7 @@ int MainCmds::match(const vector<string>& args) {
     if(alreadyFoundIdx != -1)
       whichNNModel[i] = alreadyFoundIdx;
     else {
-      whichNNModel[i] = (int)nnModelFiles.size();
+      whichNNModel[i] = static_cast<int>(nnModelFiles.size());
       nnModelFiles.push_back(desiredFile);
     }
   }
@@ -190,7 +186,7 @@ int MainCmds::match(const vector<string>& args) {
 
   //Initialize object for randomizing game settings and running games
   PlaySettings playSettings = PlaySettings::loadForMatch(cfg);
-  GameRunner* gameRunner = new GameRunner(cfg, playSettings, logger);
+  auto* gameRunner = new GameRunner(cfg, playSettings, logger);
   const int minBoardXSizeUsed = gameRunner->getGameInitializer()->getMinBoardXSize();
   const int minBoardYSizeUsed = gameRunner->getGameInitializer()->getMinBoardYSize();
   const int maxBoardXSizeUsed = gameRunner->getGameInitializer()->getMaxBoardXSize();
@@ -199,9 +195,9 @@ int MainCmds::match(const vector<string>& args) {
   //Initialize neural net inference engine globals, and load models
   Setup::initializeSession(cfg);
   const vector<string>& nnModelNames = nnModelFiles;
-  const int defaultMaxBatchSize = -1;
+  constexpr int defaultMaxBatchSize = -1;
   const bool defaultRequireExactNNLen = minBoardXSizeUsed == maxBoardXSizeUsed && minBoardYSizeUsed == maxBoardYSizeUsed;
-  const bool disableFP16 = false;
+  constexpr bool disableFP16 = false;
   const vector<string> expectedSha256s;
   vector<NNEvaluator*> nnEvals = Setup::initializeNNEvaluators(
     nnModelNames,nnModelFiles,expectedSha256s,cfg,logger,seedRand,expectedConcurrentEvals,
@@ -222,14 +218,14 @@ int MainCmds::match(const vector<string>& args) {
 
   //Initialize object for randomly pairing bots
   int64_t numGamesTotal = cfg.getInt64("numGamesTotal",1, static_cast<int64_t>(1) << 62);
-  MatchPairer* matchPairer = new MatchPairer(cfg,numBots,botNames,nnEvalsByBot,paramss,matchupsPerRound,numGamesTotal);
+  auto* matchPairer = new MatchPairer(cfg,numBots,botNames,nnEvalsByBot,paramss,matchupsPerRound,numGamesTotal);
 
   //Check for unused config keys
   cfg.warnUnusedKeys(cerr,&logger);
   for(int i = 0; i<numBots; i++) {
     if(!botIsUsed[i])
       continue;
-    Setup::maybeWarnHumanSLParams(paramss[i],nnEvalsByBot[i],NULL,cerr,&logger);
+    Setup::maybeWarnHumanSLParams(paramss[i],nnEvalsByBot[i],nullptr,cerr,&logger);
   }
 
   //Done loading!
@@ -238,7 +234,7 @@ int MainCmds::match(const vector<string>& args) {
   if(!logger.isLoggingToStdout())
     cout << "Loaded all config stuff, starting matches" << endl;
 
-  if(sgfOutputDir != string())
+  if(!sgfOutputDir.empty())
     MakeDir::make(sgfOutputDir);
 
   if(!std::atomic_is_lock_free(&shouldStop))
@@ -258,46 +254,48 @@ int MainCmds::match(const vector<string>& args) {
   ](
     uint64_t threadHash
   ) {
-    ofstream* sgfOut = NULL;
-    if(sgfOutputDir.length() > 0) {
+    ofstream* sgfOut = nullptr;
+    if(!sgfOutputDir.empty()) {
       sgfOut = new ofstream();
-      FileUtils::open(*sgfOut, sgfOutputDir + "/" + Global::uint64ToHexString(threadHash) + ".sgfs");
+      const auto* timeStampHandler = new TimeStampHandler(threadHash);
+      FileUtils::open(*sgfOut, timeStampHandler->generateFileName(sgfOutputDir + "/match-", ".sgfs"));
+      delete timeStampHandler;
     }
     auto shouldStopFunc = []() noexcept {
       return shouldStop.load();
     };
-    WaitableFlag* shouldPause = nullptr;
 
     Rand thisLoopSeedRand;
     while(true) {
       if(shouldStop.load())
         break;
 
-      FinishedGameData* gameData = NULL;
+      FinishedGameData* gameData = nullptr;
 
       MatchPairer::BotSpec botSpecB;
       MatchPairer::BotSpec botSpecW;
       if(matchPairer->getMatchup(botSpecB, botSpecW, logger)) {
+        WaitableFlag* shouldPause = nullptr;
         string seed = gameSeedBase + ":" + Global::uint64ToHexString(thisLoopSeedRand.nextUInt64());
-        std::function<void(const MatchPairer::BotSpec&, Search*)> afterInitialization = [&patternBonusTables](const MatchPairer::BotSpec& spec, Search* search) {
+        std::function afterInitialization = [&patternBonusTables](const MatchPairer::BotSpec& spec, Search* search) {
           assert(spec.botIdx < patternBonusTables.size());
           search->setCopyOfExternalPatternBonusTable(patternBonusTables[spec.botIdx]);
         };
         gameData = gameRunner->runGame(
-          seed, botSpecB, botSpecW, NULL, NULL, logger,
+          seed, botSpecB, botSpecW, nullptr, nullptr, logger,
           shouldStopFunc, shouldPause, nullptr, afterInitialization, nullptr
         );
       }
 
-      bool shouldContinue = gameData != NULL;
-      if(gameData != NULL) {
-        if(sgfOut != NULL) {
+      bool shouldContinue = gameData != nullptr;
+      if(gameData != nullptr) {
+        if(sgfOut != nullptr) {
           WriteSgf::writeSgf(*sgfOut,gameData->bName,gameData->wName,gameData->endHist,gameData,false,true);
           (*sgfOut) << endl;
         }
 
         {
-          std::lock_guard<std::mutex> lock(statsMutex);
+          std::lock_guard lock(statsMutex);
           gameCount += 1;
           timeUsedByBotMap[gameData->bName] += gameData->bTimeUsed;
           timeUsedByBotMap[gameData->wName] += gameData->wTimeUsed;
@@ -325,7 +323,7 @@ int MainCmds::match(const vector<string>& args) {
       if(!shouldContinue)
         break;
     }
-    if(sgfOut != NULL) {
+    if(sgfOut != nullptr) {
       sgfOut->close();
       delete sgfOut;
     }
@@ -338,23 +336,24 @@ int MainCmds::match(const vector<string>& args) {
 
   Rand hashRand;
   vector<std::thread> threads;
+  threads.reserve(numGameThreads);
   for(int i = 0; i<numGameThreads; i++) {
-    threads.push_back(std::thread(runMatchLoopProtected, hashRand.nextUInt64()));
+    threads.emplace_back(runMatchLoopProtected, hashRand.nextUInt64());
   }
-  for(int i = 0; i<threads.size(); i++)
-    threads[i].join();
+  for(auto& thread : threads)
+    thread.join();
 
   delete matchPairer;
   delete gameRunner;
 
   nnEvalsByBot.clear();
-  for(int i = 0; i<nnEvals.size(); i++) {
-    if(nnEvals[i] != NULL) {
-      logger.write(nnEvals[i]->getModelFileName());
-      logger.write("NN rows: " + Global::int64ToString(nnEvals[i]->numRowsProcessed()));
-      logger.write("NN batches: " + Global::int64ToString(nnEvals[i]->numBatchesProcessed()));
-      logger.write("NN avg batch size: " + Global::doubleToString(nnEvals[i]->averageProcessedBatchSize()));
-      delete nnEvals[i];
+  for(auto& nnEval : nnEvals) {
+    if(nnEval != nullptr) {
+      logger.write(nnEval->getModelFileName());
+      logger.write("NN rows: " + Global::int64ToString(nnEval->numRowsProcessed()));
+      logger.write("NN batches: " + Global::int64ToString(nnEval->numBatchesProcessed()));
+      logger.write("NN avg batch size: " + Global::doubleToString(nnEval->averageProcessedBatchSize()));
+      delete nnEval;
     }
   }
   NeuralNet::globalCleanup();

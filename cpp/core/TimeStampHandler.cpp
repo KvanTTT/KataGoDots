@@ -6,11 +6,14 @@
 
 using namespace std;
 
-TimeStampHandler::TimeStampHandler(Rand &newRand) {
-    currentDateTime = DateTime::getCompactDateTimeString();
-    currentDateTimeRand = newRand.nextUInt64();
-    currentRandSeed = Global::uint64ToHexString(currentDateTimeRand);
-    fileNameFriendlyRandSuffix = currentRandSeed.substr(0, 6);
+TimeStampHandler::TimeStampHandler(Rand &rand) : TimeStampHandler(rand.nextUInt64()) {
+}
+
+TimeStampHandler::TimeStampHandler(const uint64_t randSeed) {
+  currentDateTime = DateTime::getCompactDateTimeString();
+  currentDateTimeRand = randSeed;
+  currentRandSeed = Global::uint64ToHexString(currentDateTimeRand);
+  fileNameFriendlyRandSuffix = currentRandSeed.substr(0, 6);
 }
 
 string TimeStampHandler::generateFileName(const string &path, const string &ext) const {
