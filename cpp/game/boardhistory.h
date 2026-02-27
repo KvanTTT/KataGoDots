@@ -197,8 +197,6 @@ struct BoardHistory {
 
   void endAndScoreGameNow(const Board& board, Color area[Board::MAX_ARR_SIZE]);
 
-  void setWinnerByResignation(Player pla);
-
   void printBasicInfo(std::ostream& out, const Board& board) const;
   void printDebugInfo(std::ostream& out, const Board& board) const;
   int numberOfKoHashOccurrencesInHistory(Hash128 koHash, const KoHashTable* rootKoHashTable) const;
@@ -221,6 +219,7 @@ struct BoardHistory {
   static Hash128 getSituationRulesAndKoHash(const Board& board, const BoardHistory& hist, Player nextPlayer, double drawEquivalentWinsForWhite);
 
 private:
+  void setWinnerByResignation(Player pla);
   bool koHashOccursInHistory(Hash128 koHash, const KoHashTable* rootKoHashTable) const;
   void setKoRecapBlocked(Loc loc, bool b);
   static int countDotsScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]);

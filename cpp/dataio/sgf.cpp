@@ -2138,23 +2138,20 @@ void WriteSgf::writeSgf(
     Loc loc = endHist.moveHistory[i].loc;
     Player pla = endHist.moveHistory[i].pla;
 
-    bool isResignMove = endHist.isGameFinished && endHist.isResignation && endHist.winner == getOpp(pla) && i+1 == endHist.moveHistory.size();
+    bool isResignMove = loc == Board::RESIGN_LOC ||
+      (endHist.isGameFinished && endHist.isResignation && endHist.winner == getOpp(pla) && i+1 == endHist.moveHistory.size());
     if(!(omitResignPlayerMove && isResignMove)) {
-      if(pla == P_BLACK)
-        out << "B[";
-      else
-        out << "W[";
+      out << PlayerIO::playerToStringShort(pla, false) << "["; // Force GO format because sgf supports only `B` and `W` properties
 
       bool isPassForKo = hist.isPassForKo(board,loc,pla);
-      if(isPassForKo)
-        writeSgfLoc(out,Board::PASS_LOC,xSize,ySize);
-      else
-        writeSgfLoc(out,loc,xSize,ySize);
+      Loc locToWrite = isPassForKo ? Board::PASS_LOC : loc;
+      writeSgfLoc(out, locToWrite, xSize, ySize);
+
       out << "]";
 
       if(isPassForKo) {
         out << "TR[";
-        writeSgfLoc(out,loc,xSize,ySize);
+        writeSgfLoc(out, loc, xSize, ySize);
         out << "]";
         comment += "Pass for ko";
       }
