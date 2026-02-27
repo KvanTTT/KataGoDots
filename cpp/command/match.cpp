@@ -290,7 +290,7 @@ int MainCmds::match(const vector<string>& args) {
       bool shouldContinue = gameData != nullptr;
       if(gameData != nullptr) {
         if(sgfOut != nullptr) {
-          WriteSgf::writeSgf(*sgfOut,gameData->bName,gameData->wName,gameData->endHist,gameData,false,true);
+          WriteSgf::writeSgf(*sgfOut,gameData->bName,gameData->wName,gameData->endHist,gameData,false,false);
           (*sgfOut) << endl;
         }
 
