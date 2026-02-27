@@ -1652,13 +1652,13 @@ FinishedGameData* Play::runGame(
     if(!recordFullData) {
       //Go ahead and record this anyways with just the visits, as a bit of a hack so that the sgf output can also write the number of visits.
       int64_t unreducedNumVisits = toMoveBot->getRootVisits();
-      gameData->policyTargetsByTurn.push_back(PolicyTarget(NULL,unreducedNumVisits));
+      gameData->policyTargetsByTurn.emplace_back(nullptr, unreducedNumVisits);
     }
     else {
-      vector<PolicyTargetMove>* policyTarget = new vector<PolicyTargetMove>();
+      auto* policyTarget = new vector<PolicyTargetMove>();
       int64_t unreducedNumVisits = toMoveBot->getRootVisits();
-      Play::extractPolicyTarget(*policyTarget, toMoveBot, toMoveBot->rootNode, locsBuf, playSelectionValuesBuf);
-      gameData->policyTargetsByTurn.push_back(PolicyTarget(policyTarget,unreducedNumVisits));
+      extractPolicyTarget(*policyTarget, toMoveBot, toMoveBot->rootNode, locsBuf, playSelectionValuesBuf);
+      gameData->policyTargetsByTurn.emplace_back(policyTarget,unreducedNumVisits);
       gameData->nnRawStatsByTurn.push_back(computeNNRawStats(toMoveBot, board, hist, pla));
 
       gameData->targetWeightByTurn.push_back(limits.targetWeight);
@@ -1714,32 +1714,18 @@ FinishedGameData* Play::runGame(
       historicalMctsScoreStdevs.push_back(values.expectedScoreStdev);
     }
 
-    if(onEachMove != nullptr)
-      onEachMove(board,hist,pla,loc,historicalMctsWinLossValues,historicalMctsLeads,historicalMctsScoreStdevs,toMoveBot);
-
-    //Finally, make the move on the bots
-    bool suc;
-    suc = botB->makeMove(loc,pla);
-    testAssert(suc);
-    if(botB != botW) {
-      suc = botW->makeMove(loc,pla);
-      testAssert(suc);
-    }
-    (void)suc; //Avoid warning when asserts disabled
-
-    //And make the move on our copy of the board
-    testAssert(hist.isLegal(board,loc,pla));
-    hist.makeBoardMoveAssumeLegal(board,loc,pla,NULL);
-
+    bool shouldResign = false;
     //Check for resignation
-    if(playSettings.allowResignation && historicalMctsWinLossValues.size() >= playSettings.resignConsecTurns) {
-      //Play at least some moves no matter what
-      int minTurnForResignation = 1 + board.x_size * board.y_size / 5;
-      if(i >= minTurnForResignation) {
+    if (playSettings.allowResignation) {
+      shouldResign = hist.isResignReasonable(board, pla);
+
+      // Play at least some moves no matter what
+      if(int minTurnForResignation = 1 + board.x_size * board.y_size / 5;
+         !shouldResign && historicalMctsWinLossValues.size() >= playSettings.resignConsecTurns && i >= minTurnForResignation) {
         if(playSettings.resignThreshold > 0 || std::isnan(playSettings.resignThreshold))
           throw StringError("playSettings.resignThreshold > 0 || std::isnan(playSettings.resignThreshold)");
 
-        bool shouldResign = true;
+        shouldResign = true;
         for(int j = 0; j<playSettings.resignConsecTurns; j++) {
           double winLossValue = historicalMctsWinLossValues[historicalMctsWinLossValues.size()-j-1];
           Player resignPlayerThisTurn = C_EMPTY;
@@ -1753,14 +1739,30 @@ FinishedGameData* Play::runGame(
             break;
           }
         }
-
-        if(shouldResign)
-          hist.setWinnerByResignation(getOpp(pla));
       }
     }
 
+    Loc finalLoc = shouldResign ? Board::RESIGN_LOC : loc;
+
+    if(onEachMove != nullptr)
+      onEachMove(board,hist,pla,finalLoc,historicalMctsWinLossValues,historicalMctsLeads,historicalMctsScoreStdevs,toMoveBot);
+
+    //Finally, make the move on the bots
+    bool suc;
+    suc = botB->makeMove(finalLoc,pla);
+    testAssert(suc);
+    if(botB != botW) {
+      suc = botW->makeMove(finalLoc,pla);
+      testAssert(suc);
+    }
+    (void)suc; //Avoid warning when asserts disabled
+
+    //And make the move on our copy of the board
+    testAssert(hist.isLegal(board,finalLoc,pla));
+    hist.makeBoardMoveAssumeLegal(board,finalLoc,pla, nullptr);
+
     testAssert(hist.moveHistory.size() < 0x1FFFffff);
-    int nextTurnIdx = (int)hist.moveHistory.size();
+    int nextTurnIdx = static_cast<int>(hist.moveHistory.size());
     maybeCheckForNewNNEval(nextTurnIdx);
 
     pla = getOpp(pla);

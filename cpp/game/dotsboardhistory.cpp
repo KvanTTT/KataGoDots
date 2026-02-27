@@ -32,7 +32,7 @@ float BoardHistory::whiteScoreIfNotCapturingGroundingAlive(const Board& board, c
 }
 
 float BoardHistory::whiteScoreIfGroundingAlive(const Board& board, const Color groundColor) const {
-  assert(rules.isDots);
+  if (!rules.isDots) return std::numeric_limits<float>::quiet_NaN();
 
   const auto completeWhiteBonus = getCompleteWhiteBonus();
 

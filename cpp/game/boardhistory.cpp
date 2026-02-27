@@ -871,12 +871,12 @@ void BoardHistory::setKoRecapBlocked(Loc loc, bool b) {
 }
 
 bool BoardHistory::isReasonable(const Board& board, const Loc moveLoc, const Player movePla, const bool checkPla) const {
-  if (!rules.isDots) {
-    return isLegal(board, moveLoc, movePla);
+  if (moveLoc == Board::RESIGN_LOC) {
+    return board.isDots() ? isResignReasonable(board, movePla) : false;
   }
 
-  if (moveLoc == Board::RESIGN_LOC) {
-    return isResignReasonable(board, movePla);
+  if (!rules.isDots) {
+    return isLegal(board, moveLoc, movePla);
   }
 
   if (checkPla && movePla != presumedNextMovePla) {
@@ -1066,7 +1066,7 @@ bool BoardHistory::makeBoardMoveTolerant(Board& board, Loc moveLoc, Player moveP
 }
 
 void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player movePla, const KoHashTable* rootKoHashTable, bool preventEncore) {
-  Hash128 posHashBeforeMove = board.pos_hash;
+  const Hash128 posHashBeforeMove = board.pos_hash;
 
   //Handle if somehow we're making a move after the game or phase was ended
   if(isGameFinished || isPastNormalPhaseEnd) {
@@ -1076,7 +1076,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
     numConsecValidTurnsThisGame = std::min(numConsecValidTurnsThisGame,1);
   }
 
-  const bool moveIsIllegal = !isLegal(board,moveLoc,movePla);
+  const bool moveIsIllegal = moveLoc != Board::RESIGN_LOC && !isLegal(board,moveLoc,movePla);
 
   //And if somehow we're making a move after the game was ended, just clear those values and continue.
   isGameFinished = false;
@@ -1206,7 +1206,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   if(moveIsIllegal)
     numConsecValidTurnsThisGame = 0;
 
-  if (!rules.isDots) {
+  if (moveLoc != Board::RESIGN_LOC && !rules.isDots) {
     Hash128 koHashAfterThisMove = getKoHash(rules,board,getOpp(movePla),encorePhase,koRecapBlockHash);
     koHashHistory.push_back(koHashAfterThisMove);
     preventEncoreHistory.push_back(preventEncore);
@@ -1248,7 +1248,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
 
 
     //Territory scoring - chill 1 point per move in main phase and first encore
-    if(rules.scoringRule == Rules::SCORING_TERRITORY && encorePhase <= 1 && moveLoc != Board::PASS_LOC && moveLoc != Board::RESIGN_LOC && !wasPassForKo) {
+    if(rules.scoringRule == Rules::SCORING_TERRITORY && encorePhase <= 1 && moveLoc != Board::PASS_LOC && !wasPassForKo) {
       if(movePla == P_BLACK)
         whiteBonusScore += 1.0f;
       else if(movePla == P_WHITE)
@@ -1258,7 +1258,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
     }
 
     //Handicap bonus score
-    if(movePla == P_WHITE && moveLoc != Board::PASS_LOC && moveLoc != Board::RESIGN_LOC)
+    if(movePla == P_WHITE && moveLoc != Board::PASS_LOC)
       whiteHasMoved = true;
     if(assumeMultipleStartingBlackMovesAreHandicap && !whiteHasMoved && movePla == P_BLACK && rules.whiteHandicapBonusRule != Rules::WHB_ZERO) {
       whiteHandicapBonusScore = (float)computeWhiteHandicapBonus();
@@ -1308,7 +1308,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
     }
 
     //Break long cycles with no-result
-    if(moveLoc != Board::PASS_LOC && moveLoc != Board::RESIGN_LOC && (encorePhase > 0 || rules.koRule == Rules::KO_SIMPLE)) {
+    if(moveLoc != Board::PASS_LOC && (encorePhase > 0 || rules.koRule == Rules::KO_SIMPLE)) {
       if(numberOfKoHashOccurrencesInHistory(koHashHistory[koHashHistory.size()-1], rootKoHashTable) >= 3) {
         isNoResult = true;
         isGameFinished = true;
