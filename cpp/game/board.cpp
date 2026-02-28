@@ -7,6 +7,7 @@
  */
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <iomanip>
 #include <sstream>
@@ -16,16 +17,16 @@ using namespace std;
 
 //STATIC VARS-----------------------------------------------------------------------------
 bool Board::IS_ZOBRIST_INITALIZED = false;
-Hash128 Board::ZOBRIST_SIZE_X_HASH[MAX_LEN_X+1];
-Hash128 Board::ZOBRIST_SIZE_Y_HASH[MAX_LEN_Y+1];
-Hash128 Board::ZOBRIST_BOARD_HASH[MAX_ARR_SIZE][4];
-Hash128 Board::ZOBRIST_PLAYER_HASH[4];
-Hash128 Board::ZOBRIST_KO_LOC_HASH[MAX_ARR_SIZE];
-Hash128 Board::ZOBRIST_KO_MARK_HASH[MAX_ARR_SIZE][4];
-Hash128 Board::ZOBRIST_ENCORE_HASH[3];
-Hash128 Board::ZOBRIST_BOARD_HASH2[MAX_ARR_SIZE][4];
-Hash128 Board::ZOBRIST_SECOND_ENCORE_START_HASH[MAX_ARR_SIZE][4];
-Hash128 Board::ZOBRIST_DOTS_CAPTURES_DIFF_HASH[MAX_ARR_SIZE][MAX_CAPTURES_COUNT];
+std::array<Hash128, Board::MAX_LEN_X+1> Board::ZOBRIST_SIZE_X_HASH;
+std::array<Hash128, Board::MAX_LEN_Y+1> Board::ZOBRIST_SIZE_Y_HASH;
+std::array<std::array<Hash128, 4>, Board::MAX_ARR_SIZE> Board::ZOBRIST_BOARD_HASH;
+std::array<Hash128, 4> Board::ZOBRIST_PLAYER_HASH;
+std::array<Hash128, Board::MAX_ARR_SIZE> Board::ZOBRIST_KO_LOC_HASH;
+std::array<std::array<Hash128, 4>, Board::MAX_ARR_SIZE> Board::ZOBRIST_KO_MARK_HASH;
+std::array<Hash128, 3> Board::ZOBRIST_ENCORE_HASH;
+std::array<std::array<Hash128, 4>, Board::MAX_ARR_SIZE> Board::ZOBRIST_BOARD_HASH2;
+std::array<std::array<Hash128, 4>, Board::MAX_ARR_SIZE> Board::ZOBRIST_SECOND_ENCORE_START_HASH;
+std::array<std::array<Hash128, Board::MAX_CAPTURES_COUNT>, Board::MAX_ARR_SIZE> Board::ZOBRIST_DOTS_CAPTURES_DIFF_HASH;
 const Hash128 Board::ZOBRIST_PASS_ENDS_PHASE = //Based on sha256 hash of Board::ZOBRIST_PASS_ENDS_PHASE
   Hash128(0x853E097C279EBF4EULL, 0xE3153DEF9E14A62CULL);
 const Hash128 Board::ZOBRIST_GAME_IS_OVER = //Based on sha256 hash of Board::ZOBRIST_GAME_IS_OVER
@@ -209,8 +210,8 @@ void Board::initHash()
   //Do this second so that the player and encore hashes are not
   //afffected by the size of the board we compile with.
   for(int i = 0; i < MAX_ARR_SIZE; i++) {
-    auto *const boardHashSecondArray = ZOBRIST_BOARD_HASH[i];
-    auto *const koMarkHashSecondArray = ZOBRIST_KO_MARK_HASH[i];
+    auto &boardHashSecondArray = ZOBRIST_BOARD_HASH[i];
+    auto &koMarkHashSecondArray = ZOBRIST_KO_MARK_HASH[i];
     for(Color j = 0; j < 4; j++) {
       if (j == C_EMPTY || j == C_WALL) {
         boardHashSecondArray[j] = Hash128();
@@ -226,7 +227,7 @@ void Board::initHash()
   //Reseed the random number generator so that these hashes are also
   //not affected by the size of the board we compile with
   rand.init("Board::initHash() for ZOBRIST_SECOND_ENCORE_START hashes");
-  for (auto *const secondArray : ZOBRIST_SECOND_ENCORE_START_HASH) {
+  for (auto &secondArray : ZOBRIST_SECOND_ENCORE_START_HASH) {
     for(Color j = 0; j < 4; j++) {
       secondArray[j] = j == C_EMPTY || j == C_WALL ? Hash128() : nextHash();
     }
@@ -244,7 +245,7 @@ void Board::initHash()
 
   //Reseed and compute one more set of zobrist hashes, mixed a bit differently
   rand.init("Board::initHash() for second set of ZOBRIST hashes");
-  for (auto *const boardHash2SecondArray : ZOBRIST_BOARD_HASH2) {
+  for (auto &boardHash2SecondArray : ZOBRIST_BOARD_HASH2) {
     for(Color j = 0; j < 4; j++) {
       boardHash2SecondArray[j] = nextHash();
       boardHash2SecondArray[j].hash0 = Hash::murmurMix(boardHash2SecondArray[j].hash0);
@@ -255,7 +256,7 @@ void Board::initHash()
   //Reseed the random number generator so that these hashes are also
   //not affected by the size of the board we compile with
   rand.init("Board::initHash() for ZOBRIST_DOTS_CAPTURES_DIFF_HASH hashes");
-  for (auto *const secondArray : ZOBRIST_DOTS_CAPTURES_DIFF_HASH) {
+  for (auto &secondArray : ZOBRIST_DOTS_CAPTURES_DIFF_HASH) {
     for (int j = 0; j < MAX_CAPTURES_COUNT; j++) {
       secondArray[j] = nextHash();
     }

@@ -12,6 +12,7 @@
 #include "../external/nlohmann_json/json.hpp"
 #include "rules.h"
 #include "../core/rand.h"
+#include <array>
 
 #ifndef COMPILE_MAX_BOARD_LEN
 #define COMPILE_MAX_BOARD_LEN 39
@@ -154,18 +155,18 @@ struct Board
 
   //Zobrist Hashing------------------------------
   static bool IS_ZOBRIST_INITALIZED;
-  static Hash128 ZOBRIST_SIZE_X_HASH[MAX_LEN_X+1];
-  static Hash128 ZOBRIST_SIZE_Y_HASH[MAX_LEN_Y+1];
-  static Hash128 ZOBRIST_BOARD_HASH[MAX_ARR_SIZE][4];
-  static Hash128 ZOBRIST_BOARD_HASH2[MAX_ARR_SIZE][4];
-  static Hash128 ZOBRIST_PLAYER_HASH[4];
-  static Hash128 ZOBRIST_KO_LOC_HASH[MAX_ARR_SIZE];
-  static Hash128 ZOBRIST_KO_MARK_HASH[MAX_ARR_SIZE][4];
-  static Hash128 ZOBRIST_ENCORE_HASH[3];
-  static Hash128 ZOBRIST_SECOND_ENCORE_START_HASH[MAX_ARR_SIZE][4];
+  static std::array<Hash128, MAX_LEN_X+1> ZOBRIST_SIZE_X_HASH;
+  static std::array<Hash128, MAX_LEN_Y+1> ZOBRIST_SIZE_Y_HASH;
+  static std::array<std::array<Hash128, 4>, MAX_ARR_SIZE> ZOBRIST_BOARD_HASH;
+  static std::array<std::array<Hash128, 4>, MAX_ARR_SIZE> ZOBRIST_BOARD_HASH2;
+  static std::array<Hash128, 4> ZOBRIST_PLAYER_HASH;
+  static std::array<Hash128, MAX_ARR_SIZE> ZOBRIST_KO_LOC_HASH;
+  static std::array<std::array<Hash128, 4>, MAX_ARR_SIZE> ZOBRIST_KO_MARK_HASH;
+  static std::array<Hash128, 3> ZOBRIST_ENCORE_HASH;
+  static std::array<std::array<Hash128, 4>, MAX_ARR_SIZE> ZOBRIST_SECOND_ENCORE_START_HASH;
   // Hash for considering surrounding shapes
   // Shape matters, but not its content (number of diffs between black and white captures)
-  static Hash128 ZOBRIST_DOTS_CAPTURES_DIFF_HASH[MAX_ARR_SIZE][MAX_CAPTURES_COUNT];
+  static std::array<std::array<Hash128, MAX_CAPTURES_COUNT>, MAX_ARR_SIZE> ZOBRIST_DOTS_CAPTURES_DIFF_HASH;
   static const Hash128 ZOBRIST_PASS_ENDS_PHASE;
   static const Hash128 ZOBRIST_GAME_IS_OVER;
 
