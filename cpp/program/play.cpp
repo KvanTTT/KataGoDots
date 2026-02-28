@@ -144,21 +144,23 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
     }
   }
 
-  allowedMultiStoneSuicideLegals = cfg.getBools("multiStoneSuicideLegals");
-  if(allowedMultiStoneSuicideLegals.size() <= 0)
-    throw IOError("multiStoneSuicideLegals must have at least one value in " + cfg.getFileName());
+  if (!cfg.tryGetBools("multiStoneSuicideLegals", allowedSuicideLegals)) {
+    allowedSuicideLegals = cfg.getBools(SUICIDE_LEGALS_KEY);
+  }
+  if (allowedSuicideLegals.empty())
+    throw IOError("multiStoneSuicideLegals or " + SUICIDE_LEGALS_KEY + " must have at least one value in " + cfg.getFileName());
 
   if (cfg.contains(START_POSES_KEY) || dotsGame) {
     auto allowedStartPosRuleStrs = cfg.getStrings(START_POSES_KEY, Rules::startPosStrings());
-    for(size_t i = 0; i < allowedStartPosRuleStrs.size(); i++)
-      allowedStartPosRules.push_back(Rules::parseStartPos(allowedStartPosRuleStrs[i]));
-    if(allowedStartPosRules.size() <= 0)
+    for(const auto& allowedStartPosRuleStr : allowedStartPosRuleStrs)
+      allowedStartPosRules.push_back(Rules::parseStartPos(allowedStartPosRuleStr));
+    if(allowedStartPosRules.empty())
       throw IOError(START_POSES_KEY + " must have at least one value in " + cfg.getFileName());
   }
 
   if (cfg.contains(START_POSES_ARE_RANDOM_KEY) || dotsGame) {
     allowedStartPosRandomRules = cfg.getBools(START_POSES_ARE_RANDOM_KEY);
-    if(allowedStartPosRandomRules.size() <= 0)
+    if(allowedStartPosRandomRules.empty())
       throw IOError(START_POSES_ARE_RANDOM_KEY + " must have at least one value in " + cfg.getFileName());
   }
 
@@ -522,7 +524,7 @@ Rules GameInitializer::createRules() {
 
 Rules GameInitializer::createRulesUnsynchronized() {
   auto rules = Rules(dotsGame);
-  rules.multiStoneSuicideLegal = allowedMultiStoneSuicideLegals[rand.nextUInt(static_cast<uint32_t>(allowedMultiStoneSuicideLegals.size()))];
+  rules.multiStoneSuicideLegal = allowedSuicideLegals[rand.nextUInt(static_cast<uint32_t>(allowedSuicideLegals.size()))];
   if (!allowedStartPosRules.empty()) {
     rules.startPos = allowedStartPosRules[rand.nextUInt(static_cast<uint32_t>(allowedStartPosRules.size()))];
   }
@@ -533,11 +535,11 @@ Rules GameInitializer::createRulesUnsynchronized() {
   if (dotsGame) {
      rules.dotsCaptureEmptyBases = allowedCaptureEmptyBasesRules[rand.nextUInt(static_cast<uint32_t>(allowedCaptureEmptyBasesRules.size()))];
   } else {
-    rules.koRule = allowedKoRules[rand.nextUInt((uint32_t)allowedKoRules.size())];
-    rules.scoringRule = allowedScoringRules[rand.nextUInt((uint32_t)allowedScoringRules.size())];
-    rules.taxRule = allowedTaxRules[rand.nextUInt((uint32_t)allowedTaxRules.size())];
+    rules.koRule = allowedKoRules[rand.nextUInt(static_cast<uint32_t>(allowedKoRules.size()))];
+    rules.scoringRule = allowedScoringRules[rand.nextUInt(static_cast<uint32_t>(allowedScoringRules.size()))];
+    rules.taxRule = allowedTaxRules[rand.nextUInt(static_cast<uint32_t>(allowedTaxRules.size()))];
     rules.hasButton = rules.scoringRule == Rules::SCORING_AREA
-    ? allowedButtons[rand.nextUInt((uint32_t)allowedButtons.size())]
+    ? allowedButtons[rand.nextUInt(static_cast<uint32_t>(allowedButtons.size()))]
       : false;
   }
   return rules;
