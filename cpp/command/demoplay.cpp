@@ -1,20 +1,14 @@
-#include "../core/global.h"
-#include "../core/fileutils.h"
-#include "../core/fancymath.h"
-#include "../core/makedir.h"
+#include "../command/commandline.h"
 #include "../core/config_parser.h"
+#include "../core/global.h"
 #include "../core/parallel.h"
-#include "../core/timer.h"
 #include "../core/test.h"
 #include "../dataio/sgf.h"
-#include "../dataio/poswriter.h"
-#include "../dataio/files.h"
-#include "../search/asyncbot.h"
-#include "../program/setup.h"
-#include "../program/playutils.h"
-#include "../program/play.h"
-#include "../command/commandline.h"
 #include "../main.h"
+#include "../program/play.h"
+#include "../program/playutils.h"
+#include "../program/setup.h"
+#include "../search/asyncbot.h"
 
 #include <chrono>
 
@@ -24,101 +18,172 @@ static void writeLine(
   const Search* search, const BoardHistory& baseHist,
   const vector<double>& winLossHistory, const vector<double>& scoreHistory, const vector<double>& scoreStdevHistory
 ) {
-  const Board board = search->getRootBoard();
-  int nnXLen = search->nnXLen;
-  int nnYLen = search->nnYLen;
+  const Board& board = search->getRootBoard();
 
-  cout << board.x_size << " ";
-  cout << board.y_size << " ";
-  cout << nnXLen << " ";
-  cout << nnYLen << " ";
-  cout << baseHist.rules.komi << " ";
-  if(baseHist.isGameFinished) {
-    cout << PlayerIO::playerToString(baseHist.winner, baseHist.rules.isDots) << " ";
-    cout << baseHist.isResignation << " ";
-    cout << baseHist.finalWhiteMinusBlackScore << " ";
-  }
-  else {
-    cout << "-" << " ";
-    cout << "false" << " ";
-    cout << "0" << " ";
-  }
+  const int nnXLen = search->nnXLen;
+  const int nnYLen = search->nnYLen;
 
-  //Last move
-  Loc moveLoc = Board::NULL_LOC;
-  if(baseHist.moveHistory.size() > 0)
-    moveLoc = baseHist.moveHistory[baseHist.moveHistory.size()-1].loc;
-  cout << NNPos::locToPos(moveLoc,board.x_size,nnXLen,nnYLen) << " ";
-
-  cout << baseHist.moveHistory.size() << " ";
-  cout << board.numBlackCaptures << " ";
-  cout << board.numWhiteCaptures << " ";
-
-  for(int y = 0; y<board.y_size; y++) {
-    for(int x = 0; x<board.x_size; x++) {
-      Loc loc = Location::getLoc(x,y,board.x_size);
-      if(board.colors[loc] == C_BLACK)
-        cout << "x";
-      else if(board.colors[loc] == C_WHITE)
-        cout << "o";
-      else
-        cout << ".";
+  const bool isDots = board.isDots();
+  if (!isDots) {
+    cout << board.x_size << " ";
+    cout << board.y_size << " ";
+    cout << nnXLen << " ";
+    cout << nnYLen << " ";
+    cout << baseHist.rules.komi << " ";
+    if(baseHist.isGameFinished) {
+      cout << PlayerIO::playerToString(baseHist.winner, baseHist.rules.isDots) << " ";
+      cout << baseHist.isResignation << " ";
+      cout << baseHist.finalWhiteMinusBlackScore << " ";
     }
+    else {
+      cout << "-" << " ";
+      cout << "false" << " ";
+      cout << "0" << " ";
+    }
+
+    //Last move
+    Loc moveLoc = Board::NULL_LOC;
+    if(!baseHist.moveHistory.empty())
+      moveLoc = baseHist.moveHistory[baseHist.moveHistory.size()-1].loc;
+    cout << NNPos::locToPos(moveLoc,board.x_size,nnXLen,nnYLen) << " ";
+
+    cout << baseHist.moveHistory.size() << " ";
+    cout << board.numBlackCaptures << " ";
+    cout << board.numWhiteCaptures << " ";
+
+    for(int y = 0; y<board.y_size; y++) {
+      for(int x = 0; x<board.x_size; x++) {
+        cout << PlayerIO::stateToChar(board.getState(Location::getLoc(x, y, board.x_size)), board.isDots());
+      }
+    }
+    cout << " ";
+  } else {
+    baseHist.printBasicInfo(cout, board);
   }
-  cout << " ";
 
   vector<AnalysisData> buf;
   if(!baseHist.isGameFinished) {
-    int minMovesToTryToGet = 0; //just get the default number
-    bool duplicateForSymmetries = true;
+    constexpr int minMovesToTryToGet = 0; // just get the default number
+    constexpr bool duplicateForSymmetries = true;
     search->getAnalysisData(buf,minMovesToTryToGet,false,9,duplicateForSymmetries);
   }
-  cout << buf.size() << " ";
-  for(int i = 0; i<buf.size(); i++) {
-    const AnalysisData& data = buf[i];
-    cout << NNPos::locToPos(data.move,board.x_size,nnXLen,nnYLen) << " ";
-    cout << data.numVisits << " ";
-    cout << data.winLossValue << " ";
-    cout << data.scoreMean << " ";
-    cout << data.scoreStdev << " ";
-    cout << data.policyPrior << " ";
+
+  const int bufSize = static_cast<int>(buf.size());
+
+  if (!isDots) {
+    cout << bufSize << " ";
+    for(int i = 0; i < bufSize; i++) {
+      const AnalysisData& data = buf[i];
+      cout << NNPos::locToPos(data.move,board.x_size,nnXLen,nnYLen) << " ";
+      cout << data.numVisits << " ";
+      cout << data.winLossValue << " ";
+      cout << data.scoreMean << " ";
+      cout << data.scoreStdev << " ";
+      cout << data.policyPrior << " ";
+    }
+  } else {
+    cout << "bufSize: " << bufSize << endl;
+    for(int i = 0; i < min(10, bufSize); i++) {
+      const AnalysisData& data = buf[i];
+      cout << "pos: " << Location::toString(data.move, board.x_size, board.y_size, isDots) << ", ";
+      cout << "numVisits: " << data.numVisits << ", ";
+      cout << "winLossValue: " << data.winLossValue << ", ";
+      cout << "scoreMean: " << data.scoreMean << ", ";
+      cout << "scoreStdev: " << data.scoreStdev << ", ";
+      cout << "policyPrior: " << data.policyPrior;
+      cout << endl;
+    }
+    if (bufSize > 10) cout << "... " << endl;
   }
 
-  vector<double> ownership = search->getAverageTreeOwnership();
+  /* TODO: https://github.com/lightvector/KataGo/issues/1163
+   *
+   vector<double> ownership = search->getAverageTreeOwnership();
   for(int y = 0; y<board.y_size; y++) {
     for(int x = 0; x<board.x_size; x++) {
       int pos = NNPos::xyToPos(x,y,nnXLen);
       cout << ownership[pos] << " ";
     }
-  }
+  }*/
 
-  cout << winLossHistory.size() << " ";
-  for(int i = 0; i<winLossHistory.size(); i++)
-    cout << winLossHistory[i] << " ";
-  cout << scoreHistory.size() << " ";
-  assert(scoreStdevHistory.size() == scoreHistory.size());
-  for(int i = 0; i<scoreHistory.size(); i++)
-    cout << scoreHistory[i] << " " << scoreStdevHistory[i] << " ";
+  auto printHistoryEstimations = [&](const vector<double>& history, const string& name) {
+    const int size = static_cast<int>(history.size());
+    if (!isDots) {
+      cout << size << " ";
+      for(int i = 0; i< size; i++)
+        cout << history[i] << " ";
+    } else {
+      cout << name << " (size: " << size << "): ";
+      if (size > 10) cout << "... ";
+      for (int i = max(0, size - 10); i < size; i++) {
+        cout << history[i] << " ";
+      }
+      cout << endl;
+    }
+  };
+
+  printHistoryEstimations(winLossHistory, "winLossHistory");
+  printHistoryEstimations(scoreHistory, "scoreHistory");
 
   cout << endl;
 }
 
-static void initializeDemoGame(Board& board, BoardHistory& hist, Player& pla, Rand& rand, AsyncBot* bot) {
-  static const int numSizes = 9;
-  int sizes[numSizes] = {19,13,9,15,11,10,12,14,16};
-  int sizeFreqs[numSizes] = {240,18,12,6,2,1,1,1,1};
+static BoardHistory initializeDemoGame(bool isDots, Rand& rand, AsyncBot* bot) {
+  Rules rules;
+  int sizeX, sizeY;
+  if (!isDots) {
+    rules = Rules::getTrompTaylorish();
+    static constexpr int numSizes = 9;
+    int sizes[numSizes] = {19,13,9,15,11,10,12,14,16};
+    int sizeFreqs[numSizes] = {240,18,12,6,2,1,1,1,1};
+    sizeX = sizes[rand.nextUInt(sizeFreqs,numSizes)];
+    sizeY = sizeX;
+  } else {
+    rules = Rules::DEFAULT_DOTS;
 
-  const int size = sizes[rand.nextUInt(sizeFreqs,numSizes)];
+    static constexpr int numStartPoses = 4;
+    int startPoses[numStartPoses] = { Rules::START_POS_CROSS, Rules::START_POS_CROSS_4, Rules::START_POS_CROSS_2, Rules::START_POS_SINGLE };
+    int startPosesFreqs[numStartPoses] = { 10, 5, 2, 1 };
+    rules.startPos = startPoses[rand.nextUInt(startPosesFreqs, numStartPoses)];
 
-  board = Board(size,size, Rules::DEFAULT_GO);
-  pla = P_BLACK;
-  hist.clear(board,pla,Rules::getTrompTaylorish(),0);
+    switch (rand.nextInt(0, 2)) {
+      case 0:
+        rules.komi = 0.5;
+        break;
+      case 1:
+        rules.komi = -0.5;
+        break;
+      default:
+        rules.komi = 0.0;
+        break;
+    }
+
+    if (rand.nextBool(0.5)) {
+      sizeX = 20;
+      sizeY = 20;
+    } else {
+      sizeX = 39;
+      sizeY = 32;
+    }
+
+    if (sizeX > Board::MAX_LEN_X) {
+      sizeX = Board::MAX_LEN_X;
+    }
+    if (sizeY > Board::MAX_LEN_Y) {
+      sizeY = Board::MAX_LEN_Y;
+    }
+  }
+
+  auto board = Board(sizeX, sizeY, rules);
+  Player pla = board.setStartPos(rand);
+  BoardHistory hist(board, pla, rules, 0);
+
   bot->setPosition(pla,board,hist);
 
-  if(size == 19) {
+  if(!isDots && sizeX == 19 && sizeY == 19) {
     //Many games use a special opening
     if(rand.nextBool(0.6)) {
-      auto g = [size](int x, int y) { return Location::getLoc(x,y,size); };
+      auto g = [sizeX](int x, int y) { return Location::getLoc(x,y,sizeX); };
       const Move nb = Move(Board::NULL_LOC, P_BLACK);
       const Move nw = Move(Board::NULL_LOC, P_WHITE);
       Player b = P_BLACK;
@@ -223,14 +288,14 @@ static void initializeDemoGame(Board& board, BoardHistory& hist, Player& pla, Ra
           Loc loc = chosenOpening[k].loc;
           Player movePla = chosenOpening[k].pla;
           if(loc == Board::NULL_LOC || loc == Board::PASS_LOC)
-            symmetric.push_back(Move(loc,movePla));
+            symmetric.emplace_back(loc,movePla);
           else {
-            int x = Location::getX(loc,size);
-            int y = Location::getY(loc,size);
-            if(j & 1) x = size-1-x;
-            if(j & 2) y = size-1-y;
+            int x = Location::getX(loc,sizeX);
+            int y = Location::getY(loc,sizeX);
+            if(j & 1) x = sizeX-1-x;
+            if(j & 2) y = sizeY-1-y;
             if(j & 4) std::swap(x,y);
-            symmetric.push_back(Move(Location::getLoc(x,y,size),movePla));
+            symmetric.emplace_back(Location::getLoc(x,y,sizeX),movePla);
           }
         }
         chosenOpenings.push_back(symmetric);
@@ -246,13 +311,13 @@ static void initializeDemoGame(Board& board, BoardHistory& hist, Player& pla, Ra
       vector<Move> freeMovesPlayed;
       vector<Move> specifiedMovesPlayed;
       while(true) {
-        auto withinRadius1 = [size](Loc l0, Loc l1) {
+        auto withinRadius1 = [sizeX](Loc l0, Loc l1) {
           if(l0 == Board::NULL_LOC || l1 == Board::NULL_LOC || l0 == Board::PASS_LOC || l1 == Board::PASS_LOC)
             return false;
-          int x0 = Location::getX(l0,size);
-          int y0 = Location::getY(l0,size);
-          int x1 = Location::getX(l1,size);
-          int y1 = Location::getY(l1,size);
+          int x0 = Location::getX(l0,sizeX);
+          int y0 = Location::getY(l0,sizeX);
+          int x1 = Location::getX(l1,sizeX);
+          int y1 = Location::getY(l1,sizeX);
           return std::abs(x0-x1) <= 1 && std::abs(y0-y1) <= 1;
         };
         auto symmetryIsGood = [&movesPlayed,&specifiedMovesPlayed,&freeMovesPlayed,&withinRadius1](const vector<Move>& moves) {
@@ -351,6 +416,7 @@ static void initializeDemoGame(Board& board, BoardHistory& hist, Player& pla, Ra
   writeLine(bot->getSearch(),hist,vector<double>(),vector<double>(),vector<double>());
   std::this_thread::sleep_for(std::chrono::duration<double>(2.0));
 
+  return hist;
 }
 
 
@@ -368,7 +434,7 @@ int MainCmds::demoplay(const vector<string>& args) {
     cmd.addModelFileArg();
     cmd.addOverrideConfigArg();
 
-    TCLAP::ValueArg<string> logFileArg("","log-file","Log file to output to",false,string(),"FILE");
+    TCLAP::ValueArg logFileArg("","log-file","Log file to output to",false,string(),"FILE");
     cmd.add(logFileArg);
     cmd.parseArgs(args);
 
@@ -398,10 +464,10 @@ int MainCmds::demoplay(const vector<string>& args) {
     const int defaultMaxBatchSize = -1;
     const bool defaultRequireExactNNLen = false;
     const bool disableFP16 = false;
-    const string expectedSha256 = "";
+    const string expectedSha256;
     nnEval = Setup::initializeNNEvaluator(
       modelFile,modelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN,NNPos::MAX_BOARD_LEN,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_OTHER
     );
   }
@@ -414,11 +480,15 @@ int MainCmds::demoplay(const vector<string>& args) {
   const double searchFactorWhenWinning = cfg.getOrDefaultDouble("searchFactorWhenWinning", 0.01, 1.0, 1.0);
   const double searchFactorWhenWinningThreshold = cfg.getOrDefaultDouble("searchFactorWhenWinningThreshold", 0.0, 1.0, 1.0);
 
+  bool isDots = cfg.getOrDefaultBool(DOTS_KEY, false);
+  int numGamesTotal = cfg.getOrDefaultInt("numGamesTotal", 1, std::numeric_limits<int>::max(), 1);
+  int printGameEvery = cfg.getOrDefaultInt("printGameEvery", 1, std::numeric_limits<int>::max(), 1);
+
   //Check for unused config keys
   cfg.warnUnusedKeys(cerr,&logger);
-  Setup::maybeWarnHumanSLParams(params,nnEval,NULL,cerr,&logger);
+  Setup::maybeWarnHumanSLParams(params,nnEval,nullptr,cerr,&logger);
 
-  AsyncBot* bot = new AsyncBot(params, nnEval, &logger, searchRandSeed);
+  auto* bot = new AsyncBot(params, nnEval, &logger, searchRandSeed);
   bot->setAlwaysIncludeOwnerMap(true);
   Rand gameRand;
 
@@ -426,15 +496,15 @@ int MainCmds::demoplay(const vector<string>& args) {
   //------------------------------------------------------------------------------------
   logger.write("Loaded all config stuff, starting demo");
 
-  //Game loop
-  while(true) {
+  int gameNumber = 0;
 
-    Player pla = P_BLACK;
-    Board baseBoard;
-    BoardHistory baseHist(baseBoard,pla,Rules::getTrompTaylorish(),0);
+  //Game loop
+  while (gameNumber++ < numGamesTotal) {
     TimeControls tc;
 
-    initializeDemoGame(baseBoard, baseHist, pla, gameRand, bot);
+    BoardHistory baseHist = initializeDemoGame(isDots, gameRand, bot);
+    Player pla = baseHist.presumedNextMovePla;
+    Board baseBoard = baseHist.getRecentBoard(0);
 
     bot->setPosition(pla,baseBoard,baseHist);
 
@@ -444,17 +514,22 @@ int MainCmds::demoplay(const vector<string>& args) {
 
     double callbackPeriod = 0.05;
 
-    std::function<void(const Search*)> callback = [&baseHist,&recentWinLossValues,&recentScores,&recentScoreStdevs](const Search* search) {
+    std::function callback = [&baseHist,&recentWinLossValues,&recentScores,&recentScoreStdevs](const Search* search) {
       writeLine(search,baseHist,recentWinLossValues,recentScores,recentScoreStdevs);
     };
 
+    std::function emptyCallback = [](const Search*) {};
+
     //Move loop
     int maxMovesPerGame = 1600;
-    for(int i = 0; i<maxMovesPerGame; i++) {
+    for(int i = 0; i < maxMovesPerGame; i++) {
       if (baseHist.endGameIfReasonable(baseBoard, true, pla))
         break;
 
-      callback(bot->getSearch());
+      // Skip the initial board/field because it was already printed during initialization
+      if (i > 0 && i % printGameEvery == 0) {
+        callback(bot->getSearch());
+      }
 
       double searchFactor =
         //Speed up when either player is winning confidently, not just the winner only
@@ -462,7 +537,9 @@ int MainCmds::demoplay(const vector<string>& args) {
           PlayUtils::getSearchFactor(searchFactorWhenWinningThreshold,searchFactorWhenWinning,params,recentWinLossValues,P_BLACK),
           PlayUtils::getSearchFactor(searchFactorWhenWinningThreshold,searchFactorWhenWinning,params,recentWinLossValues,P_WHITE)
         );
-      Loc moveLoc = bot->genMoveSynchronousAnalyze(pla,tc,searchFactor,callbackPeriod,callbackPeriod,callback);
+      Loc moveLoc = bot->genMoveSynchronousAnalyze(pla,tc,searchFactor,callbackPeriod,callbackPeriod,
+        isDots ? emptyCallback : callback
+      );
 
       bool isLegal = bot->isLegalStrict(moveLoc,pla);
       if(moveLoc == Board::NULL_LOC || !isLegal) {
@@ -509,28 +586,23 @@ int MainCmds::demoplay(const vector<string>& args) {
           resigned = true;
       }
 
-      if(resigned) {
-        baseHist.setWinnerByResignation(getOpp(pla));
+      Loc finalLoc = resigned ? Board::RESIGN_LOC : moveLoc;
+
+      //And make the move on our copy of the board
+      assert(baseHist.isLegal(baseBoard, finalLoc, pla));
+      baseHist.makeBoardMoveAssumeLegal(baseBoard, finalLoc,pla, nullptr);
+
+      //If the game is over (because of resignation or other reason), skip making the move on the bot, to preserve
+      //the last known value of the search tree for display purposes
+      //Just immediately terminate the game loop
+      if (baseHist.isGameFinished)
         break;
-      }
-      else {
-        //And make the move on our copy of the board
-        assert(baseHist.isLegal(baseBoard,moveLoc,pla));
-        baseHist.makeBoardMoveAssumeLegal(baseBoard,moveLoc,pla,NULL);
 
-        //If the game is over, skip making the move on the bot, to preserve
-        //the last known value of the search tree for display purposes
-        //Just immediately terminate the game loop
-        if(baseHist.isGameFinished)
-          break;
+      bool suc = bot->makeMove(finalLoc,pla);
+      assert(suc);
+      (void)suc; //Avoid warning when asserts are off
 
-        bool suc = bot->makeMove(moveLoc,pla);
-        assert(suc);
-        (void)suc; //Avoid warning when asserts are off
-
-        pla = getOpp(pla);
-      }
-
+      pla = getOpp(pla);
     }
 
     //End of game display line
