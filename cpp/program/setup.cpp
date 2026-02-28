@@ -613,7 +613,7 @@ Rules Setup::loadSingleRules(ConfigParser& cfg, const bool loadKomi) {
   if(string rulesStr; cfg.tryGetString("rules", rulesStr)) {
     if(cfg.contains(START_POS_KEY)) throw StringError("Cannot both specify 'rules' and individual rules like " + START_POS_KEY);
     if(cfg.contains(START_POS_RANDOM_KEY)) throw StringError("Cannot both specify 'rules' and individual rules like " + START_POS_RANDOM_KEY);
-    if(cfg.contains("multiStoneSuicideLegal")) throw StringError("Cannot both specify 'rules' and individual rules like multiStoneSuicideLegal");
+    if(cfg.contains("multiStoneSuicideLegal") || cfg.contains(SUICIDE_LEGAL_KEY)) throw StringError("Cannot both specify 'rules' and individual rules like multiStoneSuicideLegal or " + SUICIDE_LEGAL_KEY);
 
     if (dotsGame) {
       if (cfg.contains(DOTS_CAPTURE_EMPTY_BASE_KEY)) throw StringError("Cannot both specify 'rules' and individual rules like " + DOTS_CAPTURE_EMPTY_BASE_KEY);
@@ -634,7 +634,9 @@ Rules Setup::loadSingleRules(ConfigParser& cfg, const bool loadKomi) {
       rules.startPos = Rules::parseStartPos(startPosStr);
     }
     rules.startPosIsRandom = cfg.getOrDefaultBool(START_POS_RANDOM_KEY, rules.startPosIsRandom);
-    rules.multiStoneSuicideLegal = cfg.getOrDefaultBool("multiStoneSuicideLegal", rules.multiStoneSuicideLegal);
+    if (!cfg.tryGetBool("multiStoneSuicideLegal", rules.multiStoneSuicideLegal)) {
+      cfg.tryGetBool(SUICIDE_LEGAL_KEY, rules.multiStoneSuicideLegal);
+    }
 
     if (dotsGame) {
       rules.dotsCaptureEmptyBases = cfg.getOrDefaultBool(DOTS_CAPTURE_EMPTY_BASE_KEY, rules.dotsCaptureEmptyBases);
