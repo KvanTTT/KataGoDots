@@ -19,17 +19,9 @@
 #include <chrono>
 #include <csignal>
 
-using namespace std;
+#include "../program/signals.h"
 
-static std::atomic<bool> sigReceived(false);
-static std::atomic<bool> shouldStop(false);
-static void signalHandler(int signal)
-{
-  if(signal == SIGINT || signal == SIGTERM) {
-    sigReceived.store(true);
-    shouldStop.store(true);
-  }
-}
+using namespace std;
 
 static void handleStartAnnotations(Sgf& rootSgf) {
   std::function<bool(Sgf&)> hasStartNode = [&hasStartNode](Sgf& sgf) {
@@ -787,14 +779,14 @@ static bool maybeGetValuesAfterMove(
     newSearchParams.maxVisits = 1 + (int64_t)(oldSearchParams.maxVisits * quickSearchFactor);
     newSearchParams.maxPlayouts = 1 + (int64_t)(oldSearchParams.maxPlayouts * quickSearchFactor);
     search->setParamsNoClearing(newSearchParams);
-    search->runWholeSearch(newNextPla,shouldStop);
+    search->runWholeSearch(newNextPla,Signals::shouldStop);
     search->setParamsNoClearing(oldSearchParams);
   }
   else {
-    search->runWholeSearch(newNextPla,shouldStop);
+    search->runWholeSearch(newNextPla,Signals::shouldStop);
   }
 
-  if(shouldStop.load(std::memory_order_acquire))
+  if(Signals::shouldStop.load(std::memory_order_acquire))
     return false;
   values = search->getRootValuesRequireSuccess();
   return true;
@@ -1064,10 +1056,10 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
   logger.write("Loaded " + Global::uint64ToString(excludeHashes.size()) + " excludes");
 
 
-  if(!std::atomic_is_lock_free(&shouldStop))
+  if(!std::atomic_is_lock_free(&Signals::shouldStop))
     throw StringError("shouldStop is not lock free, signal-quitting mechanism for terminating matches will NOT work!");
-  std::signal(SIGINT, signalHandler);
-  std::signal(SIGTERM, signalHandler);
+  std::signal(SIGINT, Signals::signalHandler);
+  std::signal(SIGTERM, Signals::signalHandler);
 
   // ---------------------------------------------------------------------------------------------------
   PosWriter posWriter("hintposes.txt", outDir, sgfSplitCount, sgfSplitIdx, maxPosesPerOutFile);
@@ -1111,7 +1103,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
     Player nextPla, const Board& board, const BoardHistory& hist,
     const Sgf::PositionSample& sample, bool markedAsHintPos, bool markedAsHintPosLight
   ) {
-    if(shouldStop.load(std::memory_order_acquire))
+    if(Signals::shouldStop.load(std::memory_order_acquire))
       return 0.0;
 
     if(std::fabs(hist.rules.komi) > maxAutoKomi) {
@@ -1481,7 +1473,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
 
     if(winLossValues.size() <= 0)
       return;
-    if(shouldStop.load(std::memory_order_acquire))
+    if(Signals::shouldStop.load(std::memory_order_acquire))
       return;
 
     vector<double> futureValue(winLossValues.size()+1);
@@ -1508,7 +1500,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
     std::map<int,double> startPosesBeforeHintsWeights;
     for(int m = 0; m<moves.size(); m++) {
 
-      if(shouldStop.load(std::memory_order_acquire))
+      if(Signals::shouldStop.load(std::memory_order_acquire))
         break;
 
       if((nextPlas[m] == P_BLACK && !blackOkay) || (nextPlas[m] == P_WHITE && !whiteOkay))
@@ -1594,7 +1586,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
     Search* search = new Search(params,nnEval,&logger,searchRandSeed);
 
     while(true) {
-      if(shouldStop.load(std::memory_order_acquire))
+      if(Signals::shouldStop.load(std::memory_order_acquire))
         break;
 
       std::unique_ptr<Sgf> sgfRaw;
@@ -1632,7 +1624,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
   auto treePosHandler = [&gameInit,&nnEval,&expensiveEvaluateMove,&autoKomi,&maxPolicy,&flipIfPassOrWFirst,&surpriseMode,trainingWeight](
     Search* search, Rand& rand, const BoardHistory& treeHist, bool markedAsHintPos, bool markedAsHintPosLight
   ) {
-    if(shouldStop.load(std::memory_order_acquire))
+    if(Signals::shouldStop.load(std::memory_order_acquire))
       return;
     if(treeHist.moveHistory.size() > 0x3FFFFFFF)
       throw StringError("Too many moves in history");
@@ -1761,7 +1753,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
     Search* search = new Search(params,nnEval,&logger,searchRandSeed);
 
     while(true) {
-      if(shouldStop.load(std::memory_order_acquire))
+      if(Signals::shouldStop.load(std::memory_order_acquire))
         break;
 
       PosQueueEntry p;
@@ -2522,10 +2514,10 @@ int MainCmds::genposesfromselfplayinit(const vector<string>& args) {
     delete gameRunner;
   }
 
-  if(!std::atomic_is_lock_free(&shouldStop))
+  if(!std::atomic_is_lock_free(&Signals::shouldStop))
     throw StringError("shouldStop is not lock free, signal-quitting mechanism for terminating matches will NOT work!");
-  std::signal(SIGINT, signalHandler);
-  std::signal(SIGTERM, signalHandler);
+  std::signal(SIGINT, Signals::signalHandler);
+  std::signal(SIGTERM, Signals::signalHandler);
 
   // ---------------------------------------------------------------------------------------------------
   const int sgfSplitIdx = 0;
@@ -2544,12 +2536,12 @@ int MainCmds::genposesfromselfplayinit(const vector<string>& args) {
 
     GameRunner* gameRunner = new GameRunner(cfg, Global::uint64ToString(rand.nextUInt64()), playSettings, logger);
     auto shouldStopFunc = []() noexcept {
-      return shouldStop.load();
+      return Signals::shouldStop.load();
     };
     WaitableFlag* shouldPause = nullptr;
 
     while(true) {
-      if(shouldStop.load(std::memory_order_acquire))
+      if(Signals::shouldStop.load(std::memory_order_acquire))
         break;
       int64_t posIdx = nextPosIdx.fetch_add(1, std::memory_order_acq_rel);
       if(posIdx >= numPosesToWrite)

@@ -285,6 +285,7 @@ add_executable(katago
   search/patternbonustable.cpp
   search/analysisdata.cpp
   search/reportedsearchvalues.cpp
+  program/signals.cpp
   program/gtpconfig.cpp
   program/setup.cpp
   program/playutils.cpp

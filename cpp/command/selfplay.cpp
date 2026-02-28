@@ -18,20 +18,9 @@
 #include <chrono>
 #include <csignal>
 
+#include "../program/signals.h"
+
 using namespace std;
-
-static std::atomic<bool> sigReceived(false);
-static std::atomic<bool> shouldStop(false);
-static void signalHandler(int signal)
-{
-  if(signal == SIGINT || signal == SIGTERM) {
-    sigReceived.store(true);
-    shouldStop.store(true);
-  }
-}
-
-//-----------------------------------------------------------------------------------------
-
 
 int MainCmds::selfplay(const vector<string>& args) {
   Board::initHash();
@@ -134,10 +123,10 @@ int MainCmds::selfplay(const vector<string>& args) {
   if(!logger.isLoggingToStdout())
     cout << "Loaded all config stuff, starting self play" << endl;
 
-  if(!std::atomic_is_lock_free(&shouldStop))
+  if(!std::atomic_is_lock_free(&Signals::shouldStop))
     throw StringError("shouldStop is not lock free, signal-quitting mechanism for terminating matches will NOT work!");
-  std::signal(SIGINT, signalHandler);
-  std::signal(SIGTERM, signalHandler);
+  std::signal(SIGINT, Signals::signalHandler);
+  std::signal(SIGTERM, Signals::signalHandler);
 
 
   //Returns true if a new net was loaded.
@@ -257,14 +246,14 @@ int MainCmds::selfplay(const vector<string>& args) {
     &timeStampSeed
   ](int threadIdx) {
     auto shouldStopFunc = []() noexcept {
-      return shouldStop.load();
+      return Signals::shouldStop.load();
     };
     WaitableFlag* shouldPause = nullptr;
 
     string prevModelName;
     Rand thisLoopSeedRand;
     while(true) {
-      if(shouldStop.load())
+      if(Signals::shouldStop.load())
         break;
       NNEvaluator* nnEval = manager->acquireLatest();
       assert(nnEval != NULL);
@@ -339,18 +328,18 @@ int MainCmds::selfplay(const vector<string>& args) {
     logger.write("Model loading loop thread starting");
 
     while(true) {
-      if(shouldStop.load())
+      if(Signals::shouldStop.load())
         break;
       string lastNetName = manager->getLatestModelName();
       bool success = loadLatestNeuralNetIntoManager(&lastNetName);
       (void)success;
 
-      if(shouldStop.load())
+      if(Signals::shouldStop.load())
         break;
 
       //Sleep for a while and then re-poll
       std::unique_lock<std::mutex> lock(modelLoadMutex);
-      modelLoadSleepVar.wait_for(lock, std::chrono::seconds(20), [](){return shouldStop.load();});
+      modelLoadSleepVar.wait_for(lock, std::chrono::seconds(20), [](){return Signals::shouldStop.load();});
     }
 
     logger.write("Model loading loop thread terminating");
@@ -370,7 +359,7 @@ int MainCmds::selfplay(const vector<string>& args) {
     threads[i].join();
 
   //If by now somehow shouldStop is not true, set it to be true since all game threads are toast
-  shouldStop.store(true);
+  Signals::shouldStop.store(true);
 
   //Wake up the model loading thread rather than waiting for it to wake up on its own, and
   //wait for it to die.
@@ -392,7 +381,7 @@ int MainCmds::selfplay(const vector<string>& args) {
   delete timeStampHandler;
   ScoreValue::freeTables();
 
-  if(sigReceived.load())
+  if(Signals::sigReceived.load())
     logger.write("Exited cleanly after signal");
   logger.write("All cleaned up, quitting");
   return 0;

@@ -21,17 +21,9 @@
 #include <chrono>
 #include <csignal>
 
-using namespace std;
+#include "../program/signals.h"
 
-static std::atomic<bool> sigReceived(false);
-static std::atomic<bool> shouldStop(false);
-static void signalHandler(int signal)
-{
-  if(signal == SIGINT || signal == SIGTERM) {
-    sigReceived.store(true);
-    shouldStop.store(true);
-  }
-}
+using namespace std;
 
 //-----------------------------------------------------------------------------------------
 
@@ -346,10 +338,10 @@ int MainCmds::gatekeeper(const vector<string>& args) {
   if(!logger.isLoggingToStdout())
     cout << "Loaded all config stuff, watching for new neural nets in " + testModelsDir << endl;
 
-  if(!std::atomic_is_lock_free(&shouldStop))
+  if(!std::atomic_is_lock_free(&Signals::shouldStop))
     throw StringError("shouldStop is not lock free, signal-quitting mechanism for terminating matches will NOT work!");
-  std::signal(SIGINT, signalHandler);
-  std::signal(SIGTERM, signalHandler);
+  std::signal(SIGINT, Signals::signalHandler);
+  std::signal(SIGTERM, Signals::signalHandler);
 
   std::mutex netAndStuffMutex;
   NetAndStuff* netAndStuff = NULL;
@@ -473,7 +465,7 @@ int MainCmds::gatekeeper(const vector<string>& args) {
     logger.write("Game loop thread " + Global::intToString(threadIdx) + " starting game testing candidate: " + netAndStuff->modelNameCandidate);
 
     auto shouldStopFunc = [&netAndStuff]() noexcept {
-      return shouldStop.load() || netAndStuff->terminated.load();
+      return Signals::shouldStop.load() || netAndStuff->terminated.load();
     };
     WaitableFlag* shouldPause = nullptr;
 
@@ -517,7 +509,7 @@ int MainCmds::gatekeeper(const vector<string>& args) {
 
   //Looping polling for new neural nets and loading them in
   while(true) {
-    if(shouldStop.load())
+    if(Signals::shouldStop.load())
       break;
 
     assert(netAndStuff == NULL);
@@ -525,12 +517,12 @@ int MainCmds::gatekeeper(const vector<string>& args) {
 
     if(netAndStuff == NULL) {
       if(quitIfNoNetsToTest) {
-        shouldStop.store(true);
+        Signals::shouldStop.store(true);
       }
       else {
         for(int i = 0; i<4; i++) {
           std::this_thread::sleep_for(std::chrono::seconds(1));
-          if(shouldStop.load())
+          if(Signals::shouldStop.load())
             break;
         }
       }
@@ -538,7 +530,7 @@ int MainCmds::gatekeeper(const vector<string>& args) {
     }
 
     //Check again if we should be stopping, after loading the new net, and quit more quickly.
-    if(shouldStop.load()) {
+    if(Signals::shouldStop.load()) {
       delete netAndStuff;
       netAndStuff = NULL;
       break;
@@ -572,7 +564,7 @@ int MainCmds::gatekeeper(const vector<string>& args) {
     }
 
     //Don't do anything if the reason we quit was due to signal
-    if(shouldStop.load()) {
+    if(Signals::shouldStop.load()) {
       delete netAndStuff;
       netAndStuff = NULL;
       break;
@@ -645,7 +637,7 @@ int MainCmds::gatekeeper(const vector<string>& args) {
   delete timeStampHandler;
   ScoreValue::freeTables();
 
-  if(sigReceived.load())
+  if(Signals::sigReceived.load())
     logger.write("Exited cleanly after signal");
   logger.write("All cleaned up, quitting");
   return 0;

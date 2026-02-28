@@ -56,22 +56,22 @@ int MainCmds::contribute(const std::vector<std::string>& args) {
 #include "../neuralnet/opencltuner.h"
 #endif
 
+#include "../program/signals.h"
+
 using json = nlohmann::json;
 using namespace std;
 
-static std::atomic<bool> sigReceived(false);
 static std::atomic<bool> shouldStopGracefully(false);
-static std::atomic<bool> shouldStop(false);
 static void signalHandler(int signal)
 {
   if(signal == SIGINT || signal == SIGTERM) {
-    sigReceived.store(true);
+    Signals::sigReceived.store(true);
     //First signal, stop gracefully
     if(!shouldStopGracefully.load())
       shouldStopGracefully.store(true);
     //Second signal, stop more quickly
     else
-      shouldStop.store(true);
+      Signals::shouldStop.store(true);
   }
 }
 static std::atomic<bool> shouldStopGracefullyPrinted(false);
@@ -671,13 +671,13 @@ int MainCmds::contribute(const vector<string>& args) {
   WaitableFlag* shouldPause = new WaitableFlag();
 
   //Set up signal handlers
-  if(!std::atomic_is_lock_free(&shouldStop))
+  if(!std::atomic_is_lock_free(&Signals::shouldStop))
     throw StringError("shouldStop is not lock free, signal-quitting mechanism for terminating matches will NOT work!");
   std::signal(SIGINT, signalHandler);
   std::signal(SIGTERM, signalHandler);
 
   auto shouldStopFunc = [&logger,&shouldPause]() {
-    if(shouldStop.load()) {
+    if(Signals::shouldStop.load()) {
       if(!shouldStopPrinted.exchange(true)) {
         //At the point where we just want to stop ASAP, we never want to pause again.
         shouldPause->setPermanently(false);
@@ -955,7 +955,7 @@ int MainCmds::contribute(const vector<string>& args) {
 
       if(!fp32BatchSuccessBuf) {
         logger.write("Error: large GPU numerical errors, unable to continue");
-        shouldStop.store(true);
+        Signals::shouldStop.store(true);
         shouldStopGracefully.store(true);
         shouldPause->setPermanently(false);
         if(nnEval32 != nnEval)
@@ -1293,7 +1293,7 @@ int MainCmds::contribute(const vector<string>& args) {
     while(true) {
       {
         std::lock_guard<std::mutex> lock(controlMutex);
-        if(shouldStop.load())
+        if(Signals::shouldStop.load())
           break;
         if(shouldStopGracefully.load()) {
           if(shouldPause->get()) {
@@ -1333,19 +1333,19 @@ int MainCmds::contribute(const vector<string>& args) {
       getline(cin,line);
       if(!cin) {
         std::lock_guard<std::mutex> lock(controlMutex);
-        if(shouldStop.load())
+        if(Signals::shouldStop.load())
           break;
         logger.write("Stdin closed, no longer listening for commands...");
         break;
       }
 
-      if(shouldStop.load())
+      if(Signals::shouldStop.load())
         break;
       line = CommandLoop::processSingleCommandLine(line);
       string lowerline = Global::toLower(line);
 
       std::lock_guard<std::mutex> lock(controlMutex);
-      if(shouldStop.load())
+      if(Signals::shouldStop.load())
         break;
 
       if(lowerline == "pause") {
@@ -1368,7 +1368,7 @@ int MainCmds::contribute(const vector<string>& args) {
         shouldStopGracefully.store(true);
       }
       else if(lowerline == "forcequit" || lowerline == "force_quit") {
-        shouldStop.store(true);
+        Signals::shouldStop.store(true);
         shouldStopGracefully.store(true);
         shouldPause->setPermanently(false);
       }
@@ -1427,7 +1427,7 @@ int MainCmds::contribute(const vector<string>& args) {
   //By the time we exit the block, the control loop will no longer be touching any resources, and can only wait on cin or exit.
   {
     std::lock_guard<std::mutex> lock(controlMutex);
-    shouldStop.store(true);
+    Signals::shouldStop.store(true);
   }
   //This should make sure stuff stops pausing
   shouldPause->setPermanently(false);
@@ -1449,7 +1449,7 @@ int MainCmds::contribute(const vector<string>& args) {
 
   delete shouldPause;
 
-  if(sigReceived.load())
+  if(Signals::sigReceived.load())
     logger.write("Exited cleanly after signal");
   logger.write("All cleaned up, quitting");
   return 0;
