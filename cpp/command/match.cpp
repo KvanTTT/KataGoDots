@@ -12,18 +12,9 @@
 
 #include <csignal>
 
+#include "../program/signals.h"
+
 using namespace std;
-
-
-static std::atomic sigReceived(false);
-static std::atomic shouldStop(false);
-static void signalHandler(const int signal)
-{
-  if(signal == SIGINT || signal == SIGTERM) {
-    sigReceived.store(true);
-    shouldStop.store(true);
-  }
-}
 
 int MainCmds::match(const vector<string>& args) {
   Board::initHash();
@@ -237,10 +228,10 @@ int MainCmds::match(const vector<string>& args) {
   if(!sgfOutputDir.empty())
     MakeDir::make(sgfOutputDir);
 
-  if(!std::atomic_is_lock_free(&shouldStop))
+  if(!std::atomic_is_lock_free(&Signals::shouldStop))
     throw StringError("shouldStop is not lock free, signal-quitting mechanism for terminating matches will NOT work!");
-  std::signal(SIGINT, signalHandler);
-  std::signal(SIGTERM, signalHandler);
+  std::signal(SIGINT, Signals::signalHandler);
+  std::signal(SIGTERM, Signals::signalHandler);
 
 
   std::mutex statsMutex;
@@ -262,12 +253,12 @@ int MainCmds::match(const vector<string>& args) {
       delete timeStampHandler;
     }
     auto shouldStopFunc = []() noexcept {
-      return shouldStop.load();
+      return Signals::shouldStop.load();
     };
 
     Rand thisLoopSeedRand;
     while(true) {
-      if(shouldStop.load())
+      if(Signals::shouldStop.load())
         break;
 
       FinishedGameData* gameData = nullptr;
@@ -318,7 +309,7 @@ int MainCmds::match(const vector<string>& args) {
         delete gameData;
       }
 
-      if(shouldStop.load())
+      if(Signals::shouldStop.load())
         break;
       if(!shouldContinue)
         break;
@@ -359,7 +350,7 @@ int MainCmds::match(const vector<string>& args) {
   NeuralNet::globalCleanup();
   ScoreValue::freeTables();
 
-  if(sigReceived.load())
+  if(Signals::sigReceived.load())
     logger.write("Exited cleanly after signal");
   logger.write("All cleaned up, quitting");
   return 0;

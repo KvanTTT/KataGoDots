@@ -8,9 +8,11 @@
 #include "../program/play.h"
 #include "../program/playutils.h"
 #include "../program/setup.h"
+#include "../program/signals.h"
 #include "../search/asyncbot.h"
 
 #include <chrono>
+#include <csignal>
 
 using namespace std;
 
@@ -498,10 +500,14 @@ int MainCmds::demoplay(const vector<string>& args) {
 
   int gameNumber = 0;
 
+  std::signal(SIGINT, Signals::signalHandler);
+  std::signal(SIGTERM, Signals::signalHandler);
+
   //Game loop
   while (gameNumber++ < numGamesTotal) {
     TimeControls tc;
 
+    cout << "Initialize the new game #" << (gameNumber - 1) << " ..." << endl;
     BoardHistory baseHist = initializeDemoGame(isDots, gameRand, bot);
     Player pla = baseHist.presumedNextMovePla;
     Board baseBoard = baseHist.getRecentBoard(0);
@@ -603,12 +609,23 @@ int MainCmds::demoplay(const vector<string>& args) {
       (void)suc; //Avoid warning when asserts are off
 
       pla = getOpp(pla);
+
+      if (Signals::shouldStop.load()) {
+        break;
+      }
     }
 
-    //End of game display line
-    writeLine(bot->getSearch(),baseHist,recentWinLossValues,recentScores,recentScoreStdevs);
-    //Wait a bit before diving into the next game
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    if (Signals::shouldStop.load()) {
+      // User interrupts the game, start the new game without awaiting
+      cout << "Received stop signal, terminating the current game #" << gameNumber - 1 << endl << endl;
+      Signals::shouldStop.store(false);
+      Signals::sigReceived.store(false);
+    } else {
+      //End of game display line
+      writeLine(bot->getSearch(),baseHist,recentWinLossValues,recentScores,recentScoreStdevs);
+      //Wait a bit before diving into the next game
+      std::this_thread::sleep_for(std::chrono::seconds(10));
+    }
 
     bot->clearSearch();
   }

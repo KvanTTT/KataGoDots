@@ -20,19 +20,11 @@
 #include <chrono>
 #include <csignal>
 
+#include "../program/signals.h"
+
 //------------------------
 #include "../core/using.h"
 //------------------------
-
-static std::atomic<bool> sigReceived(false);
-static std::atomic<bool> shouldStop(false);
-static void signalHandler(int signal)
-{
-  if(signal == SIGINT || signal == SIGTERM) {
-    sigReceived.store(true);
-    shouldStop.store(true);
-  }
-}
 
 static double getMaxPolicy(float policyProbs[NNPos::MAX_NN_POLICY_SIZE]) {
   double maxPolicy = 0.0;
@@ -542,10 +534,10 @@ int MainCmds::genbook(const vector<string>& args) {
   book->setBranchRequiredByHash(branchRequiredByHash);
   book->recomputeEverythingMultiThreaded(mutexPool, numBookThreads);
 
-  if(!std::atomic_is_lock_free(&shouldStop))
+  if(!std::atomic_is_lock_free(&Signals::shouldStop))
     throw StringError("shouldStop is not lock free, signal-quitting mechanism for terminating matches will NOT work!");
-  std::signal(SIGINT, signalHandler);
-  std::signal(SIGTERM, signalHandler);
+  std::signal(SIGINT, Signals::signalHandler);
+  std::signal(SIGTERM, Signals::signalHandler);
 
   const PrintTreeOptions options;
   const Player perspective = P_WHITE;
@@ -1165,7 +1157,7 @@ int MainCmds::genbook(const vector<string>& args) {
     search->runWholeSearch(search->rootPla);
 
 
-    if(shouldStop.load(std::memory_order_acquire))
+    if(Signals::shouldStop.load(std::memory_order_acquire))
       return;
 
     if(logSearchInfo) {
@@ -1252,7 +1244,7 @@ int MainCmds::genbook(const vector<string>& args) {
       std::atomic<int64_t> variationsAdded(0);
       auto loopAddingVariations = [&](int gameThreadIdx) {
         while(true) {
-          if(shouldStop.load(std::memory_order_acquire))
+          if(Signals::shouldStop.load(std::memory_order_acquire))
             return;
           SymBookNode node;
           bool suc = positionsToTrace.tryPop(node);
@@ -1322,7 +1314,7 @@ int MainCmds::genbook(const vector<string>& args) {
       std::atomic<int64_t> hashesUpdated(0);
       auto loopUpdatingHashes = [&](int gameThreadIdx) {
         while(true) {
-          if(shouldStop.load(std::memory_order_acquire))
+          if(Signals::shouldStop.load(std::memory_order_acquire))
             return;
           BookHash hash;
           bool suc = hashesToUpdate.tryPop(hash);
@@ -1362,7 +1354,7 @@ int MainCmds::genbook(const vector<string>& args) {
       );
     }
 
-    if(shouldStop.load(std::memory_order_acquire)) {
+    if(Signals::shouldStop.load(std::memory_order_acquire)) {
       logger.write("Trace book incomplete, exiting without saving");
       throw StringError("Trace book incomplete, exiting without saving");
     }
@@ -1374,7 +1366,7 @@ int MainCmds::genbook(const vector<string>& args) {
     ThreadSafeQueue<SymBookNode> positionsToSearch;
 
     for(int iteration = 0; iteration < numIterations; iteration++) {
-      if(shouldStop.load(std::memory_order_acquire))
+      if(Signals::shouldStop.load(std::memory_order_acquire))
         break;
 
       if(iteration % saveEveryIterations == 0 && iteration != 0) {
@@ -1417,7 +1409,7 @@ int MainCmds::genbook(const vector<string>& args) {
 
       auto loopExpandingNodes = [&](int gameThreadIdx) {
         while(true) {
-          if(shouldStop.load(std::memory_order_acquire))
+          if(Signals::shouldStop.load(std::memory_order_acquire))
             return;
           SymBookNode node;
           bool suc = positionsToSearch.tryPop(node);
@@ -1436,7 +1428,7 @@ int MainCmds::genbook(const vector<string>& args) {
       }
 
       book->recomputeMultiThreaded(newAndChangedNodes, mutexPool, numBookThreads);
-      if(shouldStop.load(std::memory_order_acquire))
+      if(Signals::shouldStop.load(std::memory_order_acquire))
         break;
     }
   }
