@@ -112,11 +112,11 @@ mv "$BASEDIR"/shuffleddata/"$OUTDIR".tmp "$BASEDIR"/shuffleddata/"$OUTDIR"
 
 # CLEANUP ---------------------------------------------------------------
 
-#Among shuffled dirs older than 2 hours, remove all but the most recent 5 of them.
+#Among shuffled dirs older than 2 hours, remove all but the most recent 2 of them.
 #This should be VERY conservative and allow plenty of time for the training to switch
 #to newer ones as they get generated.
 echo "Cleaning up any old dirs"
-find "$BASEDIR"/shuffleddata/ -mindepth 1 -maxdepth 1 -type d -mmin +120 -print0 | sort -z | head -z -n -5 | xargs -0 --no-run-if-empty rm -r
+$PYTHON -W ignore "$(dirname "$0")/cleanup_old_dirs.py" "$BASEDIR/shuffleddata/"
 
 echo "Finished shuffle at" $(date "+%Y-%m-%d %H:%M:%S")
 #Make a little space between shuffles

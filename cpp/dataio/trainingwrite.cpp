@@ -734,7 +734,7 @@ void TrainingWriteBuffers::addRow(
     if(upperIdx <= 0)
       rowScoreDistr[0] = 100;
     else if(lowerIdx >= scoreDistrLen-1)
-      rowScoreDistr[scoreDistrLen] = 100;
+      rowScoreDistr[scoreDistrLen-1] = 100;
     else {
       float lambda = score - (centerScore-0.5f);
       int upperProp = (int)round(lambda*100.0f);

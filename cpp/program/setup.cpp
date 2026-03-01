@@ -442,7 +442,7 @@ vector<SearchParams> Setup::loadParams(
     params.cpuctExploration = getValueForBot<double>(cfg, "cpuctExploration", idxStr, 0.0, 10.0, 1.0);
     params.cpuctExplorationLog = getValueForBot<double>(cfg, "cpuctExplorationLog", idxStr, 0.0, 10.0, 0.45);
     params.cpuctExplorationBase = getValueForBot<double>(cfg, "cpuctExplorationBase", idxStr, 10.0, 100000.0, 500.0);
-    params.cpuctUtilityStdevPrior = getValueForBot<double>(cfg, "cpuctUtilityStdevPrior", idxStr, 0.0, 10.0, 0.40);
+    params.cpuctUtilityStdevPrior = getValueForBot<double>(cfg, "cpuctUtilityStdevPrior", idxStr, 1e-8, 10.0, 0.40);
     params.cpuctUtilityStdevPriorWeight = getValueForBot<double>(cfg, "cpuctUtilityStdevPriorWeight", idxStr, 0.0, 100.0, 2.0);
     params.cpuctUtilityStdevScale = getValueForBot<double>(cfg, "cpuctUtilityStdevScale", idxStr, 0.0, 1.0, setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER ? 0.85 : 0.0);
     params.fpuReductionMax = getValueForBot<double>(cfg, "fpuReductionMax", idxStr, 0.0, 2.0, 0.2);
