@@ -199,7 +199,7 @@ void Board::initHash()
   auto nextHash = [&rand]{
     const uint64_t h0 = rand.nextUInt64();
     const uint64_t h1 = rand.nextUInt64();
-    return Hash128(h0,h1);
+    return Hash128(h0, h1);
   };
 
   for(auto &item : ZOBRIST_PLAYER_HASH)
@@ -208,20 +208,20 @@ void Board::initHash()
     item = nextHash();
 
   //Do this second so that the player and encore hashes are not
-  //afffected by the size of the board we compile with.
+  //affected by the size of the board we compile with.
   for(int i = 0; i < MAX_ARR_SIZE; i++) {
-    auto &boardHashSecondArray = ZOBRIST_BOARD_HASH[i];
-    auto &koMarkHashSecondArray = ZOBRIST_KO_MARK_HASH[i];
+    auto &boardHashSecondArray = ZOBRIST_BOARD_HASH.at(i);
+    auto &koMarkHashSecondArray = ZOBRIST_KO_MARK_HASH.at(i);
     for(Color j = 0; j < 4; j++) {
       if (j == C_EMPTY || j == C_WALL) {
-        boardHashSecondArray[j] = Hash128();
-        koMarkHashSecondArray[j] = Hash128();
+        boardHashSecondArray.at(j) = Hash128();
+        koMarkHashSecondArray.at(j) = Hash128();
       } else {
-        boardHashSecondArray[j] = nextHash();
-        koMarkHashSecondArray[j] = nextHash();
+        boardHashSecondArray.at(j) = nextHash();
+        koMarkHashSecondArray.at(j) = nextHash();
       }
     }
-    ZOBRIST_KO_LOC_HASH[i] = nextHash();
+    ZOBRIST_KO_LOC_HASH.at(i) = nextHash();
   }
 
   //Reseed the random number generator so that these hashes are also
@@ -229,36 +229,50 @@ void Board::initHash()
   rand.init("Board::initHash() for ZOBRIST_SECOND_ENCORE_START hashes");
   for (auto &secondArray : ZOBRIST_SECOND_ENCORE_START_HASH) {
     for(Color j = 0; j < 4; j++) {
-      secondArray[j] = j == C_EMPTY || j == C_WALL ? Hash128() : nextHash();
+      secondArray.at(j) = j == C_EMPTY || j == C_WALL ? Hash128() : nextHash();
     }
   }
 
   //Reseed the random number generator so that these size hashes are also
   //not affected by the size of the board we compile with
+  int sizeXCount = 0;
+  int sizeYCount = 0;
   rand.init("Board::initHash() for ZOBRIST_SIZE hashes");
   for(int i = 0; i < MAX_LEN + 1; i++) {
-    if (i <= MAX_LEN_X)
-      ZOBRIST_SIZE_X_HASH[i] = nextHash();
-    if (i <= MAX_LEN_Y)
-      ZOBRIST_SIZE_Y_HASH[i] = nextHash();
+    // Always generate the nextHash to make it consistent with different rectangular sizes
+    const Hash128 xHash = nextHash();
+    const Hash128 yHash = nextHash();
+    if (i <= MAX_LEN_X) {
+      ZOBRIST_SIZE_X_HASH.at(i) = xHash;
+      sizeXCount++;
+    }
+    if (i <= MAX_LEN_Y) {
+      ZOBRIST_SIZE_Y_HASH.at(i) = yHash;
+      sizeYCount++;
+    }
   }
+  assert(ZOBRIST_SIZE_X_HASH.size() == sizeXCount);
+  assert(ZOBRIST_SIZE_Y_HASH.size() == sizeYCount);
 
   //Reseed and compute one more set of zobrist hashes, mixed a bit differently
   rand.init("Board::initHash() for second set of ZOBRIST hashes");
   for (auto &boardHash2SecondArray : ZOBRIST_BOARD_HASH2) {
     for(Color j = 0; j < 4; j++) {
-      boardHash2SecondArray[j] = nextHash();
-      boardHash2SecondArray[j].hash0 = Hash::murmurMix(boardHash2SecondArray[j].hash0);
-      boardHash2SecondArray[j].hash1 = Hash::splitMix64(boardHash2SecondArray[j].hash1);
+      Hash128 hash = nextHash();
+      hash.hash0 = Hash::murmurMix(hash.hash0);
+      hash.hash1 = Hash::splitMix64(hash.hash1);
+      boardHash2SecondArray.at(j) = hash;
     }
   }
 
   //Reseed the random number generator so that these hashes are also
   //not affected by the size of the board we compile with
-  rand.init("Board::initHash() for ZOBRIST_DOTS_CAPTURES_DIFF_HASH hashes");
-  for (auto &secondArray : ZOBRIST_DOTS_CAPTURES_DIFF_HASH) {
+  for (int i = 0; i < ZOBRIST_DOTS_CAPTURES_DIFF_HASH.size(); i++) {
+    // Reinit at each iteration to make it invariant to max size
+    rand.init("Board::initHash() for ZOBRIST_DOTS_CAPTURES_DIFF_HASH hashes " + std::to_string(i));
+    auto &secondArray = ZOBRIST_DOTS_CAPTURES_DIFF_HASH.at(i);
     for (int j = 0; j < MAX_CAPTURES_COUNT; j++) {
-      secondArray[j] = nextHash();
+      secondArray.at(j) = nextHash();
     }
   }
 

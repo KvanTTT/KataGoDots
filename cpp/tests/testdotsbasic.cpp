@@ -1181,17 +1181,22 @@ xxxxx
 
 // We need to check both playMoveRecorded and playMoveAssumeLegal because they have different implementations
 // playMoveAssumeLegal is faster but doesn't return move records.
+// The method makes the specified moves and compares resulting field hashes.
+// If field2Hash is null, then it's expected that field hashes should be equal.
 static void checkHashAfterMovesAndRollback(
   const string& description,
   const string& field1Str,
   const string& field2Str,
   const vector<XYMove>& field1Moves,
   const vector<XYMove>& field2Moves,
-  const bool hashIsEqualAfterMoves,
+  const string& field1Hash,
+  const std::optional<string>& field2Hash = std::nullopt,
   const bool captureEmptyBase1 = false,
-  const bool captureEmptyBase2 = false
-  ) {
+  const bool captureEmptyBase2 = false) {
   cout << "  " << description << endl;
+
+  const Hash128 expectedField1Hash = Hash128::ofString(field1Hash);
+  const Hash128 expectedField2Hash = field2Hash.has_value() ? Hash128::ofString(field2Hash.value()) : expectedField1Hash;
 
   Board field1 = parseDotsField(
     field1Str,
@@ -1224,9 +1229,8 @@ static void checkHashAfterMovesAndRollback(
     field2MovesRecords.push_back(field2.playMoveRecorded(Location::getLoc(move.x, move.y, field2.x_size), move.player));
   }
 
-  const auto field1HashAfterMoveRecords = field1.pos_hash;
-  const auto field2HashAfterMoveRecords = field2.pos_hash;
-  testAssert(hashIsEqualAfterMoves == (field1HashAfterMoveRecords == field2HashAfterMoveRecords));
+  testAssert(expectedField1Hash == field1.pos_hash);
+  testAssert(expectedField2Hash == field2.pos_hash);
 
   for (auto it = field1MovesRecords.rbegin(); it != field1MovesRecords.rend(); ++it) {
     field1.undo(*it);
@@ -1247,9 +1251,8 @@ static void checkHashAfterMovesAndRollback(
     field2.playMoveAssumeLegal(Location::getLoc(move.x, move.y, field2.x_size), move.player);
   }
 
-  testAssert(field1HashAfterMoveRecords == field1.pos_hash);
-  testAssert(field2HashAfterMoveRecords == field2.pos_hash);
-  testAssert(hashIsEqualAfterMoves == (field1.pos_hash == field2.pos_hash));
+  testAssert(expectedField1Hash == field1.pos_hash);
+  testAssert(expectedField2Hash == field2.pos_hash);
 }
 
 void Tests::runDotsPosHashTests() {
@@ -1269,7 +1272,8 @@ void Tests::runDotsPosHashTests() {
 )",
      {},
      {},
-     false
+     "BCD32A5AC99A98B88EEACB7AF641CDC5",
+     "249080D7F57ADF9A0F6FFEBB5B474316"
 );
 
   checkHashAfterMovesAndRollback(
@@ -1298,7 +1302,7 @@ void Tests::runDotsPosHashTests() {
      XYMove(1, 1, P_WHITE),
      XYMove(2, 1, P_WHITE),
    },
-   true
+   "FA1193BCDF50E70C7943322333AE621B"
 );
 
   checkHashAfterMovesAndRollback(
@@ -1315,7 +1319,7 @@ xox
 )",
        { XYMove(1, 1, P_WHITE)},
        { XYMove(1, 2, P_BLACK) },
-       true
+       "7DE7F3E444707E264660086265EB5042"
 );
 
   checkHashAfterMovesAndRollback(
@@ -1333,7 +1337,8 @@ xox
 )",
      {},
      {},
-     false
+     "BCD32A5AC99A98B88EEACB7AF641CDC5",
+     "53B4F243232F66C20A18ED5604260A86"
 );
 
   checkHashAfterMovesAndRollback(
@@ -1348,9 +1353,9 @@ R"(
 x.o.
 .xx.
 )",
-{ XYMove(3, 1, P_BLACK) },
-{ XYMove(3, 1, P_BLACK) },
-true
+    { XYMove(3, 1, P_BLACK) },
+    { XYMove(3, 1, P_BLACK) },
+    "44CC8AA64E2DC895C1FBBC7F739AEA0B"
 );
 
   checkHashAfterMovesAndRollback(
@@ -1365,9 +1370,10 @@ true
 .ooxx
 .xxx.
 )",
-{ XYMove(0, 1, P_BLACK) },
-{ XYMove(0, 1, P_BLACK) },
-false
+    { XYMove(0, 1, P_BLACK) },
+    { XYMove(0, 1, P_BLACK) },
+    "07C9110FFEF3C5B173E4739A22E7F13C",
+    "93A23E3C97060AD03DB91BEB9EDA18B4"
     );
 
   checkHashAfterMovesAndRollback(
@@ -1382,9 +1388,10 @@ xo....xo
 xoo..xxo
 .xx..oo.
 )",
-{ XYMove(3, 1, P_BLACK), XYMove(4, 1, P_WHITE) },
-{ XYMove(3, 1, P_BLACK), XYMove(4, 1, P_WHITE) },
-false
+    { XYMove(3, 1, P_BLACK), XYMove(4, 1, P_WHITE) },
+    { XYMove(3, 1, P_BLACK), XYMove(4, 1, P_WHITE) },
+    "7CE643C7E11D8F07B165AFEDCFC2CA2E",
+    "4633E5CD39C049EB385E20486331BBFF"
   );
 
   const string& fieldForSameShapeButDifferentCaptures = R"(
@@ -1393,12 +1400,13 @@ xo..
 .xx.
 )";
   checkHashAfterMovesAndRollback(
-"Different hashes when same shape but different captures",
-fieldForSameShapeButDifferentCaptures,
-fieldForSameShapeButDifferentCaptures,
-{ XYMove(3, 1, P_BLACK) },
-{ XYMove(2, 1, P_BLACK), XYMove(3, 1, P_BLACK) },
-false
+    "Different hashes when same shape but different captures",
+    fieldForSameShapeButDifferentCaptures,
+    fieldForSameShapeButDifferentCaptures,
+    { XYMove(3, 1, P_BLACK) },
+    { XYMove(2, 1, P_BLACK), XYMove(3, 1, P_BLACK) },
+    "44CC8AA64E2DC895C1FBBC7F739AEA0B",
+    "F6495D08CA5A956DF587BBDFF819B36F"
 );
 
   const string& fieldForSameShapeButDifferentCapturesWithFree = R"(
@@ -1409,12 +1417,13 @@ ox.o....
 ..oooo..
 )";
   checkHashAfterMovesAndRollback(
-"Different hashes when for same shape but different captures with free",
-fieldForSameShapeButDifferentCapturesWithFree,
-fieldForSameShapeButDifferentCapturesWithFree,
-{ XYMove(6, 2, P_BLACK), XYMove(7, 2, P_WHITE) },
-{ XYMove(4, 2, P_WHITE), XYMove(6, 2, P_BLACK), XYMove(7, 2, P_WHITE) },
-false
+    "Different hashes when for same shape but different captures with free",
+    fieldForSameShapeButDifferentCapturesWithFree,
+    fieldForSameShapeButDifferentCapturesWithFree,
+    { XYMove(6, 2, P_BLACK), XYMove(7, 2, P_WHITE) },
+    { XYMove(4, 2, P_WHITE), XYMove(6, 2, P_BLACK), XYMove(7, 2, P_WHITE) },
+    "2210EB52EDD61D2F1D24012F92FD65B4",
+    "0C875121F18DA2B91AABD939EED49169"
 );
 
   const auto field1WhenSurroundLocsDontAffectHash = R"(
@@ -1442,7 +1451,7 @@ x........x
     field2WhenSurroundLocsDontAffectHash,
     { XYMove(3, 4, P_BLACK), XYMove(6, 4, P_WHITE), XYMove(5, 6, P_BLACK) },
     { XYMove(3, 4, P_WHITE), XYMove(6, 4, P_BLACK), XYMove(5, 6, P_BLACK) },
-    true
+    "9FC349BC827BEBB46E86DEC810E52D43"
   );
 
   checkHashAfterMovesAndRollback(
@@ -1451,7 +1460,7 @@ x........x
     invertColors(field2WhenSurroundLocsDontAffectHash),
     { XYMove(3, 4, P_WHITE), XYMove(6, 4, P_BLACK), XYMove(5, 6, P_WHITE) },
     { XYMove(3, 4, P_BLACK), XYMove(6, 4, P_WHITE), XYMove(5, 6, P_WHITE) },
-    true
+    "3A44E523C250CF9A70B2BB5BD1F92224"
   );
 
   const string fieldWithAllGroundedDots = R"(
@@ -1461,12 +1470,12 @@ x........x
 .ox.
 )";
   checkHashAfterMovesAndRollback(
-  "Grounding with all grounded dots doesn't affect hash",
-  fieldWithAllGroundedDots,
-  fieldWithAllGroundedDots,
-{ XYMove::getGroundMove(P_BLACK) },
-{ },
-true
+    "Grounding with all grounded dots doesn't affect hash",
+    fieldWithAllGroundedDots,
+    fieldWithAllGroundedDots,
+    { XYMove::getGroundMove(P_BLACK) },
+    { },
+    "7F8BB94476F72F4D52B1C69131D4E100"
   );
 
   const string fieldWithSomeUngroundedDots = R"(
@@ -1476,12 +1485,13 @@ true
 ....
 )";
   checkHashAfterMovesAndRollback(
-  "Grounding with some ungrounded dots affects hash",
-  fieldWithSomeUngroundedDots,
-  fieldWithSomeUngroundedDots,
-{ XYMove::getGroundMove(P_BLACK) },
-{ },
-false
+    "Grounding with some ungrounded dots affects hash",
+    fieldWithSomeUngroundedDots,
+    fieldWithSomeUngroundedDots,
+    { XYMove::getGroundMove(P_BLACK) },
+    { },
+    "91F96C3887C93EBA1DC9078BEAD21118",
+    "0C4C2C369093972F94F8319761667E55"
   );
 
   const string emptyBaseField = R"(
@@ -1493,12 +1503,12 @@ o.o
     "Different hash for empty base when it's enabled and not",
     emptyBaseField,
     emptyBaseField,
-{ XYMove(1, 2, P_WHITE) },
-{ XYMove(1, 2, P_WHITE) },
-false,
-false,
-true
-    );
+    { XYMove(1, 2, P_WHITE) },
+    { XYMove(1, 2, P_WHITE) },
+    "0F0BE495C26D2C126D81E72B872858E1",
+    "AF8E361A3CEB8C1C0DB4BA26EAE5A6FF",
+    true
+  );
 
   checkHashAfterMovesAndRollback(
   "Different hash for empty base and non-empty base",
@@ -1508,11 +1518,12 @@ true
 oxo
 ...
 )",
-{ XYMove(1, 2, P_WHITE) },
-{ XYMove(1, 2, P_WHITE) },
-false,
-true,
-true
+    { XYMove(1, 2, P_WHITE) },
+    { XYMove(1, 2, P_WHITE) },
+     "0F0BE495C26D2C126D81E72B872858E1",
+     "E4689E4202FFA7A9E552C0464776E95A",
+     true,
+     true
   );
 
   checkHashAfterMovesAndRollback(
@@ -1527,8 +1538,9 @@ xxox
 xoxx
 .xx.
 )",
-{ XYMove(2, 0, P_BLACK) },
-{ XYMove(1, 0, P_BLACK) },
-false
+    { XYMove(2, 0, P_BLACK) },
+    { XYMove(1, 0, P_BLACK) },
+    "AC99B8C50626A57899A093FD91BF30A2",
+    "F6495D08CA5A956DF587BBDFF819B36F"
   );
 }

@@ -218,7 +218,7 @@ Game result 0 Empty 0 0 0 0
 Last moves
 Final board hist
 pla Player2
-HASH: 9C7C78D30B6F8E0FE69622CCD46C1B3F
+HASH: 0DA92BDDCA4F4D6C671150CA59232AE4
    1  2  3  4  5  6  7  8  9  10
  8 .  .  .  X  .  .  .  .  .  .
  7 .  .  .  X  .  .  .  x  .  .
