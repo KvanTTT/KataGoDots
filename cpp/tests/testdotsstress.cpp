@@ -168,7 +168,9 @@ static void runDotsStressTestsInternal(
   bool suicideAllowed,
   float groundingStartCoef,
   float groundingEndCoef,
-  bool performExtraChecks) {
+  bool performExtraChecks,
+  int randSeed
+  ) {
   testAssert(groundingStartCoef >= 0 && groundingStartCoef <= 1);
   testAssert(groundingEndCoef >= 0 && groundingEndCoef <= 1);
   testAssert(groundingEndCoef >= groundingStartCoef);
@@ -189,7 +191,7 @@ static void runDotsStressTestsInternal(
 
   const auto start = high_resolution_clock::now();
 
-  Rand rand("runDotsStressTests");
+  Rand rand("runDotsStressTests" + to_string(randSeed));
 
   Rules rules = dotsGame
     ? Rules(startPos, startPosIsRandom, suicideAllowed, dotsCaptureEmptyBase, Rules::DEFAULT_DOTS.dotsFreeCapturedDots)
@@ -218,7 +220,7 @@ static void runDotsStressTestsInternal(
     moveRecords.clear();
 
     auto initialBoard = Board(x_size, y_size, rules);
-    initialBoard.setStartPos(DOTS_RANDOM);
+    initialBoard.setStartPos(rand);
     auto board = initialBoard;
 
     Loc lastLoc = Board::NULL_LOC;
@@ -260,11 +262,16 @@ static void runDotsStressTestsInternal(
     }
 
     if (performExtraChecks) {
+      vector<Board::CapturingAndBaseColors> capturingAndBaseColors;
       if (lastLoc == Board::PASS_LOC) {
         Board boardBeforeGrounding(board);
         boardBeforeGrounding.undo(moveRecords.back());
+        capturingAndBaseColors = boardBeforeGrounding.calculateOneMoveCaptureAndBasePositionsForDots();
         validateGrounding(boardBeforeGrounding, board, moveRecords.back().pla, moveRecords);
+      } else {
+        capturingAndBaseColors = board.calculateOneMoveCaptureAndBasePositionsForDots();
       }
+      (void)capturingAndBaseColors;
       validateStatesAndCaptures(board, moveRecords);
     }
 
@@ -331,9 +338,9 @@ void Tests::runDotsStressTests() {
   maxTerritory(P_BLACK);
   maxTerritory(P_WHITE);
 
-  runDotsStressTestsInternal(39, 32, 10000, true, Rules::START_POS_CROSS, false, false, 0.0f, true, 0.8f, 1.0f, true);
-  runDotsStressTestsInternal(39, 32, 10000, true, Rules::START_POS_CROSS_4, true, true, 0.5f, false, 0.8f, 1.0f, true);
+  runDotsStressTestsInternal(39, 32, 10000, true, Rules::START_POS_CROSS, false, false, 0.0f, true, 0.8f, 1.0f, true, 0);
+  runDotsStressTestsInternal(39, 32, 10000, true, Rules::START_POS_CROSS_4, true, true, 0.5f, false, 0.8f, 1.0f, true, 1);
 
-  runDotsStressTestsInternal(39, 32, 50000, true, Rules::START_POS_CROSS, false, false, 0.0f, true, 0.8f, 1.0f, false);
-  runDotsStressTestsInternal(39, 32, 50000, true, Rules::START_POS_CROSS_4, true, false, 0.0f, true, 0.8f, 1.0f, false);
+  runDotsStressTestsInternal(39, 32, 50000, true, Rules::START_POS_CROSS, false, false, 0.0f, true, 0.8f, 1.0f, false, 2);
+  runDotsStressTestsInternal(39, 32, 50000, true, Rules::START_POS_CROSS_4, true, false, 0.0f, true, 0.8f, 1.0f, false, 3);
 }
