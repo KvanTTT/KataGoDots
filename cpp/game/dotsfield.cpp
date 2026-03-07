@@ -271,9 +271,11 @@ Board::MoveRecord Board::playMoveRecordedDots(const Loc loc, const Player pla) {
 }
 
 void Board::playMoveAssumeLegalDots(const Loc loc, const Player pla) {
+  assert(!is_finished);
   const State originalState = getState(loc);
 
   if (loc == RESIGN_LOC) {
+    is_finished = true;
   } else if (loc == PASS_LOC) {
     auto initEmptyBaseInvalidateLocations = vector<Loc>();
     auto bases = vector<Base>();
@@ -326,6 +328,7 @@ void Board::playMoveAssumeLegalDots(const Loc loc, const Player pla) {
 }
 
 Board::MoveRecord Board::tryPlayMoveRecordedDots(Loc loc, Player pla, const bool isSuicideLegal) {
+  assert(!is_finished);
   State originalState = getState(loc);
 
   vector<Base> bases;
@@ -333,6 +336,7 @@ Board::MoveRecord Board::tryPlayMoveRecordedDots(Loc loc, Player pla, const bool
   vector<Loc> newGroundingLocations;
 
   if (loc == RESIGN_LOC) {
+    is_finished = true;
   } else if (loc == PASS_LOC) {
     ground(pla, initEmptyBaseInvalidateLocations, bases);
   } else {
@@ -387,7 +391,9 @@ Board::MoveRecord Board::tryPlayMoveRecordedDots(Loc loc, Player pla, const bool
 
 void Board::undoDots(MoveRecord& moveRecord) {
   if (moveRecord.loc == RESIGN_LOC) {
-    return; // Resin doesn't really change the state
+    assert(is_finished);
+    is_finished = false;
+    return; // Resignation doesn't really change the state
   }
 
   const bool isGroundingMove = moveRecord.loc == PASS_LOC;
@@ -466,6 +472,9 @@ void Board::undoDots(MoveRecord& moveRecord) {
   if (!isGroundingMove) {
     setState(moveRecord.loc, moveRecord.previousState);
     pos_hash ^= ZOBRIST_BOARD_HASH[moveRecord.loc][moveRecord.pla];
+  } else {
+    assert(is_finished);
+    is_finished = false;
   }
 }
 
@@ -642,6 +651,8 @@ void Board::ground(const Player pla, vector<Loc>& emptyBaseInvalidatePositions, 
       }
     }
   }
+
+  is_finished = true;
 }
 
 std::array<Loc, 4> Board::getUnconnectedLocations(const Loc loc, const Player pla, int& size) const {
@@ -965,8 +976,12 @@ void Board::makeMoveAndCalculateCapturesAndBases(
 }
 
 vector<Board::CapturingAndBaseColors> Board::calculateOneMoveCaptureAndBasePositionsForDots() const {
-  const int fieldSize = (x_size + 1) * (y_size + 1);
-  vector<CapturingAndBaseColors> capturesAndBasesColors(fieldSize);
+  vector<CapturingAndBaseColors> capturesAndBasesColors((x_size + 1) * (y_size + 1));
+
+  // Don't calculate anything if the game is already over (finished) because it doesn't look correct
+  if (is_finished) {
+    return capturesAndBasesColors;
+  }
 
   for (int y = 0; y < y_size; y++) {
     for (int x = 0; x < x_size; x++) {

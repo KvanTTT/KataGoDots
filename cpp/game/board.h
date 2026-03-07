@@ -455,12 +455,13 @@ struct Board
 
   //Data--------------------------------------------
 
+  Loc ko_loc;   //A simple ko capture was made here, making it illegal to replay here next move
+  bool is_finished; // Game is over (by resignation or by grounding in case of Dots)
+
   int x_size;                  //Horizontal size of board
   int y_size;                  //Vertical size of board
   Rules rules;
   Color colors[MAX_ARR_SIZE];  //Color of each location on the board.
-
-  Loc ko_loc;   //A simple ko capture was made here, making it illegal to replay here next move
 
   /* PointList empty_list; //List of all empty locations on board */
 
