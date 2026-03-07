@@ -125,6 +125,7 @@ Board::Board(const Board& other) {
 
   memcpy(colors, other.colors, sizeof(Color)*MAX_ARR_SIZE);
   ko_loc = other.ko_loc;
+  is_finished = other.is_finished;
 
   chain_data = other.chain_data;
   chain_head = other.chain_head;
@@ -169,6 +170,7 @@ void Board::init(const int xS, const int yS, const Rules& initRules)
     }
   }
 
+  is_finished = false;
   ko_loc = NULL_LOC;
   pos_hash = ZOBRIST_SIZE_X_HASH[x_size] ^ ZOBRIST_SIZE_Y_HASH[y_size];
   numBlackCaptures = 0;
@@ -2547,6 +2549,8 @@ bool Board::isEqualForTesting(const Board& other, const bool checkNumCaptures,
     return false;
   if(y_size != other.y_size)
     return false;
+  if (is_finished != other.is_finished)
+    return false;
   if(checkSimpleKo && ko_loc != other.ko_loc)
     return false;
   if(checkNumCaptures && (
@@ -2965,6 +2969,7 @@ nlohmann::json Board::toJson(const Board& board) {
   }
   data["xSize"] = board.x_size;
   data["ySize"] = board.y_size;
+  data["finished"] = board.is_finished;
   data["stones"] = toStringSimple(board,'|');
   if (!board.isDots()) {
     data["koLoc"] = Location::toString(board.ko_loc,board);
@@ -2979,11 +2984,12 @@ nlohmann::json Board::toJson(const Board& board) {
 }
 
 Board Board::ofJson(const nlohmann::json& data) {
-  bool dots = data.value(DOTS_KEY, false);
-  int xSize = data["xSize"].get<int>();
-  int ySize = data["ySize"].get<int>();
+  const bool dots = data.value(DOTS_KEY, false);
+  const int xSize = data["xSize"].get<int>();
+  const int ySize = data["ySize"].get<int>();
   Board board = parseBoard(xSize, ySize, data["stones"].get<string>(), Rules(dots), '|');
   board.setSimpleKoLoc(Location::ofStringAllowNull(data.value("koLoc", "null"),board));
+  board.is_finished = data.value("finished", false);
   board.numBlackCaptures = data["numBlackCaptures"].get<int>();
   board.numWhiteCaptures = data["numWhiteCaptures"].get<int>();
   board.blackScoreIfWhiteGrounds = data.value(BLACK_SCORE_IF_WHITE_GROUNDS_KEY, 0);

@@ -38,6 +38,10 @@ struct BoardWithMoveRecords {
     moveRecords.push_back(board.playMoveRecorded(Board::PASS_LOC, player));
   }
 
+  void playResignationMove(const Player player) const {
+    moveRecords.push_back(board.playMoveRecorded(Board::RESIGN_LOC, player));
+  }
+
   [[nodiscard]] State getState(const int x, const int y) const {
     return board.getState(Location::getLoc(x, y, board.x_size));
   }

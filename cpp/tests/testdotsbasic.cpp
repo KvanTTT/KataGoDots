@@ -302,6 +302,22 @@ x.....x
 
     boardWithMoveRecords.board.checkConsistency();
   });
+
+  checkDotsField("Resignation",
+    R"(
+...
+...
+...
+)", [](const BoardWithMoveRecords& boardWithMoveRecords) {
+    boardWithMoveRecords.playResignationMove(P_BLACK);
+    testAssert(boardWithMoveRecords.board.is_finished);
+
+    boardWithMoveRecords.undo();
+    testAssert(!boardWithMoveRecords.board.is_finished);
+
+    boardWithMoveRecords.playResignationMove(P_WHITE);
+    testAssert(boardWithMoveRecords.board.is_finished);
+});
 }
 
 void Tests::runDotsGroundingTests() {
@@ -606,6 +622,7 @@ R"(
 .....
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playGroundingMove(P_BLACK);
+    testAssert(boardWithMoveRecords.board.is_finished);
 
     testAssert(2 == boardWithMoveRecords.board.numBlackCaptures);
 
@@ -617,8 +634,10 @@ R"(
     testAssert(!history.isGroundReasonable(boardWithMoveRecords.board));
 
     boardWithMoveRecords.undo();
+    testAssert(!boardWithMoveRecords.board.is_finished);
 
     boardWithMoveRecords.playGroundingMove(P_WHITE);
+    testAssert(boardWithMoveRecords.board.is_finished);
 
     testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
 

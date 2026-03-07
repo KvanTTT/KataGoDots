@@ -745,6 +745,7 @@ Board SymmetryHelpers::getSymBoard(const Board& board, int symmetry) {
       }
     }
   }
+  symBoard.is_finished = board.is_finished;
   if (!board.isDots()) {
     //Set only at the end because otherwise setStoneFailIfNoLibs clears it.
     if(symKoLoc != Board::NULL_LOC)
