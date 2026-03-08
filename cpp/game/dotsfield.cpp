@@ -237,7 +237,7 @@ Board::MoveRecord::MoveRecord(
 
 bool Board::isSuicideDots(const Loc loc, const Player pla) const {
   const State state = getState(loc);
-  if (Player opp = getOpp(pla); getActiveColor(state) == C_EMPTY && getEmptyTerritoryColor(state) == opp) {
+  if (const Player opp = getOpp(pla); getActiveColor(state) == C_EMPTY && getEmptyTerritoryColor(state) == opp) {
     return !wouldBeCaptureDots(loc, pla);
   }
 
@@ -632,7 +632,7 @@ void Board::tryCapture(
       baseType = Base::Type::EMPTY;
     }
 
-    bases.push_back(createBaseAndUpdateStates(pla, numCapturedDots, numFreeDots, baseType));
+    updateStatesAndAppend(bases, pla, numCapturedDots, numFreeDots, baseType);
 
     if (!atLeastOneRealBaseIsGrounded && baseType != Base::Type::EMPTY) {
       for (const Loc& closureLoc : currentClosure) {
@@ -666,7 +666,7 @@ void Board::ground(const Player pla, vector<Loc>& emptyBaseInvalidatePositions, 
           }
         }
 
-        bases.push_back(createBaseAndUpdateStates(opp, numCapturedDots, numFreedDots, Base::Type::UNGROUNDED));
+        updateStatesAndAppend(bases, opp, numCapturedDots, numFreedDots, Base::Type::UNGROUNDED);
       }
     }
   }
@@ -852,7 +852,8 @@ void Board::getTerritoryLocations(const Player pla,
   clearVisited(territoryLocationsBuffer);
 }
 
-Board::Base Board::createBaseAndUpdateStates(
+void Board::updateStatesAndAppend(
+  vector<Base>& bases,
   const Player basePla,
   const int numCapturedDots,
   const int numFreedDots,
@@ -915,7 +916,7 @@ Board::Base Board::createBaseAndUpdateStates(
     setState(territoryLoc, newState);
   }
 
-  return Base(basePla, baseType, blackCapturesDiff, whiteCapturesDiff, locStateAndCapturesDiffs);
+  bases.emplace_back(basePla, baseType, blackCapturesDiff, whiteCapturesDiff, locStateAndCapturesDiffs);
 }
 
 void Board::invalidateAdjacentEmptyTerritoryIfNeeded(const Loc loc) {

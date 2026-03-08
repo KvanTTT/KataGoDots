@@ -544,7 +544,12 @@ struct Board
     Loc addLoc2) const;
   void tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
   void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, int &numCapturedDots, int &numFreedDots) const;
-  Base createBaseAndUpdateStates(Player basePla, int numCapturedDots, int numFreedDots, Base::Type baseType);
+  void updateStatesAndAppend(
+    std::vector<Base>& bases,
+    Player basePla,
+    int numCapturedDots,
+    int numFreedDots,
+    Base::Type baseType);
   void invalidateAdjacentEmptyTerritoryIfNeeded(Loc loc);
   void makeMoveAndCalculateCapturesAndBases(Player pla, Loc loc, std::vector<CapturingAndBaseColors>& capturesAndBasesColors)
     const;
