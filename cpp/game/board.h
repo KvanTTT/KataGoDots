@@ -226,7 +226,8 @@ struct Board
     enum class Type : uint8_t {
       NORMAL,
       EMPTY,
-      SUICIDAL
+      SUICIDAL,
+      UNGROUNDED,
     };
 
     Player pla;
@@ -542,9 +543,8 @@ struct Board
     Loc addLoc1,
     Loc addLoc2) const;
   void tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
-  Base buildBase(const std::vector<short>& closure, Player pla, bool isSuicidal);
   void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, int &numCapturedDots, int &numFreedDots) const;
-  Base createBaseAndUpdateStates(Player basePla, int numCapturedDots, int numFreedDots, bool isSuicidal);
+  Base createBaseAndUpdateStates(Player basePla, int numCapturedDots, int numFreedDots, Base::Type baseType);
   void invalidateAdjacentEmptyTerritoryIfNeeded(Loc loc);
   void makeMoveAndCalculateCapturesAndBases(Player pla, Loc loc, std::vector<CapturingAndBaseColors>& capturesAndBasesColors)
     const;
