@@ -223,13 +223,19 @@ struct Board
   };
 
   struct Base {
+    enum class Type : uint8_t {
+      NORMAL,
+      EMPTY,
+      SUICIDAL
+    };
+
     Player pla;
-    bool is_real;
+    Type type;
     short black_captures_diff;
     short white_captures_diff;
     std::vector<LocStateAndCapturesDiff> rollback_locs_states_captures;
 
-    Base(Player newPla, bool newIsReal, short newBlackCapturesDiff, short newWhiteCapturesDiff, const std::vector<LocStateAndCapturesDiff>& newRollbackLocStateCapturesDiff);
+    Base(Player newPla, Type newType, short newBlackCapturesDiff, short newWhiteCapturesDiff, const std::vector<LocStateAndCapturesDiff>& newRollbackLocStateCapturesDiff);
   };
 
   //Move data passed back when moves are made to allow for undos
@@ -524,7 +530,8 @@ struct Board
     const std::array<Loc, 4>& unconnectedLocations,
     int unconnectedLocationsSize,
     bool& atLeastOneRealBaseIsGrounded,
-    std::vector<Base>& bases);
+    std::vector<Base>& bases,
+    bool isSuicidal);
   void ground(Player pla, std::vector<Loc>& emptyBaseInvalidatePositions, std::vector<Base>& bases);
   std::array<Loc, 4> getUnconnectedLocations(Loc loc, Player pla, int& size) const;
   void checkAndAddUnconnectedLocation(
@@ -535,9 +542,9 @@ struct Board
     Loc addLoc1,
     Loc addLoc2) const;
   void tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
-  Base buildBase(const std::vector<short>& closure, Player pla);
+  Base buildBase(const std::vector<short>& closure, Player pla, bool isSuicidal);
   void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, int &numCapturedDots, int &numFreedDots) const;
-  Base createBaseAndUpdateStates(Player basePla, int numCapturedDots, int numFreedDots);
+  Base createBaseAndUpdateStates(Player basePla, int numCapturedDots, int numFreedDots, bool isSuicidal);
   void invalidateAdjacentEmptyTerritoryIfNeeded(Loc loc);
   void makeMoveAndCalculateCapturesAndBases(Player pla, Loc loc, std::vector<CapturingAndBaseColors>& capturesAndBasesColors)
     const;
