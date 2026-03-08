@@ -259,68 +259,88 @@ R"(
 )", 1, {XYMove(0, 2, P_WHITE)});
 }
 
-static std::tuple<string, string, string, string, string> getCapturesAndTerritories(const Board& board) {
+enum class CaptureTerritoryType {
+  OneMoveCapture,
+  OneMoveTerritory,
+  OneMoveEmptyCapture,
+  OneMoveEmptyTerritory,
+  ZeroMoveEmptyTerritory
+};
+
+static std::map<CaptureTerritoryType, std::ostringstream> getCapturesAndTerritories(const Board& board) {
   const Board& copy(board);
 
-  const auto capturesAndTerritoriesColors = copy.calculateCapturesAndTerritoriesColorsForDots();
+  std::map<CaptureTerritoryType, std::ostringstream> captureTerritoryStringStreams;
 
-  std::ostringstream oneMoveCapturesStringStream;
-  std::ostringstream oneMoveTerritoryStringStream;
-  std::ostringstream oneMoveEmptyCapturesStringStream;
-  std::ostringstream oneMoveEmptyTerritoryStringStream;
-  std::ostringstream zeroMoveTerritoryStringStream;
+  captureTerritoryStringStreams.emplace(CaptureTerritoryType::OneMoveCapture, std::ostringstream());
+  captureTerritoryStringStreams.emplace(CaptureTerritoryType::OneMoveTerritory, std::ostringstream());
+  captureTerritoryStringStreams.emplace(CaptureTerritoryType::OneMoveEmptyCapture, std::ostringstream());
+  captureTerritoryStringStreams.emplace(CaptureTerritoryType::OneMoveEmptyTerritory, std::ostringstream());
+  captureTerritoryStringStreams.emplace(CaptureTerritoryType::ZeroMoveEmptyTerritory, std::ostringstream());
+
+  const auto* capturesAndTerritoriesInfos = copy.calculateCapturesAndTerritoriesColorsForDots();
 
   for (int y = 0; y < copy.y_size; y++) {
     for (int x = 0; x < copy.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, copy.x_size);
-      const auto captureAndTerritoryColors = capturesAndTerritoriesColors[loc];
+      const auto* captureAndTerritoryInfos = capturesAndTerritoriesInfos->at(loc);
 
-      auto appendColor = [&](std::ostringstream& stream, const Color color) {
-        if (color == C_WALL) {
+      auto appendColor = [&](const CaptureTerritoryType type, std::ostringstream& stream) {
+        Color colorOrPlayer = C_EMPTY;
+        if (captureAndTerritoryInfos != nullptr) {
+          switch (type) {
+            case CaptureTerritoryType::OneMoveCapture:
+              colorOrPlayer = captureAndTerritoryInfos->getOneMoveCaptureColor();
+              break;
+            case CaptureTerritoryType::OneMoveTerritory:
+              colorOrPlayer = captureAndTerritoryInfos->getOneMoveTerritoryColor();
+              break;
+            case CaptureTerritoryType::OneMoveEmptyCapture:
+              colorOrPlayer = captureAndTerritoryInfos->getOneMoveEmptyCaptureColor();
+              break;
+            case CaptureTerritoryType::OneMoveEmptyTerritory:
+              colorOrPlayer = captureAndTerritoryInfos->getOneMoveEmptyTerritoryPlayer();
+              break;
+            case CaptureTerritoryType::ZeroMoveEmptyTerritory:
+              colorOrPlayer = captureAndTerritoryInfos->getZeroMoveEmptyTerritoryPlayer();
+              break;
+          }
+        }
+
+        if (colorOrPlayer == C_WALL) {
           stream << PlayerIO::colorToChar(P_BLACK) << PlayerIO::colorToChar(P_WHITE);
         } else {
-          stream << PlayerIO::colorToChar(color) << " ";
+          stream << PlayerIO::colorToChar(colorOrPlayer) << " ";
         }
       };
 
-      appendColor(oneMoveCapturesStringStream,  captureAndTerritoryColors.getOneMoveCaptureColor());
-      appendColor(oneMoveTerritoryStringStream,  captureAndTerritoryColors.getOneMoveTerritoryColor());
-      appendColor(oneMoveEmptyCapturesStringStream,  captureAndTerritoryColors.getOneMoveEmptyCaptureColor());
-
-      oneMoveEmptyTerritoryStringStream << PlayerIO::colorToChar(captureAndTerritoryColors.getOneMoveEmptyTerritoryColor()) << " ";
-      zeroMoveTerritoryStringStream << PlayerIO::colorToChar(captureAndTerritoryColors.getZeroMoveEmptyTerritoryColor()) << " ";
+      for (auto& [type, stream] : captureTerritoryStringStreams) {
+        appendColor(type, stream);
+      }
 
       if (x < copy.x_size - 1) {
-        oneMoveCapturesStringStream << " ";
-        oneMoveTerritoryStringStream << " ";
-        oneMoveEmptyCapturesStringStream << " ";
-        oneMoveEmptyTerritoryStringStream << " ";
-        zeroMoveTerritoryStringStream << " ";
+        for (auto& [type, stream] : captureTerritoryStringStreams) {
+          stream << " ";
+        }
       }
     }
-    oneMoveCapturesStringStream << endl;
-    oneMoveTerritoryStringStream << endl;
-    oneMoveEmptyCapturesStringStream << endl;
-    oneMoveEmptyTerritoryStringStream << endl;
-    zeroMoveTerritoryStringStream << endl;
+    for (auto& [type, stream] : captureTerritoryStringStreams) {
+      stream << endl;
+    }
   }
+
+  delete capturesAndTerritoriesInfos;
 
   // Make sure we didn't change an internal state during calculating
   testAssert(board.isEqualForTesting(copy));
 
-  return {
-    oneMoveCapturesStringStream.str(),
-    oneMoveTerritoryStringStream.str(),
-    oneMoveEmptyCapturesStringStream.str(),
-    oneMoveEmptyTerritoryStringStream.str(),
-    zeroMoveTerritoryStringStream.str()
-  };
+  return captureTerritoryStringStreams;
 }
 
 static void checkCapturesAndTerritories(
   const string& title,
   const string& boardData,
-  const std::optional<string>& expectedCaptures,
+  const std::optional<string>& expectedOneMoveCaptures,
   const std::optional<string>& expectedOneMoveTerritory,
   const std::optional<string>& expectedOneMoveEmptyCaptures = std::nullopt,
   const std::optional<string>& expectedOneMoveEmptyTerritory = std::nullopt,
@@ -330,7 +350,7 @@ static void checkCapturesAndTerritories(
   const vector<XYMove>& extraMoves = {}
 ) {
   const Board board = parseDotsField(boardData, false, suicide, captureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, extraMoves);
-  auto [captures, oneMoveTerritory, oneMoveEmptyCaptures, oneMoveEmptyTerritory, zeroMoveEmptyTerritory] = getCapturesAndTerritories(board);
+  auto captureTerritoryStringStreams = getCapturesAndTerritories(board);
 
   std::ostringstream emptyFieldStream;
   for (int y = 0; y < board.y_size; y++) {
@@ -352,11 +372,11 @@ static void checkCapturesAndTerritories(
     expect("", actual, expectedString);
   };
 
-  checkTextRepresentation("one move captures", captures, expectedCaptures);
-  checkTextRepresentation("one move territory", oneMoveTerritory, expectedOneMoveTerritory);
-  checkTextRepresentation("one move empty captures", oneMoveEmptyCaptures, expectedOneMoveEmptyCaptures);
-  checkTextRepresentation("one move empty territory", oneMoveEmptyTerritory, expectedOneMoveEmptyTerritory);
-  checkTextRepresentation("zero move empty territory", zeroMoveEmptyTerritory, expectedZeroMoveEmptyTerritory);
+  checkTextRepresentation("one move captures", captureTerritoryStringStreams[CaptureTerritoryType::OneMoveCapture].str(), expectedOneMoveCaptures);
+  checkTextRepresentation("one move territory", captureTerritoryStringStreams[CaptureTerritoryType::OneMoveTerritory].str(), expectedOneMoveTerritory);
+  checkTextRepresentation("one move empty captures", captureTerritoryStringStreams[CaptureTerritoryType::OneMoveEmptyCapture].str(), expectedOneMoveEmptyCaptures);
+  checkTextRepresentation("one move empty territory", captureTerritoryStringStreams[CaptureTerritoryType::OneMoveEmptyTerritory].str(), expectedOneMoveEmptyTerritory);
+  checkTextRepresentation("zero move empty territory", captureTerritoryStringStreams[CaptureTerritoryType::ZeroMoveEmptyTerritory].str(), expectedZeroMoveEmptyTerritory);
 }
 
 void Tests::runDotsCapturesAndTerritoriesTests() {
@@ -367,14 +387,17 @@ void Tests::runDotsCapturesAndTerritoriesTests() {
     R"(
 .x...o.
 xox.oxo
+xox.oxo
 .......
 )", R"(
+.  .  .  .  .  .  .
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
 .  X  .  .  .  O  .
 )",
   R"(
 .  .  .  .  .  .  .
+.  X  .  .  .  O  .
 .  X  .  .  .  O  .
 .  .  .  .  .  .  .
 )"
@@ -409,6 +432,7 @@ oxo
   R"(
 .x..o.
 x.xo.o
+x.xo.o
 .x..o.
 )",
   nullopt,
@@ -417,6 +441,7 @@ x.xo.o
   nullopt,
   R"(
 .  .  .  .  .  .
+.  X  .  .  O  .
 .  X  .  .  O  .
 .  .  .  .  .  .
 )");
@@ -589,29 +614,85 @@ oxo.oxo
   );
 
   checkCapturesAndTerritories(
-  "Big territory supersedes multiple small ones",
-  R"(
+    "Big territory supersedes multiple small ones",
+    R"(
+..X..
+.XOX.
+XO.OX
+.X.X.
+.....
+)",
+    R"(
+.  .  .  .  .
+.  .  .  .  .
+.  .  .  .  .
+.  .  .  .  .
+.  .  X  .  .
+)",
+    R"(
+.  .  .  .  .
+.  .  X  .  .
+.  X  X  X  .
+.  .  X  .  .
+.  .  .  .  .
+)",
+    nullopt,
+    nullopt,
+    nullopt
+);
+
+  checkCapturesAndTerritories(
+  "Big empty territory supersedes multiple small ones",
+    R"(
 ..O.
 .O.O
 O..O
 .O..
 )",
-  nullopt,
-  nullopt,
-  R"(
+    nullopt,
+    nullopt,
+    R"(
 .  .  .  .
 .  .  .  .
 .  .  .  .
 .  .  O  .
 )",
-  R"(
+    R"(
 .  .  .  .
 .  .  O  .
 .  O  O  .
 .  .  .  .
 )",
-  nullopt
+    nullopt
 );
+
+  checkCapturesAndTerritories(
+    "4 captures locs (3 of the pla, 1 of the opp)",
+    R"(
+.oxx.o.
+oxoxo.o
+ox...xo
+oxoxo.o
+.ox..o.
+..ooo..
+)",
+    R"(
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  O  X  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+)",
+    R"(
+.  .  .  .  .  .  .
+.  O  X  .  .  O  .
+.  O  XO X  O  O  .
+.  O  X  O  .  O  .
+.  .  O  O  O  .  .
+.  .  .  .  .  .  .
+)"
+    );
 
   checkCapturesAndTerritories(
     "No any captures and territory after grounding",

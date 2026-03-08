@@ -32,7 +32,7 @@ void NNInputs::fillRowV7Dots(
 
   const Rules& rules = hist.rules;
 
-  const auto capturesAndTerritoriesColors = board.calculateCapturesAndTerritoriesColorsForDots();
+  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
   [[maybe_unused]] int deadDotsCount = 0;
 
   auto setSpatial = [&](const int pos, const DotsSpatialFeature spatialFeature) {
@@ -82,27 +82,30 @@ void NNInputs::fillRowV7Dots(
         setSpatial(pos, DotsSpatialFeature::Grounded_8);
       }
 
-      const auto captureAndTerritoryColors = capturesAndTerritoriesColors[loc];
+      if (const auto* captureAndTerritoryInfos = capturesAndTerritoriesInfos->at(loc);
+         captureAndTerritoryInfos != nullptr) {
+        const Color captureColor = captureAndTerritoryInfos->getOneMoveCaptureColor();
+        if ((pla & captureColor) != 0) {
+          setSpatial(pos, DotsSpatialFeature::PlayerCaptures_18);
+        }
+        if ((opp & captureColor) != 0) {
+          setSpatial(pos, DotsSpatialFeature::PlayerOppCaptures_19);
+        }
 
-      const Color captureColor = captureAndTerritoryColors.getOneMoveCaptureColor();
-      if ((pla & captureColor) != 0) {
-        setSpatial(pos, DotsSpatialFeature::PlayerCaptures_18);
-      }
-      if ((opp & captureColor) != 0) {
-        setSpatial(pos, DotsSpatialFeature::PlayerOppCaptures_19);
-      }
-
-      const Color territoryColor = captureAndTerritoryColors.getOneMoveTerritoryColor();
-      if ((pla & territoryColor) != 0) {
-        setSpatial(pos, DotsSpatialFeature::PlayerSurroundings_20);
-      }
-      if ((opp & territoryColor) != 0) {
-        setSpatial(pos, DotsSpatialFeature::PlayerOppSurroundings_21);
+        const Color territoryColor = captureAndTerritoryInfos->getOneMoveTerritoryColor();
+        if ((pla & territoryColor) != 0) {
+          setSpatial(pos, DotsSpatialFeature::PlayerSurroundings_20);
+        }
+        if ((opp & territoryColor) != 0) {
+          setSpatial(pos, DotsSpatialFeature::PlayerOppSurroundings_21);
+        }
       }
 
       // TODO: Set up history and ladder features, https://github.com/KvanTTT/KataGoDots/issues/3
     }
   }
+
+  delete capturesAndTerritoriesInfos;
 
   assert(deadDotsCount == board.numBlackCaptures + board.numWhiteCaptures);
 
