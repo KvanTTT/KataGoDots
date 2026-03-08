@@ -262,16 +262,16 @@ static void runDotsStressTestsInternal(
     }
 
     if (performExtraChecks) {
-      vector<Board::CaptureAndTerritoryColors> capturesAndTerritoriesColors;
+      Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos;
       if (lastLoc == Board::PASS_LOC) {
         Board boardBeforeGrounding(board);
         boardBeforeGrounding.undo(moveRecords.back());
-        capturesAndTerritoriesColors = boardBeforeGrounding.calculateCapturesAndTerritoriesColorsForDots();
+        capturesAndTerritoriesInfos = boardBeforeGrounding.calculateCapturesAndTerritoriesColorsForDots();
         validateGrounding(boardBeforeGrounding, board, moveRecords.back().pla, moveRecords);
       } else {
-        capturesAndTerritoriesColors = board.calculateCapturesAndTerritoriesColorsForDots();
+        capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
       }
-      (void)capturesAndTerritoriesColors;
+      delete capturesAndTerritoriesInfos;
       validateStatesAndCaptures(board, moveRecords);
     }
 
