@@ -556,11 +556,10 @@ void Board::captureWhenEmptyTerritoryBecomesRealBase(
     if (unconnectedLocationsSize >= 1) {
       bases.clear();
       tryCapture(loc, opp, unconnectedLocations, unconnectedLocationsSize, isGrounded, bases, true);
-      // The found base always should be real and include the `iniLoc`
-      for (const Base& oppBase : bases) {
-        if (oppBase.type != Base::Type::EMPTY) {
-          return;
-        }
+      if (!bases.empty()) {
+        // If the base exists, it's always expected to be SUICIDAL and containing the `initLoc`
+        assert(bases.size() == 1 && bases.back().type == Base::Type::SUICIDAL);
+        return;
       }
     }
   }
@@ -613,13 +612,32 @@ void Board::tryCapture(
 
   atLeastOneRealBaseIsGrounded = false;
   for (const vector<Loc>& currentClosure: currentClosures) {
-    Base base = buildBase(currentClosure, pla, isSuicidal);
-    bases.push_back(base);
+    for (const Loc& closureLoc : currentClosure) {
+      setVisited(closureLoc);
+    }
 
-    if (!atLeastOneRealBaseIsGrounded && base.type != Base::Type::EMPTY) {
+    const Loc territoryFirstLoc = Location::getNextLocCW(currentClosure.at(1), currentClosure.at(0), x_size);
+    int numCapturedDots, numFreeDots;
+    getTerritoryLocations(pla, territoryFirstLoc, false, numCapturedDots, numFreeDots);
+    clearVisited(currentClosure);
+
+    Base::Type baseType;
+    if (numCapturedDots + numFreeDots > 0 || rules.dotsCaptureEmptyBases) {
+      baseType = isSuicidal ? Base::Type::SUICIDAL : Base::Type::NORMAL;
+    } else {
+      if (isSuicidal) {
+        // Drop the empty closure because only single base is expected in case of suicidal enclosing and the empty enclosure becomes redundant
+        continue;
+      }
+      baseType = Base::Type::EMPTY;
+    }
+
+    bases.push_back(createBaseAndUpdateStates(pla, numCapturedDots, numFreeDots, baseType));
+
+    if (!atLeastOneRealBaseIsGrounded && baseType != Base::Type::EMPTY) {
       for (const Loc& closureLoc : currentClosure) {
         forEachAdjacent(closureLoc, [&](const Loc adj) {
-          atLeastOneRealBaseIsGrounded = atLeastOneRealBaseIsGrounded || isGroundedOrWall(getState(adj), base.pla);
+          atLeastOneRealBaseIsGrounded = atLeastOneRealBaseIsGrounded || isGroundedOrWall(getState(adj), pla);
         });
         if (atLeastOneRealBaseIsGrounded) {
           break;
@@ -648,7 +666,7 @@ void Board::ground(const Player pla, vector<Loc>& emptyBaseInvalidatePositions, 
           }
         }
 
-        bases.push_back(createBaseAndUpdateStates(opp, numCapturedDots, numFreedDots, false));
+        bases.push_back(createBaseAndUpdateStates(opp, numCapturedDots, numFreedDots, Base::Type::UNGROUNDED));
       }
     }
   }
@@ -771,19 +789,6 @@ void Board::tryGetCounterClockwiseClosure(const Loc initialLoc, const Loc startL
   }
 }
 
-Board::Base Board::buildBase(const vector<Loc>& closure, const Player pla, const bool isSuicidal) {
-  for (const Loc& closureLoc : closure) {
-    setVisited(closureLoc);
-  }
-
-  const Loc territoryFirstLoc = Location::getNextLocCW(closure.at(1), closure.at(0), x_size);
-  int numCapturedDots, numFreeDots;
-  getTerritoryLocations(pla, territoryFirstLoc, false, numCapturedDots, numFreeDots);
-  clearVisited(closure);
-
-  return createBaseAndUpdateStates(pla, numCapturedDots, numFreeDots, isSuicidal);
-}
-
 void Board::getTerritoryLocations(const Player pla,
                                   const Loc firstLoc,
                                   const bool grounding,
@@ -851,7 +856,7 @@ Board::Base Board::createBaseAndUpdateStates(
   const Player basePla,
   const int numCapturedDots,
   const int numFreedDots,
-  const bool isSuicidal) {
+  const Base::Type baseType) {
   auto locStateAndCapturesDiffs = vector<LocStateAndCapturesDiff>();
   locStateAndCapturesDiffs.reserve(territoryLocationsBuffer.size());
 
@@ -873,13 +878,6 @@ Board::Base Board::createBaseAndUpdateStates(
 
   numBlackCaptures += blackCapturesDiff;
   numWhiteCaptures += whiteCapturesDiff;
-  Base::Type baseType;
-  if (capturesDiff > 0 || rules.dotsCaptureEmptyBases) {
-    baseType = isSuicidal ? Base::Type::SUICIDAL : Base::Type::NORMAL;
-  } else {
-    // assert(!isSuicidal); TODO: fix bug with empty surroundings and uncomment
-    baseType = Base::Type::EMPTY;
-  }
 
   for (const Loc& territoryLoc : territoryLocationsBuffer) {
     const State prevState = getState(territoryLoc);

@@ -41,6 +41,8 @@ xox
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
   boardWithMoveRecords.playMove(1, 2, P_BLACK);
   testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
+
+  testAssert(Board::Base::Type::NORMAL == boardWithMoveRecords.moveRecords.back().bases.back().type);
 });
 
   checkDotsField("Capturing with empty loc inside",
@@ -67,6 +69,7 @@ xo.ox
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
   boardWithMoveRecords.playMove(2, 1, P_BLACK);
   testAssert(3 == boardWithMoveRecords.board.numWhiteCaptures);
+  testAssert(3 == boardWithMoveRecords.moveRecords.back().bases.size());
 });
 
   checkDotsField("Base inside base inside base",
@@ -122,6 +125,8 @@ testAssert(6 == boardWithMoveRecords.board.numBlackCaptures);  // Don't free the
 x.xo.o
 .x..o.
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
+    const auto& moveRecords = boardWithMoveRecords.moveRecords;
+
     // Suicide move is not capture
     testAssert(!boardWithMoveRecords.wouldBeCapture(1, 1, P_WHITE));
     testAssert(!boardWithMoveRecords.wouldBeCapture(1, 1, P_BLACK));
@@ -132,14 +137,29 @@ x.xo.o
     testAssert(!boardWithMoveRecords.isSuicide(1, 1, P_BLACK));
     boardWithMoveRecords.playMove(1, 1, P_WHITE);
     testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
+    testAssert(Board::Base::Type::SUICIDAL == moveRecords.back().bases.back().type);
 
     testAssert(boardWithMoveRecords.isSuicide(4, 1, P_BLACK));
     testAssert(!boardWithMoveRecords.isSuicide(4, 1, P_WHITE));
     boardWithMoveRecords.playMove(4, 1, P_BLACK);
     testAssert(1 == boardWithMoveRecords.board.numBlackCaptures);
+    testAssert(Board::Base::Type::SUICIDAL == moveRecords.back().bases.back().type);
 });
 
-  checkDotsField("Empty bases when they are allowed",
+  checkDotsField("Empty base creation",
+  R"(
+.x..o.
+x.xo.o
+......
+)", [](const BoardWithMoveRecords& boardWithMoveRecords) {
+    const auto& moveRecords = boardWithMoveRecords.moveRecords;
+    boardWithMoveRecords.playMove(1, 2, P_BLACK);
+    testAssert(Board::Base::Type::EMPTY == moveRecords.back().bases.back().type);
+    boardWithMoveRecords.playMove(4, 2, P_WHITE);
+    testAssert(Board::Base::Type::EMPTY == moveRecords.back().bases.back().type);
+});
+
+  checkDotsField("Empty bases when they are treated as normal",
   R"(
 .x..o.
 x.xo.o
@@ -167,6 +187,7 @@ xo.o
     testAssert(!boardWithMoveRecords.isSuicide(2, 1, P_BLACK));
     boardWithMoveRecords.playMove(2, 1, P_BLACK);
     testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
+    testAssert(Board::Base::Type::NORMAL == boardWithMoveRecords.moveRecords.back().bases.back().type);
 });
 
   checkDotsField("Single dot doesn't break searching inside empty base",
@@ -317,6 +338,27 @@ x.....x
 
     boardWithMoveRecords.playResignationMove(P_WHITE);
     testAssert(boardWithMoveRecords.board.is_finished);
+});
+
+  checkDotsField(
+    "Drop redundant empty enclosure in case of suicidal surrounding",
+  R"(
+.x.xx.
+x.x..x
+.x.xx.
+)", [](const BoardWithMoveRecords& boardWithMoveRecords) {
+    testAssert(getEmptyTerritoryColor(boardWithMoveRecords.getState(3, 1)) == P_BLACK);
+    testAssert(getEmptyTerritoryColor(boardWithMoveRecords.getState(4, 1)) == P_BLACK);
+
+    boardWithMoveRecords.playMove(3, 1, P_WHITE);
+
+    const auto& lastBases = boardWithMoveRecords.moveRecords.back().bases;
+    testAssert(1 == lastBases.size());
+    testAssert(Board::Base::Type::SUICIDAL == lastBases.back().type);
+    testAssert(1 == boardWithMoveRecords.getBlackScore());
+
+    testAssert(getActiveColor(boardWithMoveRecords.getState(2, 1)) == P_BLACK);
+    testAssert(getActiveColor(boardWithMoveRecords.getState(3, 1)) == P_BLACK);
 });
 }
 
@@ -624,6 +666,10 @@ R"(
     boardWithMoveRecords.playGroundingMove(P_BLACK);
     testAssert(boardWithMoveRecords.board.is_finished);
 
+    const vector<Board::Base> groundingBases = boardWithMoveRecords.moveRecords.back().bases;
+    testAssert(1 == groundingBases.size());
+    testAssert(Board::Base::Type::UNGROUNDED == groundingBases.back().type);
+
     testAssert(2 == boardWithMoveRecords.board.numBlackCaptures);
 
     testAssert(1 == boardWithMoveRecords.board.blackScoreIfWhiteGrounds);
@@ -638,6 +684,10 @@ R"(
 
     boardWithMoveRecords.playGroundingMove(P_WHITE);
     testAssert(boardWithMoveRecords.board.is_finished);
+
+    const vector<Board::Base> groundingBases2 = boardWithMoveRecords.moveRecords.back().bases;
+    testAssert(1 == groundingBases2.size());
+    testAssert(Board::Base::Type::UNGROUNDED == groundingBases2.back().type);
 
     testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
 
