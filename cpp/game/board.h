@@ -199,9 +199,9 @@ struct Board
   struct LocStateAndCapturesDiff {
     LocStateAndCapturesDiff(Loc newLoc, State newState, uint16_t newCapturesDiff);
 
-    Loc getLoc() const;
-    State getState() const;
-    uint16_t getCapturesDiff() const;
+    [[nodiscard]] Loc getLoc() const;
+    [[nodiscard]] State getState() const;
+    [[nodiscard]] uint16_t getCapturesDiff() const;
 
     static constexpr int LOC_BITS_COUNT = 12;
     static constexpr int LOC_BITS_MASK = (1 << LOC_BITS_COUNT) - 1;
@@ -436,23 +436,60 @@ struct Board
     bool isMultiStoneSuicideLegal
   ) const;
 
-  struct CaptureAndTerritoryColors {
+  struct BaseInfo {
+    enum class RelationType : uint8_t {
+      UNRELATED,
+      SUBSET,
+      SUPERSET,
+      INTERSECTION
+    };
+
+    uint16_t id{};
+    Loc captureLoc{};
+    Player player{};
+    Base::Type type{};
+    std::unordered_set<Loc> territory;
+
+    BaseInfo() = default;
+    BaseInfo(Loc newCaptureLoc, const Base& base);
+    [[nodiscard]] RelationType getRelationTo(const Base& other, Loc otherCaptureLoc) const;
+  };
+
+  struct CaptureAndTerritoryInfos {
+    std::array<BaseInfo*, 4> captureBaseInfos;
+    std::array<BaseInfo*, 2> territoryBaseInfos;
+
+    void addCaptureInfo(BaseInfo* newBaseInfo);
+    void addTerritoryInfo(BaseInfo* newBaseInfo);
+    void removeCaptureAndTerritoryInfos(BaseInfo* baseInfoToRemove);
+
     [[nodiscard]] Color getOneMoveCaptureColor() const;
     [[nodiscard]] Color getOneMoveEmptyCaptureColor() const;
     [[nodiscard]] Color getOneMoveTerritoryColor() const;
-    [[nodiscard]] Color getOneMoveEmptyTerritoryColor() const;
-    [[nodiscard]] Color getZeroMoveEmptyTerritoryColor() const;
-    void addOneMoveCapturePlayer(Player capturePlayer);
-    void addOneMoveEmptyCapturePlayer(Player capturePlayer);
-    void addOneMoveTerritoryPlayer(Player territoryPlayer);
-    void addOneMoveEmptyTerritoryPlayer(Player territoryPlayer);
-    void addZeroMoveEmptyTerritoryPlayer(Player territoryPlayer);
+    [[nodiscard]] Player getOneMoveEmptyTerritoryPlayer() const;
+    [[nodiscard]] Player getZeroMoveEmptyTerritoryPlayer() const;
 
-  private:
-    int16_t packed = 0;
+    CaptureAndTerritoryInfos() = default;
   };
 
-  std::vector<CaptureAndTerritoryColors> calculateCapturesAndTerritoriesColorsForDots() const;
+  struct CapturesAndTerritoriesInfos {
+    explicit CapturesAndTerritoriesInfos(int size);
+    [[nodiscard]] CaptureAndTerritoryInfos* at(int index) const;
+    [[nodiscard]] CaptureAndTerritoryInfos& getOrPut(int index);
+
+    CapturesAndTerritoriesInfos(const CapturesAndTerritoriesInfos&) = delete;
+    CapturesAndTerritoriesInfos& operator=(const CapturesAndTerritoriesInfos&) = delete;
+
+    BaseInfo* addBaseInfo(Loc captureLoc, const Base& base);
+
+    ~CapturesAndTerritoriesInfos();
+
+   private:
+    std::vector<CaptureAndTerritoryInfos*> capturesAndTerritoriesInfos;
+    std::vector<BaseInfo*> baseInfos;
+  };
+
+  CapturesAndTerritoriesInfos* calculateCapturesAndTerritoriesColorsForDots() const;
 
   //Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
@@ -559,23 +596,10 @@ struct Board
     Base::Type baseType);
   void invalidateAdjacentEmptyTerritoryIfNeeded(Loc loc);
 
-  struct BaseInfo {
-    Player player;
-    Loc captureLoc;
-    Base::Type type;
-    std::unordered_set<Loc> territory;
-
-    enum class RelationType {
-      UNRELATED_OR_INTERSECTED,
-      SUBSET,
-      SUPERSET
-    };
-
-    BaseInfo(Loc newCaptureLoc, const Base& base);
-    [[nodiscard]] RelationType getRelationTo(const BaseInfo& other) const;
-  };
-
-  void makeMoveAndRecalculateMaxBases(Player pla, Loc loc, std::vector<BaseInfo>& baseInfos) const;
+  void makeMoveAndRecalculateMaxBases(
+    Player pla,
+    Loc loc,
+    CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos) const;
 
   void setGrounded(Loc loc);
   void clearGrounded(Loc loc);
