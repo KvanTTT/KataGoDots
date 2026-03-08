@@ -468,6 +468,7 @@ struct Board
     [[nodiscard]] Color getOneMoveTerritoryColor() const;
     [[nodiscard]] Player getOneMoveEmptyTerritoryPlayer() const;
     [[nodiscard]] Player getZeroMoveEmptyTerritoryPlayer() const;
+    bool hasAnyTerritory(Player pla) const;
 
     CaptureAndTerritoryInfos() = default;
   };
@@ -476,6 +477,7 @@ struct Board
     explicit CapturesAndTerritoriesInfos(int size);
     [[nodiscard]] CaptureAndTerritoryInfos* at(int index) const;
     [[nodiscard]] CaptureAndTerritoryInfos& getOrPut(int index);
+    CaptureAndTerritoryInfos* put(int index);
 
     CapturesAndTerritoriesInfos(const CapturesAndTerritoriesInfos&) = delete;
     CapturesAndTerritoriesInfos& operator=(const CapturesAndTerritoriesInfos&) = delete;
@@ -596,7 +598,7 @@ struct Board
     Base::Type baseType);
   void invalidateAdjacentEmptyTerritoryIfNeeded(Loc loc);
 
-  void makeMoveAndRecalculateMaxBases(
+  void recalculateCapturesAndTerritories(
     Player pla,
     Loc loc,
     CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos) const;
