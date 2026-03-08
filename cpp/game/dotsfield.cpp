@@ -1074,6 +1074,15 @@ Color Board::CaptureAndTerritoryInfos::getOneMoveTerritoryColor() const {
   return result;
 }
 
+bool Board::CaptureAndTerritoryInfos::hasAnyTerritory(const Player pla) const {
+  for (const BaseInfo* baseInfo : territoryBaseInfos) {
+    if (baseInfo != nullptr && baseInfo->player == pla) {
+      return true;
+    }
+  }
+  return false;
+}
+
 Player Board::CaptureAndTerritoryInfos::getOneMoveEmptyTerritoryPlayer() const {
   Player result = C_EMPTY;
   for (const BaseInfo* baseInfo : territoryBaseInfos) {
@@ -1113,6 +1122,13 @@ Board::CaptureAndTerritoryInfos& Board::CapturesAndTerritoriesInfos::getOrPut(co
   return *result;
 }
 
+Board::CaptureAndTerritoryInfos* Board::CapturesAndTerritoriesInfos::put(const int index) {
+  assert(nullptr == capturesAndTerritoriesInfos[index]);
+  auto* result = new CaptureAndTerritoryInfos();
+  capturesAndTerritoriesInfos[index] = result;
+  return result;
+}
+
 Board::BaseInfo* Board::CapturesAndTerritoriesInfos::addBaseInfo(const Loc captureLoc, const Base& base) {
   const auto baseInfo = new BaseInfo(captureLoc, base);
   baseInfos.push_back(baseInfo);
@@ -1130,20 +1146,31 @@ Board::CapturesAndTerritoriesInfos::~CapturesAndTerritoriesInfos() {
   capturesAndTerritoriesInfos.clear();
 }
 
-void Board::makeMoveAndRecalculateMaxBases(
+void Board::recalculateCapturesAndTerritories(
   const Player pla,
   const Loc loc,
   CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos) const {
+
+  CaptureAndTerritoryInfos* captureAndTerritoryInfoAtCaptureLoc = capturesAndTerritoriesInfos->at(loc);
+
+  // Optimization: if the dot is placed into own territory it's expected that a larger and optimal surrounding exists
+  // with corresponding (more outer) capturing location
+  if (captureAndTerritoryInfoAtCaptureLoc != nullptr && captureAndTerritoryInfoAtCaptureLoc->hasAnyTerritory(pla)) {
+    return;
+  }
 
   MoveRecord moveRecord = const_cast<Board*>(this)->playMoveRecordedDots(loc, pla);
 
   for (Base const& base: moveRecord.bases) {
     const bool isSuicidal = base.type == Base::Type::SUICIDAL;
 
-    CaptureAndTerritoryInfos& captureAndTerritoryInfoAtCaptureLoc = capturesAndTerritoriesInfos->getOrPut(loc);
+    if (captureAndTerritoryInfoAtCaptureLoc == nullptr) {
+      captureAndTerritoryInfoAtCaptureLoc = capturesAndTerritoriesInfos->put(loc);
+    }
 
-    if (isSuicidal && captureAndTerritoryInfoAtCaptureLoc.getZeroMoveEmptyTerritoryPlayer() == base.pla) {
-      // Optimization: don't recalculate same suicidal territory on each suicidal move
+    if (isSuicidal && captureAndTerritoryInfoAtCaptureLoc->hasAnyTerritory(base.pla)) {
+      // Optimization: don't recalculate same or more inner territory on each suicidal move
+      // It differs from the above one, because the suicide can be determined only after the placement
       continue;
     }
 
@@ -1161,15 +1188,18 @@ void Board::makeMoveAndRecalculateMaxBases(
     unordered_set<BaseInfo*> baseInfosToRemove;
 
     bool shouldAddNewBaseInfo = true;
-    for (BaseInfo* intersectedBaseInfo: intersectedBaseInfos) {
+    for (BaseInfo* intersectedBaseInfo : intersectedBaseInfos) {
       const BaseInfo::RelationType relationType = intersectedBaseInfo->getRelationTo(base, loc);
       assert(relationType != BaseInfo::RelationType::UNRELATED);
       if (relationType == BaseInfo::RelationType::SUPERSET) {
+        // It's expected that the supersets are only actual for opp surroundings
+        // Because own surroundings should be filtered out at the beginning of the method
+        assert(intersectedBaseInfo->player != base.pla);
         // Optimization: superset supersedes the subset -> break the loop, because further traversal doesn't make sense
         shouldAddNewBaseInfo = false;
         break;
       }
-      if(relationType == BaseInfo::RelationType::SUBSET) {
+      if (relationType == BaseInfo::RelationType::SUBSET) {
         // Remove the subset. Don't break the loop because multiple subsets are legal.
         baseInfosToRemove.insert(intersectedBaseInfo);
       }
@@ -1191,7 +1221,7 @@ void Board::makeMoveAndRecalculateMaxBases(
     }
 
     if (newBaseInfo != nullptr && !isSuicidal) {
-      captureAndTerritoryInfoAtCaptureLoc.addCaptureInfo(newBaseInfo);
+      captureAndTerritoryInfoAtCaptureLoc->addCaptureInfo(newBaseInfo);
     }
   }
 
@@ -1219,11 +1249,11 @@ Board::CapturesAndTerritoriesInfos* Board::calculateCapturesAndTerritoriesColors
 
       // It doesn't make sense to calculate capturing when the dot placed into own empty territory
       if (emptyTerritoryColor != P_BLACK) {
-        makeMoveAndRecalculateMaxBases(P_BLACK, loc, capturesAndTerritoriesInfos);
+        recalculateCapturesAndTerritories(P_BLACK, loc, capturesAndTerritoriesInfos);
       }
 
       if (emptyTerritoryColor != P_WHITE) {
-        makeMoveAndRecalculateMaxBases(P_WHITE, loc, capturesAndTerritoriesInfos);
+        recalculateCapturesAndTerritories(P_WHITE, loc, capturesAndTerritoriesInfos);
       }
     }
   }

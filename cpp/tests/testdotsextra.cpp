@@ -809,6 +809,37 @@ x..x..x
   );
 
   checkCapturesAndTerritories(
+    "Drop internal empty territory 2",
+    R"(
+..o.o..
+.o...o.
+o..o..o
+o.o.o.o
+o..o..o
+.o.x.o.
+..ooo..
+)",
+    R"(
+.  .  .  O  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+)",
+    R"(
+.  .  .  .  .  .  .
+.  .  O  O  O  .  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  .  O  O  O  .  .
+.  .  .  .  .  .  .
+)"
+);
+
+  checkCapturesAndTerritories(
   "Drop dangling territory",
   R"(
 .......
