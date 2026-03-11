@@ -767,7 +767,7 @@ struct GTPEngine {
         if(buf.size() <= 0)
           return;
 
-        const Board board = search->getRootBoard();
+        const Board& board = search->getRootBoard();
         for(int i = 0; i<buf.size(); i++) {
           if(i > 0)
             cout << " ";
@@ -843,7 +843,7 @@ struct GTPEngine {
           out << std::showpoint;
         }
 
-        const Board board = search->getRootBoard();
+        const Board& board = search->getRootBoard();
         for(int i = 0; i<buf.size(); i++) {
           if(i > 0)
             out << " ";
