@@ -6,7 +6,7 @@
 #include "../core/using.h"
 //------------------------
 
-void Search::computeRootNNEvaluation(NNResultBuf& nnResultBuf, bool includeOwnerMap) {
+void Search::computeRootNNEvaluation(NNResultBuf& nnResultBuf, bool includeOwnerMap) const {
   Board board = rootBoard;
   const BoardHistory& hist = rootHistory;
   Player pla = rootPla;
