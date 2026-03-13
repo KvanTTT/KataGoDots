@@ -395,7 +395,7 @@ xox.oxo
 .  .  .  .  .  .  .
 .  X  .  .  .  O  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .  .
 .  X  .  .  .  O  .
 .  X  .  .  .  O  .
@@ -411,14 +411,15 @@ xox
 ...
 oxo
 .o.
-)", R"(
+)",
+    R"(
 .  .  .
 .  .  .
 .  XO .
 .  .  .
 .  .  .
 )",
-  R"(
+    R"(
 .  .  .
 .  X  .
 .  .  .
@@ -428,18 +429,18 @@ oxo
 );
 
   checkCapturesAndTerritories(
-  "Empty territories",
-  R"(
+    "Empty territories",
+    R"(
 .x..o.
 x.xo.o
 x.xo.o
 .x..o.
 )",
-  nullopt,
-  nullopt,
-  nullopt,
-  nullopt,
-  R"(
+    nullopt,
+    nullopt,
+    nullopt,
+    nullopt,
+    R"(
 .  .  .  .  .  .
 .  X  .  .  O  .
 .  X  .  .  O  .
@@ -447,54 +448,55 @@ x.xo.o
 )");
 
   checkCapturesAndTerritories(
-"One move empty territory",
-R"(
+    "One move empty territory",
+    R"(
 .x..o.
 x.xo.o
 ......
 )",
-  nullopt,
-  nullopt,
-  R"(
+    nullopt,
+    nullopt,
+    R"(
 .  .  .  .  .  .
 .  .  .  .  .  .
 .  X  .  .  O  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .
 .  X  .  .  O  .
 .  .  .  .  .  .
 )",
-  nullopt,
-  Rules::DEFAULT_DOTS.multiStoneSuicideLegal, false
+    nullopt,
+    Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
+    false
 );
 
   checkCapturesAndTerritories(
-"Empty territory can be broken",
-R"(
+    "Empty territory can be broken",
+    R"(
 .xx..oo.
 x..xo..o
 x.x..o.o
 oxo..xox
 .o....x.
 )",
-  R"(
+    R"(
 .  .  .  .  .  .  .  .
 .  .  .  .  .  .  .  .
 .  O  .  .  .  .  X  .
 .  .  .  .  .  .  .  .
 .  .  .  .  .  .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .  .  .
 .  .  .  .  .  .  .  .
 .  .  .  .  .  .  .  .
 .  O  .  .  .  .  X  .
 .  .  .  .  .  .  .  .
 )",
-  nullopt,
-  nullopt,
-  R"(
+    nullopt,
+    nullopt,
+    R"(
 .  .  .  .  .  .  .  .
 .  X  X  .  .  O  O  .
 .  X  .  .  .  .  O  .
@@ -504,61 +506,41 @@ oxo..xox
 );
 
   checkCapturesAndTerritories(
-    "Overlapping one move empty captures",
-  R"(
-.xxoo.
-x....o
-.xxoo.
-)",
-  nullopt,
-  nullopt,
-  R"(
-.  .  .  .  .  .
-.  .  O  X  .  .
-.  .  .  .  .  .
-)",
-  R"(
-.  .  .  .  .  .
-.  X  X  O  O  .
-.  .  .  .  .  .
-)"
-);
-
-  checkCapturesAndTerritories(
-    "Overlapping one move empty captures",
-  R"(
+    "Trivial overlapping of captures with empty territory",
+    R"(
 .xo.
 x..o
 .xo.
 )",
-  nullopt,
-  nullopt,
-  R"(
+    nullopt,
+    nullopt,
+    R"(
 .  .  .  .
-.  O  X  .
+.  .  .  .
 .  .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .
 .  X  O  .
 .  .  .  .
 )"
 );
 
-
   checkCapturesAndTerritories(
-    "Overlapping one move normal capture with empty loc",
-  R"(
+    "Overlapping of captures with empty territory",
+    R"(
 .xxoo.
-xo..xo
+x....o
 .xxoo.
 )",
-  R"(
+    nullopt,
+    nullopt,
+    R"(
 .  .  .  .  .  .
-.  .  O  X  .  .
+.  .  .  .  .  .
 .  .  .  .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .
 .  X  X  O  O  .
 .  .  .  .  .  .
@@ -566,31 +548,152 @@ xo..xo
 );
 
   checkCapturesAndTerritories(
-    "Overlapping one move normal and empty capture",
-  R"(
+    "Overlapping one move normal capture with empty loc",
+    R"(
+.xxoo.
+xo..xo
+.xxoo.
+)",
+    R"(
+.  .  .  .  .  .
+.  .  O  X  .  .
+.  .  .  .  .  .
+)",
+    R"(
+.  .  .  .  .  .
+.  X  X  O  O  .
+.  .  .  .  .  .
+)"
+);
+
+  checkCapturesAndTerritories(
+    "Overlapping with one move normal and empty capture",
+    R"(
 .xxoo.
 x...xo
 .xxoo.
 )",
-  R"(
+    R"(
 .  .  .  .  .  .
 .  .  O  .  .  .
 .  .  .  .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .
 .  .  .  O  O  .
 .  .  .  .  .  .
 )",
-  R"(
+    R"(
+.  .  .  .  .  .
+.  .  .  .  .  .
+.  .  .  .  .  .
+)",
+    R"(
+.  .  .  .  .  .
+.  X  X  .  .  .
+.  .  .  .  .  .
+)"
+);
+
+  checkCapturesAndTerritories(
+    "Overlapping with one move normal and empty capture (reversed)",
+    R"(
+.xxoo.
+xo...o
+.xxoo.
+)",
+    R"(
 .  .  .  .  .  .
 .  .  .  X  .  .
 .  .  .  .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .
 .  X  X  .  .  .
 .  .  .  .  .  .
+)",
+    R"(
+.  .  .  .  .  .
+.  .  .  .  .  .
+.  .  .  .  .  .
+)",
+    R"(
+.  .  .  .  .  .
+.  .  .  O  O  .
+.  .  .  .  .  .
+)"
+);
+
+  checkCapturesAndTerritories(
+    "Outer empty and inner normal captures",
+    R"(
+.ooxx.
+...o.x
+.ooxx.
+)",
+    R"(
+.  .  .  .  .  .
+.  .  X  .  .  .
+.  .  .  .  .  .
+)",
+    R"(
+.  .  .  .  .  .
+.  .  .  X  X  .
+.  .  .  .  .  .
+)",
+    R"(
+.  .  .  .  .  .
+O  .  .  .  .  .
+.  .  .  .  .  .
+)",
+    R"(
+.  .  .  .  .  .
+.  O  O  .  .  .
+.  .  .  .  .  .
+)"
+    );
+
+  checkCapturesAndTerritories(
+    "Outer normal and inner normal captures",
+    R"(
+.ooxx.
+..xo..
+.ooxx.
+)",
+    R"(
+.  .  .  .  .  .
+O  .  .  .  .  X
+.  .  .  .  .  .
+)",
+    R"(
+.  .  .  .  .  .
+.  O  O  X  X  .
+.  .  .  .  .  .
+)"
+  );
+
+  checkCapturesAndTerritories(
+    "Normal base supersedes suicidal without capturing location",
+    R"(
+.ooo.
+o.xxo
+ox..x
+o.xxo
+.ooo.
+)",
+    R"(
+.  .  .  .  .
+.  .  .  .  .
+.  .  .  O  .
+.  .  .  .  .
+.  .  .  .  .
+)",
+    R"(
+.  .  .  .  .
+.  O  O  O  .
+.  O  O  .  .
+.  O  O  O  .
+.  .  .  .  .
 )"
 );
 
@@ -635,14 +738,11 @@ XO.OX
 .  X  X  X  .
 .  .  X  .  .
 .  .  .  .  .
-)",
-    nullopt,
-    nullopt,
-    nullopt
+)"
 );
 
   checkCapturesAndTerritories(
-  "Big empty territory supersedes multiple small ones",
+    "Big empty territory supersedes multiple small ones",
     R"(
 ..O.
 .O.O
@@ -662,8 +762,7 @@ O..O
 .  .  O  .
 .  O  O  .
 .  .  .  .
-)",
-    nullopt
+)"
 );
 
   checkCapturesAndTerritories(
@@ -714,22 +813,22 @@ x..x
 );
 
   checkCapturesAndTerritories(
-  "Overlapping of captures and territories",
-  R"(
+    "Overlapping of captures and territories",
+    R"(
 .ooxx.
 o.xo.x
 ox.ox.
 ox.ox.
 .o.x..
 )",
-  R"(
+    R"(
 .  .  .  .  .  .
 .  .  .  .  .  .
 .  .  .  .  .  .
 .  .  .  .  .  .
 .  .  XO .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .
 .  O  O  X  X  .
 .  O  XO X  .  .
@@ -773,8 +872,8 @@ x.....x
     );
 
   checkCapturesAndTerritories(
-  "Drop internal empty territory",
-  R"(
+    "Drop internal empty territory",
+    R"(
 ..xxx..
 .x...x.
 x..x..x
@@ -784,9 +883,9 @@ x..x..x
 ..x.x..
 .......
 )",
-  nullopt,
-  nullopt,
-  R"(
+    nullopt,
+    nullopt,
+    R"(
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
@@ -796,7 +895,7 @@ x..x..x
 .  .  .  .  .  .  .
 .  .  .  X  .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .  .
 .  .  X  X  X  .  .
 .  X  X  .  X  X  .
@@ -840,8 +939,8 @@ o..o..o
 );
 
   checkCapturesAndTerritories(
-  "Drop dangling territory",
-  R"(
+    "Drop dangling territory",
+    R"(
 .......
 .oo.oo.
 o.....o
@@ -850,7 +949,7 @@ o..o..o
 o.....o
 .ooooo.
 )",
-  R"(
+    R"(
 .  .  .  O  .  .  .
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
@@ -859,7 +958,7 @@ o.....o
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .  .
 .  .  .  O  .  .  .
 .  O  O  O  O  O  .
@@ -871,8 +970,8 @@ o.....o
   );
 
   checkCapturesAndTerritories(
-  "Drop internal opp captures and territory",
-  R"(
+    "Drop internal opp captures and territory",
+    R"(
 ..xxx..
 .x...x.
 x..o..x
@@ -882,7 +981,7 @@ x.....x
 ..x.x..
 ...o...
 )",
-  R"(
+    R"(
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
@@ -892,7 +991,7 @@ x.....x
 .  .  .  X  .  .  .
 .  .  .  .  .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .  .
 .  .  X  X  X  .  .
 .  X  X  X  X  X  .
@@ -905,8 +1004,8 @@ x.....x
 );
 
   checkCapturesAndTerritories(
-  "Drop internal opp captures and territory 2",
-  R"(
+    "Drop internal opp captures and territory 2",
+    R"(
 .......
 .oo.oo.
 o.....o
@@ -915,7 +1014,7 @@ o..x..o
 o.....o
 .ooooo.
 )",
-  R"(
+    R"(
 .  .  .  O  .  .  .
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
@@ -924,7 +1023,7 @@ o.....o
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .  .
 .  .  .  O  .  .  .
 .  O  O  O  O  O  .
@@ -937,7 +1036,7 @@ o.....o
 
   checkCapturesAndTerritories(
     "Drop inner empty territory if outer captures",
-  R"(
+    R"(
 .oo.oo.
 o.....o
 o..x..o
@@ -946,7 +1045,7 @@ o..x..o
 o.....o
 .ooooo.
 )",
-  R"(
+    R"(
 .  .  .  O  .  .  .
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
@@ -955,7 +1054,7 @@ o.....o
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .  .
 .  O  O  O  O  O  .
 .  O  O  O  O  O  .
