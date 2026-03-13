@@ -944,10 +944,12 @@ void Board::invalidateAdjacentEmptyTerritoryIfNeeded(const Loc loc) {
   clearVisited(closureOrInvalidateLocsBuffer);
 }
 
-Board::BaseInfo::BaseInfo(const Loc newCaptureLoc, const Base& base) {
+Board::BaseInfo::BaseInfo(const Base& base, const Loc newCaptureLoc, const bool newNonCapturing) {
+  assert((!newNonCapturing || base.type != Base::Type::NORMAL) && "Non-capturing bases must not be NORMAL");
   player = base.pla;
   captureLoc = newCaptureLoc;
   type = base.type;
+  nonCapturing = newNonCapturing;
   territory.reserve(base.rollback_locs_states_captures.size());
 
   for(const auto& rollback_locs_states_capture: base.rollback_locs_states_captures) {
@@ -967,51 +969,58 @@ Board::BaseInfo::RelationType Board::BaseInfo::getRelationTo(const Base& other, 
     }
   }
 
-  // No overlapping -> different or intersected bases
-  if (commonLocsCount == 0) {
-    const bool anyCaptureLocInAnyTerritory =
-      territory.find(otherCaptureLoc) != territory.end() || otherContainsCaptureLoc;
-    if (player == other.pla) {
-      // Bases of same color can't have intersection
-      assert(!anyCaptureLocInAnyTerritory);
-      return RelationType::UNRELATED;
-    }
-    return anyCaptureLocInAnyTerritory ? RelationType::INTERSECTION : RelationType::UNRELATED;
-  }
+  const bool containsCaptureLoc = territory.find(otherCaptureLoc) != territory.end();
 
-  // Overlapping -> relation should be SUPERSET or SUBSET
-  if (player == other.pla) {
-    if (territory.size() > commonLocsCount) {
-      assert(other.rollback_locs_states_captures.size() == commonLocsCount);
+  if (commonLocsCount == 0) {
+    assert(player != other.pla && "Bases of same color can have only SUPERSET or SUBSET relation");
+  } else {
+    // Overlapping -> relation must be SUPERSET or SUBSET
+    if (player == other.pla) {
+      if (territory.size() > commonLocsCount) {
+        assert(other.rollback_locs_states_captures.size() == commonLocsCount);
+        return RelationType::SUPERSET;
+      }
+
+      assert(
+        other.rollback_locs_states_captures.size() > commonLocsCount &&
+        territory.size() == commonLocsCount &&
+        "Surrounding locs sets of same color should be either subsets or supersets but they neither equal nor different"
+      );
+      return RelationType::SUBSET;
+    }
+
+    if (other.rollback_locs_states_captures.size() == commonLocsCount || other.type == Base::Type::SUICIDAL) {
+      // There is a rare case when a suicidal base overlaps a normal one.
+      // Effectively, it's a SUPERSET because the only capturing loc isn't common.
+      assert(other.type != Base::Type::SUICIDAL ||
+        other.rollback_locs_states_captures.size() == commonLocsCount ||
+        other.rollback_locs_states_captures.size() == commonLocsCount + 1 && otherContainsCaptureLoc);
       return RelationType::SUPERSET;
     }
 
-    assert(
-      other.rollback_locs_states_captures.size() > commonLocsCount &&
-      territory.size() == commonLocsCount &&
-      "Surrounding locs sets of same color should be either subsets or supersets but they neither equal nor different"
-    );
-    return RelationType::SUBSET;
+    if (territory.size() == commonLocsCount || type == Base::Type::SUICIDAL) {
+      // There is a rare case when a suicidal base overlaps a normal one.
+      // Effectively, it's a SUBSET because the only capturing loc isn't common.
+      assert(type != Base::Type::SUICIDAL ||
+        territory.size() == commonLocsCount ||
+        territory.size() == commonLocsCount + 1 && containsCaptureLoc);
+      return RelationType::SUBSET;
+    }
   }
 
-  if (other.rollback_locs_states_captures.size() == commonLocsCount) {
-    return RelationType::SUPERSET;
-  }
-
-  if (territory.size() == commonLocsCount) {
-    return RelationType::SUBSET;
-  }
-
-  return RelationType::INTERSECTION;
+  return containsCaptureLoc && otherContainsCaptureLoc
+    ? RelationType::INNER_CAPTURE
+    : RelationType::OUTER_CAPTURE_OR_UNRELATED;
 }
 
 void Board::CaptureAndTerritoryInfos::addCaptureInfo(BaseInfo* newBaseInfo) {
   [[maybe_unused]] bool added = false;
+  assert(newBaseInfo != nullptr && "Attempt to add null base info");
   for (BaseInfo*& baseInfo : captureBaseInfos) {
-    if (baseInfo == nullptr) {
+    assert(baseInfo != newBaseInfo && "Attempt to add an existing base info");
+    if (!added && baseInfo == nullptr) {
       baseInfo = newBaseInfo;
       added = true;
-      break;
     }
   }
   assert(added && "Too many capture locs, max is 4");
@@ -1019,29 +1028,33 @@ void Board::CaptureAndTerritoryInfos::addCaptureInfo(BaseInfo* newBaseInfo) {
 
 void Board::CaptureAndTerritoryInfos::addTerritoryInfo(BaseInfo* newBaseInfo) {
   [[maybe_unused]] bool added = false;
+  assert(newBaseInfo != nullptr && "Attempt to add null base info");
   for (BaseInfo*& baseInfo : territoryBaseInfos) {
-    if (baseInfo == nullptr) {
+    assert(baseInfo != newBaseInfo && "Attempt to add an existing base info");
+    if (!added && baseInfo == nullptr) {
       baseInfo = newBaseInfo;
       added = true;
-      break;
     }
   }
   assert(added && "Too many capture locs, max is 2");
 }
 
-void Board::CaptureAndTerritoryInfos::removeCaptureAndTerritoryInfos(BaseInfo* baseInfoToRemove) {
+bool Board::CaptureAndTerritoryInfos::removeCaptureAndTerritoryInfos(const BaseInfo* baseInfoToRemove) {
+  bool removed = false;
+  assert(baseInfoToRemove != nullptr && "Attempt to remove null base info");
   for (BaseInfo*& baseInfo : captureBaseInfos) {
     if (baseInfo == baseInfoToRemove) {
       baseInfo = nullptr;
-      break;
+      removed = true;
     }
   }
   for (BaseInfo*& baseInfo : territoryBaseInfos) {
     if (baseInfo == baseInfoToRemove) {
       baseInfo = nullptr;
-      break;
+      removed = true;
     }
   }
+  return removed;
 }
 
 Color Board::CaptureAndTerritoryInfos::getOneMoveCaptureColor() const {
@@ -1074,9 +1087,9 @@ Color Board::CaptureAndTerritoryInfos::getOneMoveTerritoryColor() const {
   return result;
 }
 
-bool Board::CaptureAndTerritoryInfos::hasAnyTerritory(const Player pla) const {
+bool Board::CaptureAndTerritoryInfos::hasAnyRealTerritory(const Player pla) const {
   for (const BaseInfo* baseInfo : territoryBaseInfos) {
-    if (baseInfo != nullptr && baseInfo->player == pla) {
+    if (baseInfo != nullptr && baseInfo->player == pla && baseInfo->type != Base::Type::EMPTY) {
       return true;
     }
   }
@@ -1129,8 +1142,8 @@ Board::CaptureAndTerritoryInfos* Board::CapturesAndTerritoriesInfos::put(const i
   return result;
 }
 
-Board::BaseInfo* Board::CapturesAndTerritoriesInfos::addBaseInfo(const Loc captureLoc, const Base& base) {
-  const auto baseInfo = new BaseInfo(captureLoc, base);
+Board::BaseInfo* Board::CapturesAndTerritoriesInfos::addBaseInfo(const Base& base, const Loc captureLoc, const bool newNonCapturing) {
+  const auto baseInfo = new BaseInfo(base, captureLoc, newNonCapturing);
   baseInfos.push_back(baseInfo);
   return baseInfo;
 }
@@ -1149,13 +1162,14 @@ Board::CapturesAndTerritoriesInfos::~CapturesAndTerritoriesInfos() {
 void Board::recalculateCapturesAndTerritories(
   const Player pla,
   const Loc loc,
+  const Color currentPla,
   CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos) const {
 
   CaptureAndTerritoryInfos* captureAndTerritoryInfoAtCaptureLoc = capturesAndTerritoriesInfos->at(loc);
 
   // Optimization: if the dot is placed into own territory it's expected that a larger and optimal surrounding exists
   // with corresponding (more outer) capturing location
-  if (captureAndTerritoryInfoAtCaptureLoc != nullptr && captureAndTerritoryInfoAtCaptureLoc->hasAnyTerritory(pla)) {
+  if (captureAndTerritoryInfoAtCaptureLoc != nullptr && captureAndTerritoryInfoAtCaptureLoc->hasAnyRealTerritory(pla)) {
     return;
   }
 
@@ -1168,44 +1182,102 @@ void Board::recalculateCapturesAndTerritories(
       captureAndTerritoryInfoAtCaptureLoc = capturesAndTerritoriesInfos->put(loc);
     }
 
-    if (isSuicidal && captureAndTerritoryInfoAtCaptureLoc->hasAnyTerritory(base.pla)) {
+    if (isSuicidal && captureAndTerritoryInfoAtCaptureLoc->hasAnyRealTerritory(base.pla)) {
       // Optimization: don't recalculate same or more inner territory on each suicidal move
       // It differs from the above one, because the suicide can be determined only after the placement
       continue;
     }
 
-    unordered_set<BaseInfo*> intersectedBaseInfos;
+    unordered_set<BaseInfo*> overlappedBaseInfos;
 
     for (auto const& rollback_locs_states_capture: base.rollback_locs_states_captures) {
       const Loc territoryLoc = rollback_locs_states_capture.getLoc();
       for (BaseInfo* territoryBaseInfo : capturesAndTerritoriesInfos->getOrPut(territoryLoc).territoryBaseInfos) {
         if (territoryBaseInfo != nullptr) {
-          intersectedBaseInfos.insert(territoryBaseInfo);
+          overlappedBaseInfos.insert(territoryBaseInfo);
         }
+      }
+    }
+
+    for (BaseInfo* territoryBaseInfo : capturesAndTerritoriesInfos->getOrPut(loc).territoryBaseInfos) {
+      if (territoryBaseInfo != nullptr) {
+        overlappedBaseInfos.insert(territoryBaseInfo);
       }
     }
 
     unordered_set<BaseInfo*> baseInfosToRemove;
 
-    bool shouldAddNewBaseInfo = true;
-    for (BaseInfo* intersectedBaseInfo : intersectedBaseInfos) {
-      const BaseInfo::RelationType relationType = intersectedBaseInfo->getRelationTo(base, loc);
-      assert(relationType != BaseInfo::RelationType::UNRELATED);
-      if (relationType == BaseInfo::RelationType::SUPERSET) {
-        // It's expected that the supersets are only actual for opp surroundings
-        // Because own surroundings should be filtered out at the beginning of the method
-        assert(intersectedBaseInfo->player != base.pla);
-        // Optimization: superset supersedes the subset -> break the loop, because further traversal doesn't make sense
-        shouldAddNewBaseInfo = false;
-        break;
+    auto newBaseInfoOpFlags = static_cast<uint8_t>(NewBaseInfoOpType::ADD);
+    if (isSuicidal) {
+      newBaseInfoOpFlags |= static_cast<uint8_t>(NewBaseInfoOpType::NO_CAPTURE_LOC);
+    }
+    for (BaseInfo* overlappedBaseInfo : overlappedBaseInfos) {
+      if (const BaseInfo::RelationType relationType = overlappedBaseInfo->getRelationTo(base, loc);
+         relationType == BaseInfo::RelationType::SUPERSET) {
+        newBaseInfoOpFlags = static_cast<uint8_t>(NewBaseInfoOpType::IGNORE);
+      } else if (relationType == BaseInfo::RelationType::SUBSET) {
+        newBaseInfoOpFlags = static_cast<uint8_t>(NewBaseInfoOpType::ADD_SUPERSEDE);
+      } else if (relationType == BaseInfo::RelationType::OUTER_CAPTURE_OR_UNRELATED) {
+        // The position is unsettled in case of outer or unrelated capturing because
+        // it's not obvious if outer capturing locs should be ignored ->
+        // keep both base infos
+        newBaseInfoOpFlags = static_cast<uint8_t>(NewBaseInfoOpType::ADD);
+      } else {
+        // In case of the inner capturing, it becomes possible to filter out almost suicidal moves
+        // When they can be captured right after the placement
+        assert(relationType == BaseInfo::RelationType::INNER_CAPTURE);
+        assert(overlappedBaseInfo->player != base.pla);
+
+        if (overlappedBaseInfo->type == Base::Type::NORMAL && base.type == Base::Type::NORMAL) {
+          if (currentPla != C_EMPTY) {
+            if (overlappedBaseInfo->player == currentPla) {
+              newBaseInfoOpFlags = static_cast<uint8_t>(NewBaseInfoOpType::IGNORE);
+            } else {
+              assert(overlappedBaseInfo->player == getOpp(currentPla));
+              newBaseInfoOpFlags = static_cast<uint8_t>(NewBaseInfoOpType::ADD_SUPERSEDE);
+            }
+          } else {
+            // Position is unsettled and depends on the current player -> keep both bases
+            newBaseInfoOpFlags = static_cast<uint8_t>(NewBaseInfoOpType::ADD);
+          }
+        } else {
+          if (overlappedBaseInfo->type == Base::Type::NORMAL) {
+            assert(base.type == Base::Type::EMPTY);
+            newBaseInfoOpFlags = static_cast<uint8_t>(NewBaseInfoOpType::ADD_NO_CAPTURE_LOC);
+          } else {
+            assert(overlappedBaseInfo->type == Base::Type::EMPTY);
+            if (base.type == Base::Type::NORMAL) {
+              newBaseInfoOpFlags = static_cast<uint8_t>(NewBaseInfoOpType::ADD_CHANGE_NO_CAPTURE_LOC);
+            } else {
+              assert(base.type == Base::Type::EMPTY);
+              newBaseInfoOpFlags = static_cast<uint8_t>(NewBaseInfoOpType::ADD_NO_CAPTURE_LOC_CHANGE_NO_CAPTURE_LOC);
+            }
+          }
+        }
       }
-      if (relationType == BaseInfo::RelationType::SUBSET) {
+
+      if (newBaseInfoOpFlags & static_cast<uint8_t>(NewBaseInfoOpType::SUPERSEDE)) {
         // Remove the subset. Don't break the loop because multiple subsets are legal.
-        baseInfosToRemove.insert(intersectedBaseInfo);
+        baseInfosToRemove.insert(overlappedBaseInfo);
+      }
+
+      if (newBaseInfoOpFlags & static_cast<uint8_t>(NewBaseInfoOpType::CHANGE_NO_CAPTURE_LOC)) {
+        // Keep empty territories but remove their capturing locs because they can be captured
+        const bool removed = capturesAndTerritoriesInfos->at(overlappedBaseInfo->captureLoc)->removeCaptureAndTerritoryInfos(overlappedBaseInfo);
+        assert(removed);
+        (void)removed;
+        overlappedBaseInfo->nonCapturing = true;
+      }
+
+      // Optimization: superset supersedes the subset -> break the loop, because the further traversal doesn't make sense
+      if (!(newBaseInfoOpFlags & static_cast<uint8_t>(NewBaseInfoOpType::ADD))) {
+        break;
       }
     }
 
-    BaseInfo* newBaseInfo = shouldAddNewBaseInfo ? capturesAndTerritoriesInfos->addBaseInfo(loc, base) : nullptr;
+    BaseInfo* newBaseInfo = newBaseInfoOpFlags & static_cast<uint8_t>(NewBaseInfoOpType::ADD)
+                              ? capturesAndTerritoriesInfos->addBaseInfo(base, loc, newBaseInfoOpFlags & static_cast<uint8_t>(NewBaseInfoOpType::NO_CAPTURE_LOC))
+                              : nullptr;
 
     for (auto const& rollback_locs_states_capture: base.rollback_locs_states_captures) {
       const Loc territoryLoc = rollback_locs_states_capture.getLoc();
@@ -1220,7 +1292,11 @@ void Board::recalculateCapturesAndTerritories(
       }
     }
 
-    if (newBaseInfo != nullptr && !isSuicidal) {
+    for (auto& baseInfoToRemove: baseInfosToRemove) {
+      captureAndTerritoryInfoAtCaptureLoc->removeCaptureAndTerritoryInfos(baseInfoToRemove);
+    }
+
+    if (newBaseInfo != nullptr && !(newBaseInfoOpFlags & static_cast<uint8_t>(NewBaseInfoOpType::NO_CAPTURE_LOC))) {
       captureAndTerritoryInfoAtCaptureLoc->addCaptureInfo(newBaseInfo);
     }
   }
@@ -1228,7 +1304,7 @@ void Board::recalculateCapturesAndTerritories(
   const_cast<Board*>(this)->undo(moveRecord);
 }
 
-Board::CapturesAndTerritoriesInfos* Board::calculateCapturesAndTerritoriesColorsForDots() const {
+Board::CapturesAndTerritoriesInfos* Board::calculateCapturesAndTerritoriesColorsForDots(const Color currentPla) const {
   const auto capturesAndTerritoriesInfos = new CapturesAndTerritoriesInfos((x_size + 1) * (y_size + 1));
 
   // Don't calculate anything if the game is already over (finished) because it doesn't look correct
@@ -1249,11 +1325,11 @@ Board::CapturesAndTerritoriesInfos* Board::calculateCapturesAndTerritoriesColors
 
       // It doesn't make sense to calculate capturing when the dot placed into own empty territory
       if (emptyTerritoryColor != P_BLACK) {
-        recalculateCapturesAndTerritories(P_BLACK, loc, capturesAndTerritoriesInfos);
+        recalculateCapturesAndTerritories(P_BLACK, loc, currentPla, capturesAndTerritoriesInfos);
       }
 
       if (emptyTerritoryColor != P_WHITE) {
-        recalculateCapturesAndTerritories(P_WHITE, loc, capturesAndTerritoriesInfos);
+        recalculateCapturesAndTerritories(P_WHITE, loc, currentPla, capturesAndTerritoriesInfos);
       }
     }
   }
