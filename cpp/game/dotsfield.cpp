@@ -1118,6 +1118,34 @@ Player Board::CaptureAndTerritoryInfos::getZeroMoveEmptyTerritoryPlayer() const 
   return result;
 }
 
+bool Board::CaptureAndTerritoryInfos::isReasonableMove(const Player currentPla) const {
+  for (const BaseInfo* captureBaseInfo : captureBaseInfos) {
+    if (captureBaseInfo == nullptr) continue;
+
+    if (captureBaseInfo->player == currentPla) {
+      // Always reasonable if it captures anything
+      // Own capturing moves don't overlap with own territory thanks to the preliminary refinement
+      return true;
+    }
+  }
+
+  for (const BaseInfo* baseInfo : territoryBaseInfos) {
+    if (baseInfo == nullptr) continue;
+
+    if (baseInfo->type == Base::Type::NORMAL) {
+      // Never reasonable: either own or opp can capture the loc right on the next move by an outer loc
+      return false;
+    }
+
+    // Otherwise, it's reasonable if only it's a territory of the current player
+    // In most cases such moves are useless;
+    // however, unfortunately they can't be just dropped because enclosure dots might prevent grounding.
+    return baseInfo->player == currentPla;
+  }
+
+  return true;
+}
+
 Board::CapturesAndTerritoriesInfos::CapturesAndTerritoriesInfos(const int size) {
   capturesAndTerritoriesInfos.resize(size);
 }

@@ -262,16 +262,22 @@ static void runDotsStressTestsInternal(
     }
 
     if (performExtraChecks) {
-      Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos;
+      Board boardWithoutGrounding;
       if (lastLoc == Board::PASS_LOC) {
-        Board boardBeforeGrounding(board);
-        boardBeforeGrounding.undo(moveRecords.back());
-        capturesAndTerritoriesInfos = boardBeforeGrounding.calculateCapturesAndTerritoriesColorsForDots();
-        validateGrounding(boardBeforeGrounding, board, moveRecords.back().pla, moveRecords);
+        boardWithoutGrounding = board;
+        boardWithoutGrounding.undo(moveRecords.back());
+        validateGrounding(boardWithoutGrounding, board, moveRecords.back().pla, moveRecords);
       } else {
-        capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+        boardWithoutGrounding = board;
       }
+
+      Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos = boardWithoutGrounding.calculateCapturesAndTerritoriesColorsForDots();
       delete capturesAndTerritoriesInfos;
+
+      BoardHistory boardHistory(boardWithoutGrounding);
+      (void)boardHistory.getReasonableLocs(boardWithoutGrounding, P_BLACK);
+      (void)boardHistory.getReasonableLocs(boardWithoutGrounding, P_WHITE);
+
       validateStatesAndCaptures(board, moveRecords);
     }
 

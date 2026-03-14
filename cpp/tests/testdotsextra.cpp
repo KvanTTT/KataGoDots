@@ -259,7 +259,9 @@ R"(
 )", 1, {XYMove(0, 2, P_WHITE)});
 }
 
-enum class CaptureTerritoryType {
+enum class NextMoveType {
+  BlackReasonable,
+  WhiteReasonable,
   OneMoveCapture,
   OneMoveTerritory,
   OneMoveEmptyCapture,
@@ -267,44 +269,75 @@ enum class CaptureTerritoryType {
   ZeroMoveEmptyTerritory
 };
 
-static std::map<CaptureTerritoryType, std::ostringstream> getCapturesAndTerritories(const Board& board) {
+static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& board) {
   const Board& copy(board);
 
-  std::map<CaptureTerritoryType, std::ostringstream> captureTerritoryStringStreams;
+  std::map<NextMoveType, std::ostringstream> nextMoveTypeStreams;
 
-  captureTerritoryStringStreams.emplace(CaptureTerritoryType::OneMoveCapture, std::ostringstream());
-  captureTerritoryStringStreams.emplace(CaptureTerritoryType::OneMoveTerritory, std::ostringstream());
-  captureTerritoryStringStreams.emplace(CaptureTerritoryType::OneMoveEmptyCapture, std::ostringstream());
-  captureTerritoryStringStreams.emplace(CaptureTerritoryType::OneMoveEmptyTerritory, std::ostringstream());
-  captureTerritoryStringStreams.emplace(CaptureTerritoryType::ZeroMoveEmptyTerritory, std::ostringstream());
+  nextMoveTypeStreams.emplace(NextMoveType::BlackReasonable, std::ostringstream());
+  nextMoveTypeStreams.emplace(NextMoveType::WhiteReasonable, std::ostringstream());
+  nextMoveTypeStreams.emplace(NextMoveType::OneMoveCapture, std::ostringstream());
+  nextMoveTypeStreams.emplace(NextMoveType::OneMoveTerritory, std::ostringstream());
+  nextMoveTypeStreams.emplace(NextMoveType::OneMoveEmptyCapture, std::ostringstream());
+  nextMoveTypeStreams.emplace(NextMoveType::OneMoveEmptyTerritory, std::ostringstream());
+  nextMoveTypeStreams.emplace(NextMoveType::ZeroMoveEmptyTerritory, std::ostringstream());
+
+  const BoardHistory history(board);
+  const vector<Loc> reasonableBlackLocs = history.getReasonableLocs(board, P_BLACK);
+  const vector<Loc> reasonableWhiteLocs = history.getReasonableLocs(board, P_WHITE);
+  int currentReasonableBlackLocIndex = 0;
+  int currentReasonableWhiteLocIndex = 0;
 
   const auto* capturesAndTerritoriesInfos = copy.calculateCapturesAndTerritoriesColorsForDots();
+
+  // Don't consider grounding in this test
+  if (!reasonableBlackLocs.empty() && reasonableBlackLocs[0] == Board::PASS_LOC) {
+    currentReasonableBlackLocIndex++;
+  }
+  if (!reasonableWhiteLocs.empty() && reasonableWhiteLocs[0] == Board::PASS_LOC) {
+    currentReasonableWhiteLocIndex++;
+  }
 
   for (int y = 0; y < copy.y_size; y++) {
     for (int x = 0; x < copy.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, copy.x_size);
       const auto* captureAndTerritoryInfos = capturesAndTerritoriesInfos->at(loc);
 
-      auto appendColor = [&](const CaptureTerritoryType type, std::ostringstream& stream) {
+      auto appendColor = [&](const NextMoveType type, std::ostringstream& stream) {
         Color colorOrPlayer = C_EMPTY;
-        if (captureAndTerritoryInfos != nullptr) {
-          switch (type) {
-            case CaptureTerritoryType::OneMoveCapture:
-              colorOrPlayer = captureAndTerritoryInfos->getOneMoveCaptureColor();
-              break;
-            case CaptureTerritoryType::OneMoveTerritory:
-              colorOrPlayer = captureAndTerritoryInfos->getOneMoveTerritoryColor();
-              break;
-            case CaptureTerritoryType::OneMoveEmptyCapture:
-              colorOrPlayer = captureAndTerritoryInfos->getOneMoveEmptyCaptureColor();
-              break;
-            case CaptureTerritoryType::OneMoveEmptyTerritory:
-              colorOrPlayer = captureAndTerritoryInfos->getOneMoveEmptyTerritoryPlayer();
-              break;
-            case CaptureTerritoryType::ZeroMoveEmptyTerritory:
-              colorOrPlayer = captureAndTerritoryInfos->getZeroMoveEmptyTerritoryPlayer();
-              break;
-          }
+        switch (type) {
+          case NextMoveType::BlackReasonable:
+            if (currentReasonableBlackLocIndex < reasonableBlackLocs.size() && loc == reasonableBlackLocs[currentReasonableBlackLocIndex]) {
+              colorOrPlayer = P_BLACK;
+              currentReasonableBlackLocIndex++;
+            }
+            break;
+          case NextMoveType::WhiteReasonable:
+            if (currentReasonableWhiteLocIndex < reasonableWhiteLocs.size() && loc == reasonableWhiteLocs[currentReasonableWhiteLocIndex]) {
+              colorOrPlayer = P_WHITE;
+              currentReasonableWhiteLocIndex++;
+            }
+            break;
+          case NextMoveType::OneMoveCapture:
+            if (captureAndTerritoryInfos == nullptr) break;
+            colorOrPlayer = captureAndTerritoryInfos->getOneMoveCaptureColor();
+            break;
+          case NextMoveType::OneMoveTerritory:
+            if (captureAndTerritoryInfos == nullptr) break;
+            colorOrPlayer = captureAndTerritoryInfos->getOneMoveTerritoryColor();
+            break;
+          case NextMoveType::OneMoveEmptyCapture:
+            if (captureAndTerritoryInfos == nullptr) break;
+            colorOrPlayer = captureAndTerritoryInfos->getOneMoveEmptyCaptureColor();
+            break;
+          case NextMoveType::OneMoveEmptyTerritory:
+            if (captureAndTerritoryInfos == nullptr) break;
+            colorOrPlayer = captureAndTerritoryInfos->getOneMoveEmptyTerritoryPlayer();
+            break;
+          case NextMoveType::ZeroMoveEmptyTerritory:
+            if (captureAndTerritoryInfos == nullptr) break;
+            colorOrPlayer = captureAndTerritoryInfos->getZeroMoveEmptyTerritoryPlayer();
+            break;
         }
 
         if (colorOrPlayer == C_WALL) {
@@ -314,17 +347,19 @@ static std::map<CaptureTerritoryType, std::ostringstream> getCapturesAndTerritor
         }
       };
 
-      for (auto& [type, stream] : captureTerritoryStringStreams) {
+      for (auto& [type, stream] : nextMoveTypeStreams) {
         appendColor(type, stream);
       }
 
       if (x < copy.x_size - 1) {
-        for (auto& [type, stream] : captureTerritoryStringStreams) {
-          stream << " ";
+        for (auto& [type, stream] : nextMoveTypeStreams) {
+          if (type != NextMoveType::BlackReasonable && type != NextMoveType::WhiteReasonable) {
+            stream << " ";
+          }
         }
       }
     }
-    for (auto& [type, stream] : captureTerritoryStringStreams) {
+    for (auto& [type, stream] : nextMoveTypeStreams) {
       stream << endl;
     }
   }
@@ -334,12 +369,14 @@ static std::map<CaptureTerritoryType, std::ostringstream> getCapturesAndTerritor
   // Make sure we didn't change an internal state during calculating
   testAssert(board.isEqualForTesting(copy));
 
-  return captureTerritoryStringStreams;
+  return nextMoveTypeStreams;
 }
 
-static void checkCapturesAndTerritories(
+static void checkNextMoveInfos(
   const string& title,
   const string& boardData,
+  const std::optional<string>& expectedBlackReasonableMoves,
+  const std::optional<string>& expectedWhiteReasonableMoves,
   const std::optional<string>& expectedOneMoveCaptures,
   const std::optional<string>& expectedOneMoveTerritory,
   const std::optional<string>& expectedOneMoveEmptyCaptures = std::nullopt,
@@ -350,7 +387,7 @@ static void checkCapturesAndTerritories(
   const vector<XYMove>& extraMoves = {}
 ) {
   const Board board = parseDotsField(boardData, false, suicide, captureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, extraMoves);
-  auto captureTerritoryStringStreams = getCapturesAndTerritories(board);
+  auto nextMoveTypes = getNextMoveTypes(board);
 
   std::ostringstream emptyFieldStream;
   for (int y = 0; y < board.y_size; y++) {
@@ -372,24 +409,39 @@ static void checkCapturesAndTerritories(
     expect("", actual, expectedString);
   };
 
-  checkTextRepresentation("one move captures", captureTerritoryStringStreams[CaptureTerritoryType::OneMoveCapture].str(), expectedOneMoveCaptures);
-  checkTextRepresentation("one move territory", captureTerritoryStringStreams[CaptureTerritoryType::OneMoveTerritory].str(), expectedOneMoveTerritory);
-  checkTextRepresentation("one move empty captures", captureTerritoryStringStreams[CaptureTerritoryType::OneMoveEmptyCapture].str(), expectedOneMoveEmptyCaptures);
-  checkTextRepresentation("one move empty territory", captureTerritoryStringStreams[CaptureTerritoryType::OneMoveEmptyTerritory].str(), expectedOneMoveEmptyTerritory);
-  checkTextRepresentation("zero move empty territory", captureTerritoryStringStreams[CaptureTerritoryType::ZeroMoveEmptyTerritory].str(), expectedZeroMoveEmptyTerritory);
+  checkTextRepresentation("black reasonable", nextMoveTypes[NextMoveType::BlackReasonable].str(), expectedBlackReasonableMoves);
+  checkTextRepresentation("white reasonable", nextMoveTypes[NextMoveType::WhiteReasonable].str(), expectedWhiteReasonableMoves);
+  checkTextRepresentation("one move captures", nextMoveTypes[NextMoveType::OneMoveCapture].str(), expectedOneMoveCaptures);
+  checkTextRepresentation("one move territory", nextMoveTypes[NextMoveType::OneMoveTerritory].str(), expectedOneMoveTerritory);
+  checkTextRepresentation("one move empty captures", nextMoveTypes[NextMoveType::OneMoveEmptyCapture].str(), expectedOneMoveEmptyCaptures);
+  checkTextRepresentation("one move empty territory", nextMoveTypes[NextMoveType::OneMoveEmptyTerritory].str(), expectedOneMoveEmptyTerritory);
+  checkTextRepresentation("zero move empty territory", nextMoveTypes[NextMoveType::ZeroMoveEmptyTerritory].str(), expectedZeroMoveEmptyTerritory);
 }
 
 void Tests::runDotsCapturesAndTerritoriesTests() {
   cout << "Running dots captures and territories tests" << endl;
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Two bases",
     R"(
 .x...o.
 xox.oxo
 xox.oxo
 .......
-)", R"(
+)",
+    R"(
+. . X X X . .
+. . . X . . .
+. . . X . . .
+. X X X X X .
+)",
+    R"(
+. . O O O . .
+. . . O . . .
+. . . O . . .
+. O O O O O .
+)",
+    R"(
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
 .  .  .  .  .  .  .
@@ -403,7 +455,7 @@ xox.oxo
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Overlapping captures location",
     R"(
 .x.
@@ -411,6 +463,20 @@ xox
 ...
 oxo
 .o.
+)",
+    R"(
+. . .
+. . .
+X X X
+. . .
+. . .
+)",
+    R"(
+. . .
+. . .
+O O O
+. . .
+. . .
 )",
     R"(
 .  .  .
@@ -428,13 +494,25 @@ oxo
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Empty territories",
     R"(
 .x..o.
 x.xo.o
 x.xo.o
 .x..o.
+)",
+    R"(
+. . X X . .
+. X . . . .
+. X . . . .
+. . X X . .
+)",
+    R"(
+. . O O . .
+. . . . O .
+. . . . O .
+. . O O . .
 )",
     nullopt,
     nullopt,
@@ -447,12 +525,22 @@ x.xo.o
 .  .  .  .  .  .
 )");
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "One move empty territory",
     R"(
 .x..o.
 x.xo.o
 ......
+)",
+    R"(
+. . X X . .
+. X . . . .
+. X X X X .
+)",
+    R"(
+. . O O . .
+. . . . O .
+. O O O O .
 )",
     nullopt,
     nullopt,
@@ -471,7 +559,7 @@ x.xo.o
     false
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Empty territory can be broken",
     R"(
 .xx..oo.
@@ -479,6 +567,20 @@ x..xo..o
 x.x..o.o
 oxo..xox
 .o....x.
+)",
+    R"(
+. . . X X . . .
+. X X . . . . .
+. X . X X . X .
+. . . X X . . .
+. . X X X X . .
+)",
+    R"(
+. . . O O . . .
+. . . . . O O .
+. O . O O . O .
+. . . O O . . .
+. . O O O O . .
 )",
     R"(
 .  .  .  .  .  .  .  .
@@ -505,12 +607,22 @@ oxo..xox
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Trivial overlapping of captures with empty territory",
     R"(
 .xo.
 x..o
 .xo.
+)",
+    R"(
+. . . .
+. X . .
+. . . .
+)",
+    R"(
+. . . .
+. . O .
+. . . .
 )",
     nullopt,
     nullopt,
@@ -526,12 +638,22 @@ x..o
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Overlapping of captures with empty territory",
     R"(
 .xxoo.
 x....o
 .xxoo.
+)",
+    R"(
+. . . . . .
+. X X . . .
+. . . . . .
+)",
+    R"(
+. . . . . .
+. . . O O .
+. . . . . .
 )",
     nullopt,
     nullopt,
@@ -547,12 +669,22 @@ x....o
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Overlapping one move normal capture with empty loc",
     R"(
 .xxoo.
 xo..xo
 .xxoo.
+)",
+    R"(
+. . . . . .
+. . . X . .
+. . . . . .
+)",
+    R"(
+. . . . . .
+. . O . . .
+. . . . . .
 )",
     R"(
 .  .  .  .  .  .
@@ -566,12 +698,22 @@ xo..xo
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Overlapping with one move normal and empty capture",
     R"(
 .xxoo.
 x...xo
 .xxoo.
+)",
+    R"(
+. . . . . .
+. X X . . .
+. . . . . .
+)",
+    R"(
+. . . . . .
+. . O . . .
+. . . . . .
 )",
     R"(
 .  .  .  .  .  .
@@ -595,12 +737,22 @@ x...xo
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Overlapping with one move normal and empty capture (reversed)",
     R"(
 .xxoo.
 xo...o
 .xxoo.
+)",
+    R"(
+. . . . . .
+. . . X . .
+. . . . . .
+)",
+    R"(
+. . . . . .
+. . . O O .
+. . . . . .
 )",
     R"(
 .  .  .  .  .  .
@@ -624,12 +776,22 @@ xo...o
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Outer empty and inner normal captures",
     R"(
 .ooxx.
 ...o.x
 .ooxx.
+)",
+    R"(
+. . . . . .
+X . X . . .
+. . . . . .
+)",
+    R"(
+. . . . . .
+O O O . . .
+. . . . . .
 )",
     R"(
 .  .  .  .  .  .
@@ -653,12 +815,22 @@ O  .  .  .  .  .
 )"
     );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Outer normal and inner normal captures",
     R"(
 .ooxx.
 ..xo..
 .ooxx.
+)",
+    R"(
+. . . . . .
+X . . . . X
+. . . . . .
+)",
+    R"(
+. . . . . .
+O . . . . O
+. . . . . .
 )",
     R"(
 .  .  .  .  .  .
@@ -672,7 +844,7 @@ O  .  .  .  .  X
 )"
   );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Normal base supersedes suicidal without capturing location",
     R"(
 .ooo.
@@ -680,6 +852,20 @@ o.xxo
 ox..x
 o.xxo
 .ooo.
+)",
+    R"(
+. . . . .
+. . . . .
+. . . X .
+. . . . .
+. . . . .
+)",
+    R"(
+. . . . .
+. . . . .
+. . . O .
+. . . . .
+. . . . .
 )",
     R"(
 .  .  .  .  .
@@ -697,12 +883,22 @@ o.xxo
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Unrelated bases of same color",
     R"(
 .o...o.
 oxo.oxo
 .......
+)",
+    R"(
+. . X X X . .
+. . . X . . .
+. X X X X X .
+)",
+    R"(
+. . O O O . .
+. . . O . . .
+. O O O O O .
 )",
     R"(
 .  .  .  .  .  .  .
@@ -716,7 +912,7 @@ oxo.oxo
 )"
   );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Big territory supersedes multiple small ones",
     R"(
 ..X..
@@ -724,6 +920,20 @@ oxo.oxo
 XO.OX
 .X.X.
 .....
+)",
+    R"(
+. X . X .
+X . . . X
+. . . . .
+X . . . X
+. X X X .
+)",
+    R"(
+. O . O .
+O . . . O
+. . . . .
+O . . . O
+. O O O .
 )",
     R"(
 .  .  .  .  .
@@ -741,13 +951,25 @@ XO.OX
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Big empty territory supersedes multiple small ones",
     R"(
 ..O.
 .O.O
 O..O
 .O..
+)",
+    R"(
+. X . .
+X . . .
+. . . .
+. . X .
+)",
+    R"(
+. O . .
+O . O .
+. O O .
+. . O .
 )",
     nullopt,
     nullopt,
@@ -765,7 +987,41 @@ O..O
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
+    "Mutual capturing location",
+    R"(
+.xo.
+xoxo
+xo..
+.x..
+)",
+    R"(
+. . . .
+. . . .
+. . X X
+. . X .
+)",
+    R"(
+. . . .
+. . . .
+. . O O
+. . O .
+)",
+    R"(
+.  .  .  .
+.  .  .  .
+.  .  XO .
+.  .  .  .
+)",
+    R"(
+.  .  .  .
+.  X  O  .
+.  X  .  .
+.  .  .  .
+)"
+);
+
+  checkNextMoveInfos(
     "4 captures locs (3 of the pla, 1 of the opp)",
     R"(
 .oxx.o.
@@ -774,6 +1030,22 @@ ox...xo
 oxoxo.o
 .ox..o.
 ..ooo..
+)",
+    R"(
+. . . . X . .
+. . . . . . .
+. . . . X . .
+. . . . . . .
+X . . . . . X
+. X . . . X .
+)",
+    R"(
+. . . . O . .
+. . . . . . .
+. . . O . . .
+. . . . . . .
+O . . . . . O
+. O . . . O .
 )",
     R"(
 .  .  .  .  .  .  .
@@ -791,9 +1063,8 @@ oxoxo.o
 .  .  O  O  O  .  .
 .  .  .  .  .  .  .
 )"
-    );
-
-  checkCapturesAndTerritories(
+  );
+  checkNextMoveInfos(
     "No any captures and territory after grounding",
     R"(
 .x..
@@ -801,6 +1072,20 @@ x.O.
 x.x.
 x..x
 .xx.
+)",
+    R"(
+. . . .
+. . . .
+. . . .
+. . . .
+. . . .
+)",
+    R"(
+. . . .
+. . . .
+. . . .
+. . . .
+. . . .
 )",
     nullopt,
     nullopt,
@@ -812,7 +1097,7 @@ x..x
     {XYMove::getGroundMove(P_WHITE)}
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Overlapping of captures and territories",
     R"(
 .ooxx.
@@ -820,6 +1105,20 @@ o.xo.x
 ox.ox.
 ox.ox.
 .o.x..
+)",
+    R"(
+. . . . . .
+. . . . . .
+. . . . . X
+. . . . . X
+. . X . X .
+)",
+    R"(
+. . . . . .
+. . . . . .
+. . . . . O
+. . . . . O
+. . O . O .
 )",
     R"(
 .  .  .  .  .  .
@@ -837,7 +1136,7 @@ ox.ox.
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Drop internal territory",
     R"(
 ..xxx..
@@ -848,6 +1147,26 @@ x.....x
 .x...x.
 ..x.x..
 .......
+)",
+    R"(
+. X . . . X .
+X . . . . . X
+. . . . . . .
+. . . . . . .
+. . . . . . .
+X . . . . . X
+X X . . . X X
+. X X X X X .
+)",
+    R"(
+. O . . . O .
+O . . . . . O
+. . . . . . .
+. . . . . . .
+. . . . . . .
+O . . . . . O
+O O . . . O O
+. O O O O O .
 )",
     R"(
 .  .  .  .  .  .  .
@@ -871,7 +1190,7 @@ x.....x
 )"
     );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Drop internal empty territory",
     R"(
 ..xxx..
@@ -882,6 +1201,26 @@ x..x..x
 .x...x.
 ..x.x..
 .......
+)",
+    R"(
+. X . . . X .
+X . X X X . X
+. X X . X X .
+. X . X . X .
+. X X . X X .
+X . X X X . X
+X X . X . X X
+. X X X X X .
+)",
+    R"(
+. O . . . O .
+O . . . . . O
+. . . . . . .
+. . . . . . .
+. . . . . . .
+O . . . . . O
+O O . . . O O
+. O O O O O .
 )",
     nullopt,
     nullopt,
@@ -907,7 +1246,7 @@ x..x..x
 )"
   );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Drop internal empty territory 2",
     R"(
 ..o.o..
@@ -917,6 +1256,24 @@ o.o.o.o
 o..o..o
 .o.x.o.
 ..ooo..
+)",
+    R"(
+. X . X . X .
+X . . . . . X
+. . . . . . .
+. . . . . . .
+. . . . . . .
+X . . . . . X
+. X . . . X .
+)",
+    R"(
+. O . O . O .
+O . . . . . O
+. . . . . . .
+. . . . . . .
+. . . . . . .
+O . . . . . O
+. O . . . O .
 )",
     R"(
 .  .  .  O  .  .  .
@@ -938,7 +1295,7 @@ o..o..o
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Drop dangling territory",
     R"(
 .......
@@ -948,6 +1305,24 @@ o.oxo.o
 o..o..o
 o.....o
 .ooooo.
+)",
+    R"(
+. X X X X X .
+X . . . . . X
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+)",
+    R"(
+. O O O O O .
+O . . . . . O
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
 )",
     R"(
 .  .  .  O  .  .  .
@@ -969,7 +1344,7 @@ o.....o
 )"
   );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Drop internal opp captures and territory",
     R"(
 ..xxx..
@@ -980,6 +1355,26 @@ x.....x
 .x...x.
 ..x.x..
 ...o...
+)",
+    R"(
+. X . . . X .
+X . . . . . X
+. . . . . . .
+. . . . . . .
+. . . . . . .
+X . . . . . X
+X X . X . X X
+. X X . X X .
+)",
+    R"(
+. O . . . O .
+O . . . . . O
+. . . . . . .
+. . . . . . .
+. . . . . . .
+O . . . . . O
+O O . O . O O
+. O O . O O .
 )",
     R"(
 .  .  .  .  .  .  .
@@ -1003,7 +1398,7 @@ x.....x
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Drop internal opp captures and territory 2",
     R"(
 .......
@@ -1013,6 +1408,24 @@ o.xox.o
 o..x..o
 o.....o
 .ooooo.
+)",
+    R"(
+. X X X X X .
+X . . . . . X
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+)",
+    R"(
+. O O O O O .
+O . . . . . O
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
 )",
     R"(
 .  .  .  O  .  .  .
@@ -1034,7 +1447,7 @@ o.....o
 )"
 );
 
-  checkCapturesAndTerritories(
+  checkNextMoveInfos(
     "Drop inner empty territory if outer captures",
     R"(
 .oo.oo.
@@ -1044,6 +1457,24 @@ o.x.x.o
 o..x..o
 o.....o
 .ooooo.
+)",
+    R"(
+. . . X . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+)",
+    R"(
+. . . O . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
 )",
     R"(
 .  .  .  O  .  .  .
