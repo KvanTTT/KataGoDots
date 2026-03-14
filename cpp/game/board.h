@@ -456,7 +456,6 @@ struct Board
       OUTER_CAPTURE_OR_UNRELATED,
     };
 
-    uint16_t id{};
     Loc captureLoc{};
     Player player{};
     Base::Type type{};
@@ -482,6 +481,7 @@ struct Board
     [[nodiscard]] Color getOneMoveTerritoryColor() const;
     [[nodiscard]] Player getOneMoveEmptyTerritoryPlayer() const;
     [[nodiscard]] Player getZeroMoveEmptyTerritoryPlayer() const;
+    [[nodiscard]] bool isReasonableMove(Player currentPla) const;
     [[nodiscard]] bool hasAnyRealTerritory(Player pla) const;
 
     CaptureAndTerritoryInfos() = default;
