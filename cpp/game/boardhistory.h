@@ -143,6 +143,8 @@ struct BoardHistory {
 
   //Check if a move on the board is legal, taking into account the full game state and superko
   bool isLegal(const Board& board, Loc moveLoc, Player movePla) const;
+  // Returns vector of reasonable to play locations
+  std::vector<Loc> getReasonableLocs(const Board& board, Color currentPla) const;
   // Returns true if move is legal and reasonable (isn't immediately losing and could bring benefit in future)
   bool isReasonable(const Board& board, Loc moveLoc, Player movePla, bool checkPla = true) const;
   //Check if passing right now would end the current phase of play, or the entire game
