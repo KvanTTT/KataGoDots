@@ -862,7 +862,8 @@ std::vector<Loc> BoardHistory::getReasonableMoves(
   const Color currentPla,
   const bool allowPass,
   const Loc banMove,
-  const bool breakOnFirstReasonable) const {
+  const bool breakOnFirstReasonable,
+  const Board::CapturesAndTerritoriesInfos* initializedCapturesAndTerritoriesInfos) const {
 
   vector<Loc> result;
 
@@ -876,7 +877,9 @@ std::vector<Loc> BoardHistory::getReasonableMoves(
   const int y_size = board.y_size;
   result.reserve(board.numMaxMoves());
 
-  const auto* capturesAndTerritoriesInfos = isDots ? board.calculateCapturesAndTerritoriesColorsForDots(currentPla) : nullptr;
+  const auto* capturesAndTerritoriesInfos = initializedCapturesAndTerritoriesInfos != nullptr
+    ? initializedCapturesAndTerritoriesInfos :
+      (isDots ? board.calculateCapturesAndTerritoriesColorsForDots() : nullptr);
 
   for (int y = 0; y < y_size; y++) {
     for (int x = 0; x < x_size; x++) {
@@ -906,7 +909,9 @@ std::vector<Loc> BoardHistory::getReasonableMoves(
     }
   }
 
-  delete capturesAndTerritoriesInfos;
+  if (initializedCapturesAndTerritoriesInfos == nullptr) {
+    delete capturesAndTerritoriesInfos;
+  }
 
   // We need at least one reasonable move. If there is no any move on board, add the GROUND move
   if (allowPass && banMove != Board::PASS_LOC && (!isDots || result.empty() || isGroundReasonable(board))) {
