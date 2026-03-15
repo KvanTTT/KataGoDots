@@ -61,3 +61,41 @@ float BoardHistory::whiteScoreIfGroundingAlive(const Board& board, const Color g
 
   return std::numeric_limits<float>::quiet_NaN();
 }
+
+bool BoardHistory::isReasonableForDots(const Loc loc, const Board& board, const Color currentPla) {
+  assert(loc != Board::PASS_LOC);
+  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots(currentPla);
+  const bool result = isReasonableForDots(Location::getX(loc, board.x_size), Location::getY(loc, board.x_size), loc, board, currentPla, capturesAndTerritoriesInfos);
+  delete capturesAndTerritoriesInfos;
+  return result;
+}
+
+bool BoardHistory::isReasonableForDots(
+  const int x,
+  const int y,
+  const Loc loc,
+  const Board& board,
+  const Color currentPla,
+  const Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos) {
+
+  if((x == 0 || x == board.x_size - 1) && (y == 0 || y == board.y_size - 1)) {
+    // Drop corner locs because they are never beneficial
+    return false;
+  }
+
+  // Drop locs with already placed (or just surrounded) dots
+  if(board.getColor(loc) != C_EMPTY)
+    return false;
+
+  // Check reasonability that depends on capture/territory status.
+  // For instance, it doesn't make sense to play under atari if this loc can be captured by the next opp move.
+  // Also, always choose territories with max square.
+  if(capturesAndTerritoriesInfos != nullptr) {
+    if (const auto* captureAndTerritoryInfo = capturesAndTerritoriesInfos->at(loc);
+       captureAndTerritoryInfo != nullptr && !captureAndTerritoryInfo->isReasonableMove(currentPla)) {
+          return false;
+       }
+  }
+
+  return true;
+}

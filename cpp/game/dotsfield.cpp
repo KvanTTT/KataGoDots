@@ -1040,21 +1040,24 @@ void Board::CaptureAndTerritoryInfos::addTerritoryInfo(BaseInfo* newBaseInfo) {
 }
 
 bool Board::CaptureAndTerritoryInfos::removeCaptureAndTerritoryInfos(const BaseInfo* baseInfoToRemove) {
-  bool removed = false;
+  bool captureBaseInfoRemoved = false;
   assert(baseInfoToRemove != nullptr && "Attempt to remove null base info");
   for (BaseInfo*& baseInfo : captureBaseInfos) {
     if (baseInfo == baseInfoToRemove) {
+      assert(!captureBaseInfoRemoved && "Capture base info is already removed");
       baseInfo = nullptr;
-      removed = true;
+      captureBaseInfoRemoved = true;
     }
   }
+  bool territoryBaseInfoRemoved = false;
   for (BaseInfo*& baseInfo : territoryBaseInfos) {
     if (baseInfo == baseInfoToRemove) {
+      assert(!territoryBaseInfoRemoved && "Capture base info is already removed");
       baseInfo = nullptr;
-      removed = true;
+      territoryBaseInfoRemoved = true;
     }
   }
-  return removed;
+  return captureBaseInfoRemoved || territoryBaseInfoRemoved;
 }
 
 Color Board::CaptureAndTerritoryInfos::getOneMoveCaptureColor() const {
@@ -1129,6 +1132,9 @@ bool Board::CaptureAndTerritoryInfos::isReasonableMove(const Player currentPla) 
     }
   }
 
+  bool reasonable = false;
+  bool territoryExists = false;
+
   for (const BaseInfo* baseInfo : territoryBaseInfos) {
     if (baseInfo == nullptr) continue;
 
@@ -1140,10 +1146,13 @@ bool Board::CaptureAndTerritoryInfos::isReasonableMove(const Player currentPla) 
     // Otherwise, it's reasonable if only it's a territory of the current player
     // In most cases such moves are useless;
     // however, unfortunately they can't be just dropped because enclosure dots might prevent grounding.
-    return baseInfo->player == currentPla;
+    assert(!territoryExists || baseInfo->player == currentPla);
+    reasonable = baseInfo->player == currentPla;
+
+    territoryExists = true;
   }
 
-  return true;
+  return !territoryExists || reasonable;
 }
 
 Board::CapturesAndTerritoriesInfos::CapturesAndTerritoriesInfos(const int size) {

@@ -2267,12 +2267,16 @@ void Play::maybeForkGame(
   if(maxChoices < playSettings.forkGameMinChoices)
     throw StringError("playSettings fork game max choices < playSettings.forkGameMinChoices");
 
-  //Generate a selection of a small random number of choices
-  int numChoices = gameRand.nextInt(playSettings.forkGameMinChoices, maxChoices);
+  // Generate a selection of a small random number of choices
+  const int numChoices = gameRand.nextInt(playSettings.forkGameMinChoices, maxChoices);
   assert(numChoices <= NNPos::MAX_NN_POLICY_SIZE);
-  Loc possibleMoves[NNPos::MAX_NN_POLICY_SIZE];
-  if (const int numPossible = PlayUtils::chooseRandomLegalMoves(board, hist, pla, gameRand, possibleMoves, numChoices); numPossible <= 0)
+
+  testAssert(pla == hist.presumedNextMovePla);
+  vector<Loc> shuffledReasonableMoves = hist.getReasonableMoves(board, pla, true);
+  if (shuffledReasonableMoves.empty()) {
     return;
+  }
+  gameRand.shuffle(shuffledReasonableMoves, numChoices);
 
   //Try the one the value net thinks is best
   Loc bestMove = Board::NULL_LOC;
@@ -2281,15 +2285,17 @@ void Play::maybeForkGame(
   NNResultBuf buf;
   double drawEquivalentWinsForWhite = 0.5;
   for(int i = 0; i<numChoices; i++) {
-    Loc loc = possibleMoves[i];
+    if (i >= shuffledReasonableMoves.size()) break;
+
+    const Loc loc = shuffledReasonableMoves[i];
     Board copy = board;
     BoardHistory copyHist = hist;
     copyHist.makeBoardMoveAssumeLegal(copy,loc,pla,NULL);
     MiscNNInputParams nnInputParams;
     nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
     bot->nnEvaluator->evaluate(copy,copyHist,getOpp(pla),nnInputParams,buf,false,false);
-    std::shared_ptr<NNOutput> nnOutput = std::move(buf.result);
-    double whiteScore = nnOutput->whiteScoreMean;
+    const std::shared_ptr<NNOutput> nnOutput = std::move(buf.result);
+    const double whiteScore = nnOutput->whiteScoreMean;
     if(bestMove == Board::NULL_LOC || (pla == P_WHITE && whiteScore > bestScore) || (pla == P_BLACK && whiteScore < bestScore)) {
       bestMove = loc;
       bestScore = whiteScore;

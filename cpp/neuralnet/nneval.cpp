@@ -859,30 +859,12 @@ void NNEvaluator::evaluate(
     int ySize = board.y_size;
 
     float maxPolicy = -1e25f;
-    bool isLegal[NNPos::MAX_NN_POLICY_SIZE];
-    int legalCount = 0;
+    bool isLegal[NNPos::MAX_NN_POLICY_SIZE] = {};
     assert(nextPlayer == history.presumedNextMovePla);
 
-    // Force grounding move if it doesn't affect captures.
-    // Otherwise, let NN decide when it should use grounding and which ungrounded dots should be grounded.
-    // Grounding with captures affects the score, and it's more accurate for training not to force it.
-    const bool allowOnlyGrounding = history.rules.isDots && history.isNotCapturingGroundingAlive(board, nextPlayer);
-
-    for(int i = 0; i<policySize; i++) {
-      const Loc loc = NNPos::posToLoc(i,xSize,ySize,nnXLen,nnYLen);
-      bool legal;
-      // Legalize the grounding if it doesn't lose the game, or even it's a single reasonable move to play.
-      // Also, legalize the grounding when there are no normal moves on the field (board) because we need at least one legal move.
-      // If the grounding has captures, allow normal moves as well and let NN decide which dangling dots are needed to be grounded (if any).
-      if (loc == Board::PASS_LOC) {
-        legal = legalCount == 0 || allowOnlyGrounding || history.isReasonable(board,loc,nextPlayer);
-      } else {
-        legal = allowOnlyGrounding ? false : history.isReasonable(board,loc,nextPlayer);
-      }
-      isLegal[i] = legal;
-      if (legal) {
-        legalCount++;
-      }
+    vector<Loc> reasonableMoves = history.getReasonableMoves(board, nextPlayer, true, Board::NULL_LOC);
+    for (const auto& reasonableMove : reasonableMoves) {
+      isLegal[NNPos::locToPos(reasonableMove, xSize, nnXLen, nnYLen)] = true;
     }
 
     if(nnInputParams.avoidMYTDaggerHack && xSize >= 13 && ySize >= 13) {
@@ -896,7 +878,7 @@ void NNEvaluator::evaluate(
       }
     }
 
-    legalCount = 0;
+    int legalCount = 0;
     for(int i = 0; i<policySize; i++) {
       float policyValue;
       if(isLegal[i]) {

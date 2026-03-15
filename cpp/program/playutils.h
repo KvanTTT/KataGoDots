@@ -41,14 +41,6 @@ namespace PlayUtils {
 
   Loc chooseRandomLegalMove(const Board& board, const BoardHistory& hist, Player pla, Rand& gameRand, Loc banMove);
 
-  int chooseRandomLegalMoves(
-    const Board& board,
-    const BoardHistory& hist,
-    Player pla,
-    Rand& gameRand,
-    Loc* buf,
-    int len);
-
   Loc chooseRandomPolicyMove(
     const NNOutput* nnOutput,
     const Board& board,

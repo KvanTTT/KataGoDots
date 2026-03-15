@@ -32,7 +32,6 @@ void NNInputs::fillRowV7Dots(
 
   const Rules& rules = hist.rules;
 
-  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
   [[maybe_unused]] int deadDotsCount = 0;
 
   auto setSpatial = [&](const int pos, const DotsSpatialFeature spatialFeature) {
@@ -43,7 +42,10 @@ void NNInputs::fillRowV7Dots(
     rowGlobal[static_cast<int>(globalFeature)] = value;
   };
 
-  bool hasReasonableNonGroundMoves = false;
+  const vector<Loc> reasonableNonGroundMoves = hist.getReasonableMoves(board, nextPlayer, false);
+  const bool hasReasonableNonGroundMove = !reasonableNonGroundMoves.empty();
+
+  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
   for(int y = 0; y<ySize; y++) {
     for(int x = 0; x<xSize; x++) {
@@ -55,8 +57,6 @@ void NNInputs::fillRowV7Dots(
       const State state = board.getState(loc);
       const Color activeColor = getActiveColor(state);
       const Color placedColor = getPlacedDotColor(state);
-
-      hasReasonableNonGroundMoves = hasReasonableNonGroundMoves || hist.isReasonable(board, loc, nextPlayer);
 
       if (activeColor == pla)
         setSpatial(pos, DotsSpatialFeature::PlayerActive_1);
@@ -111,7 +111,7 @@ void NNInputs::fillRowV7Dots(
 
   int maxTurnsOfHistoryToInclude = 5;
   const vector<Move>& moveHistory = hist.moveHistory;
-  if (!hasReasonableNonGroundMoves) {
+  if (!hasReasonableNonGroundMove) {
     // Don't include history for non-resultative games: when there are no reasonable non-ground moves to play
     maxTurnsOfHistoryToInclude = 0;
   }
@@ -140,12 +140,9 @@ void NNInputs::fillRowV7Dots(
       continue;
     }
 
-    // If the game is played until the exhaustiveness of all reasonable moves, the history shouldn't be included (see above)
-    assert(prevLoc != Board::PASS_LOC || hasReasonableNonGroundMoves);
-
     // Unreasonable moves can exist in a real game (suicides, corners), but not during training.
     // Ignore them for refinement because NN wasn't trained on them.
-    if (!hist.isReasonable(hist.getRecentBoard(i + 1), prevLoc, currentPla, false)) {
+    if (!BoardHistory::isReasonableForDots(prevLoc, hist.getRecentBoard(i + 1), currentPla)) {
       continue;
     }
 
@@ -179,7 +176,7 @@ void NNInputs::fillRowV7Dots(
     setGlobal(DotsGlobalFeature::CaptureEmpty_17);
   }
 
-  if (hist.isGroundReasonable(board)) {
+  if (!hasReasonableNonGroundMove || hist.isGroundReasonable(board)) {
     // Train to better understand grounding
     setGlobal(DotsGlobalFeature::EndByGrounding_14);
   }

@@ -150,49 +150,12 @@ Loc PlayUtils::chooseRandomLegalMove(
   const BoardHistory& hist,
   const Player pla,
   Rand& gameRand,
-  const Loc banMove) {
-  int numLegalMoves = 0;
-  Loc locs[Board::MAX_ARR_SIZE];
+  const Loc banMove
+  ) {
   testAssert(pla == hist.presumedNextMovePla);
-  for(Loc loc = 0; loc < Board::MAX_ARR_SIZE; loc++) {
-    if (hist.isReasonable(board,loc,pla) && loc != banMove) {
-      locs[numLegalMoves] = loc;
-      numLegalMoves += 1;
-    }
-  }
-  if(numLegalMoves > 0) {
-    const int n = gameRand.nextUInt(numLegalMoves);
-    return locs[n];
-  }
-  return Board::NULL_LOC;
+  const vector<Loc> reasonableMoves = hist.getReasonableMoves(board, pla, true, banMove);
+  return reasonableMoves.empty() ? Board::NULL_LOC : reasonableMoves[gameRand.nextUInt(reasonableMoves.size())];
 }
-
-int PlayUtils::chooseRandomLegalMoves(
-  const Board& board,
-  const BoardHistory& hist,
-  const Player pla,
-  Rand& gameRand,
-  Loc* buf,
-  const int len) {
-  int numLegalMoves = 0;
-  Loc locs[Board::MAX_ARR_SIZE];
-  testAssert(pla == hist.presumedNextMovePla);
-  for (Loc loc = 0; loc < Board::MAX_ARR_SIZE; loc++) {
-    if (hist.isReasonable(board,loc,pla)) {
-      locs[numLegalMoves] = loc;
-      numLegalMoves += 1;
-    }
-  }
-  if(numLegalMoves > 0) {
-    for(int i = 0; i<len; i++) {
-      const int n = gameRand.nextUInt(numLegalMoves);
-      buf[i] = locs[n];
-    }
-    return len;
-  }
-  return 0;
-}
-
 
 Loc PlayUtils::chooseRandomPolicyMove(
   const NNOutput* nnOutput, const Board& board, const BoardHistory& hist, Player pla, Rand& gameRand, double temperature, bool allowPass, Loc banMove
@@ -200,26 +163,28 @@ Loc PlayUtils::chooseRandomPolicyMove(
   const float* policyProbs = nnOutput->policyProbs;
   int nnXLen = nnOutput->nnXLen;
   int nnYLen = nnOutput->nnYLen;
-  int numLegalMoves = 0;
-  double relProbs[NNPos::MAX_NN_POLICY_SIZE];
-  int locs[NNPos::MAX_NN_POLICY_SIZE];
+
+  const int numMaxMoves = board.numMaxMoves();
+  vector<double> relProbs(numMaxMoves);
+  vector<Loc> locs;
+  locs.reserve(numMaxMoves);
+
   testAssert(pla == hist.presumedNextMovePla);
-  for(int pos = 0; pos<NNPos::MAX_NN_POLICY_SIZE; pos++) {
-    const Loc loc = NNPos::posToLoc(pos,board.x_size,board.y_size,nnXLen,nnYLen);
-    if((loc == Board::PASS_LOC && !allowPass) || loc == banMove)
-      continue;
-    if(policyProbs[pos] > 0.0 && hist.isReasonable(board,loc,pla)) {
+
+  const vector<Loc> reasonableMoves = hist.getReasonableMoves(board, pla, allowPass, banMove);
+
+  for (const Loc reasonableMove : reasonableMoves) {
+    if (const int pos = NNPos::locToPos(reasonableMove, board.x_size, nnXLen, nnYLen); policyProbs[pos] > 0.0) {
       const double relProb = policyProbs[pos];
-      relProbs[numLegalMoves] = relProb;
-      locs[numLegalMoves] = loc;
-      numLegalMoves += 1;
+      relProbs[locs.size()] = relProb;
+      locs.push_back(reasonableMove);
     }
   }
 
   //Just in case the policy map is somehow not consistent with the board position
-  if(numLegalMoves > 0) {
-    double onlyBelowProb = 1.0;
-    uint32_t n = Search::chooseIndexWithTemperature(gameRand, relProbs, numLegalMoves, temperature, onlyBelowProb, NULL);
+  if(!locs.empty()) {
+    const double onlyBelowProb = 1.0;
+    const uint32_t n = Search::chooseIndexWithTemperature(gameRand, relProbs.data(), static_cast<int>(locs.size()), temperature, onlyBelowProb, nullptr);
     return locs[n];
   }
   return Board::NULL_LOC;
