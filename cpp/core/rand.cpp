@@ -1195,4 +1195,43 @@ Gamma(4.0) expected: Mean 4.000000 Variance 4.000000 Skew 1.000000 ExcessKurt 1.
 )%%";
     TestCommon::expect(name,out,expected);
   }
+
+  {
+    Rand rand("partial shuffling");
+
+    vector<int> emptyVector;
+    rand.shuffle(emptyVector);
+    testAssert(emptyVector.empty());
+
+    vector<int> singleElementVector;
+    singleElementVector.push_back(1);
+    rand.shuffle(singleElementVector);
+    testAssert(singleElementVector.size() == 1);
+    testAssert(singleElementVector[0] == 1);
+
+    constexpr int origVectorSize = 100;
+    vector<int> origVector;
+    origVector.reserve(origVectorSize);
+    for (int i = 0; i < origVectorSize; ++i) {
+      origVector.push_back(i);
+    }
+
+    // Check that the resulting partially shuffled vector may contain start, end and middle elements
+    bool containsStartElement = false;
+    bool containsEndElement = false;
+    bool containsMiddleElement = false;
+    for (int i = 0; i < 1000; ++i) {
+      constexpr int numberOfNeededElements = 5;
+      vector<int> copy = origVector;
+      rand.shuffle(copy, numberOfNeededElements);
+      auto elements = vector(copy.begin(), copy.begin() + numberOfNeededElements);
+      containsStartElement = containsStartElement || contains(elements, 0);
+      containsEndElement = containsEndElement || contains(elements, origVectorSize - 1);
+      containsMiddleElement = containsMiddleElement || contains(elements, origVectorSize / 2);
+      if (containsStartElement && containsEndElement && containsMiddleElement) {
+        break;
+      }
+    }
+    testAssert(containsStartElement && containsEndElement && containsMiddleElement);
+  }
 }

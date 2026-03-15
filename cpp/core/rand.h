@@ -124,10 +124,13 @@ class Rand
   void fillShuffledUIntRange(size_t n, uint32_t* buf);
 
   template<typename T>
-  void shuffle(std::vector<T>& vec) {
-    for(size_t i = 1; i<vec.size(); i++) {
-      size_t r = (size_t)nextUInt64(i+1);
-      std::swap(vec[i],vec[r]);
+  void shuffle(std::vector<T>& vec, const size_t n = std::numeric_limits<size_t>::max()) {
+    const size_t size = vec.size();
+    if (size <= 1)
+       return;
+    for (size_t i = 0; i < std::min(size - 1, n); i++) {
+      size_t r = i + nextUInt64(size - i);
+      std::swap(vec[i], vec[r]);
     }
   }
 

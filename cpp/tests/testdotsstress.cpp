@@ -275,8 +275,8 @@ static void runDotsStressTestsInternal(
       delete capturesAndTerritoriesInfos;
 
       BoardHistory boardHistory(boardWithoutGrounding);
-      (void)boardHistory.getReasonableLocs(boardWithoutGrounding, P_BLACK);
-      (void)boardHistory.getReasonableLocs(boardWithoutGrounding, P_WHITE);
+      (void)boardHistory.getReasonableMoves(boardWithoutGrounding, P_BLACK);
+      (void)boardHistory.getReasonableMoves(boardWithoutGrounding, P_WHITE);
 
       validateStatesAndCaptures(board, moveRecords);
     }
