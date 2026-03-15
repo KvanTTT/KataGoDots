@@ -1265,6 +1265,13 @@ xxxxx
 
     // The field is not grounding alive; however, the game should be finished because there are no legal moves for WHITE
     testAssert(!boardHistory.isGroundReasonable(board));
+
+    testAssert(!boardHistory.getReasonableMoves(board, P_BLACK).empty());
+    // White can and should only ground
+    const vector<Loc> whiteReasonableMoves = boardHistory.getReasonableMoves(board, P_WHITE);
+    testAssert(1 == whiteReasonableMoves.size());
+    testAssert(Board::PASS_LOC == whiteReasonableMoves[0]);
+
     testAssert(boardHistory.endGameIfReasonable(board, false, P_WHITE));
     testAssert(C_EMPTY == boardHistory.winner);
     testAssert(0.0f == boardHistory.finalWhiteMinusBlackScore);

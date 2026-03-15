@@ -729,6 +729,10 @@ int Board::numPlaStonesOnBoard(Player pla) const {
   return pla == C_BLACK ? startBoardNumBlackStones : startBoardNumWhiteStones;
 }
 
+int Board::numMaxMoves() const {
+  return x_size * y_size + 1; // Reserve 1 move for PASS move
+}
+
 vector<Move> Board::getCurrentMoves(
   int& startBoardNumBlackStones,
   int& startBoardNumWhiteStones,

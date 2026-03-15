@@ -143,10 +143,15 @@ struct BoardHistory {
 
   //Check if a move on the board is legal, taking into account the full game state and superko
   bool isLegal(const Board& board, Loc moveLoc, Player movePla) const;
-  // Returns vector of reasonable to play locations
-  std::vector<Loc> getReasonableLocs(const Board& board, Color currentPla) const;
+  // Returns vector of reasonable to play locations. Never returns RESIGN loc (because NN doesn't expect this move)
+  std::vector<Loc> getReasonableMoves(
+    const Board& board,
+    Color currentPla,
+    bool allowPass = true,
+    Loc banMove = Board::NULL_LOC,
+    bool breakOnFirstReasonable = false) const;
   // Returns true if move is legal and reasonable (isn't immediately losing and could bring benefit in future)
-  bool isReasonable(const Board& board, Loc moveLoc, Player movePla, bool checkPla = true) const;
+  static bool isReasonableForDots(Loc loc, const Board& board, Color currentPla) ;
   //Check if passing right now would end the current phase of play, or the entire game
   bool passWouldEndPhase(const Board& board, Player movePla) const;
   bool passWouldEndGame(const Board& board, Player movePla) const;
@@ -224,6 +229,13 @@ private:
   void setWinnerByResignation(Player pla);
   bool koHashOccursInHistory(Hash128 koHash, const KoHashTable* rootKoHashTable) const;
   void setKoRecapBlocked(Loc loc, bool b);
+  static bool isReasonableForDots(
+    int x,
+    int y,
+    Loc loc,
+    const Board& board,
+    Color currentPla,
+    const Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos);
   static int countDotsScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]);
   int countAreaScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]) const;
   int countTerritoryAreaScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]) const;

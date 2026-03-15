@@ -340,8 +340,9 @@ struct Board
   //Count the number of stones on the board
   int numStonesOnBoard() const;
   int numPlaStonesOnBoard(Player pla) const;
-  std::vector<Move>
-  getCurrentMoves(int& startBoardNumBlackStones, int& startBoardNumWhiteStones, bool includeStartLocs) const;
+  //Count the max possible moves on the board (inclusing pass/ground move)
+  int numMaxMoves() const;
+  std::vector<Move> getCurrentMoves(int& startBoardNumBlackStones, int& startBoardNumWhiteStones, bool includeStartLocs) const;
   std::pair<float, float> getAcceptableKomiRange(bool allowDraw, int extraBlack = 0) const;
 
   //Get a hash that combines the position of the board with simple ko prohibition and a player to move.
@@ -462,7 +463,6 @@ struct Board
     bool nonCapturing{};
     std::unordered_set<Loc> territory;
 
-    BaseInfo() = default;
     BaseInfo(const Base& base, Loc newCaptureLoc, bool newNonCapturing);
     // Currently, it can't distinguish between OUTER_CAPTURE and UNRELATED
     [[nodiscard]] RelationType getRelationTo(const Base& other, Loc otherCaptureLoc) const;

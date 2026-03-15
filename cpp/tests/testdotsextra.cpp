@@ -270,8 +270,6 @@ enum class NextMoveType {
 };
 
 static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& board) {
-  const Board& copy(board);
-
   std::map<NextMoveType, std::ostringstream> nextMoveTypeStreams;
 
   nextMoveTypeStreams.emplace(NextMoveType::BlackReasonable, std::ostringstream());
@@ -283,24 +281,16 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
   nextMoveTypeStreams.emplace(NextMoveType::ZeroMoveEmptyTerritory, std::ostringstream());
 
   const BoardHistory history(board);
-  const vector<Loc> reasonableBlackLocs = history.getReasonableLocs(board, P_BLACK);
-  const vector<Loc> reasonableWhiteLocs = history.getReasonableLocs(board, P_WHITE);
+  const vector<Loc> reasonableBlackLocs = history.getReasonableMoves(board, P_BLACK, false);
+  const vector<Loc> reasonableWhiteLocs = history.getReasonableMoves(board, P_WHITE, false);
   int currentReasonableBlackLocIndex = 0;
   int currentReasonableWhiteLocIndex = 0;
 
-  const auto* capturesAndTerritoriesInfos = copy.calculateCapturesAndTerritoriesColorsForDots();
+  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
-  // Don't consider grounding in this test
-  if (!reasonableBlackLocs.empty() && reasonableBlackLocs[0] == Board::PASS_LOC) {
-    currentReasonableBlackLocIndex++;
-  }
-  if (!reasonableWhiteLocs.empty() && reasonableWhiteLocs[0] == Board::PASS_LOC) {
-    currentReasonableWhiteLocIndex++;
-  }
-
-  for (int y = 0; y < copy.y_size; y++) {
-    for (int x = 0; x < copy.x_size; x++) {
-      const Loc loc = Location::getLoc(x, y, copy.x_size);
+  for (int y = 0; y < board.y_size; y++) {
+    for (int x = 0; x < board.x_size; x++) {
+      const Loc loc = Location::getLoc(x, y, board.x_size);
       const auto* captureAndTerritoryInfos = capturesAndTerritoriesInfos->at(loc);
 
       auto appendColor = [&](const NextMoveType type, std::ostringstream& stream) {
@@ -351,7 +341,7 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
         appendColor(type, stream);
       }
 
-      if (x < copy.x_size - 1) {
+      if (x < board.x_size - 1) {
         for (auto& [type, stream] : nextMoveTypeStreams) {
           if (type != NextMoveType::BlackReasonable && type != NextMoveType::WhiteReasonable) {
             stream << " ";
@@ -366,8 +356,8 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
 
   delete capturesAndTerritoriesInfos;
 
-  // Make sure we didn't change an internal state during calculating
-  testAssert(board.isEqualForTesting(copy));
+  assert(currentReasonableBlackLocIndex == reasonableBlackLocs.size());
+  assert(currentReasonableWhiteLocIndex == reasonableWhiteLocs.size());
 
   return nextMoveTypeStreams;
 }
@@ -389,33 +379,41 @@ static void checkNextMoveInfos(
   const Board board = parseDotsField(boardData, false, suicide, captureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, extraMoves);
   auto nextMoveTypes = getNextMoveTypes(board);
 
+  std::ostringstream emptyFieldForReasonableStream;
   std::ostringstream emptyFieldStream;
   for (int y = 0; y < board.y_size; y++) {
     for (int x = 0; x < board.x_size; x++) {
       emptyFieldStream << ". ";
+      emptyFieldForReasonableStream << ".";
       if (x < board.x_size - 1) {
         emptyFieldStream << " ";
+        emptyFieldForReasonableStream << " ";
       }
     }
     emptyFieldStream << endl;
+    emptyFieldForReasonableStream << endl;
   }
   string emptyFieldString = emptyFieldStream.str();
+  string emptyFieldForReasonableString = emptyFieldForReasonableStream.str();
 
-  auto checkTextRepresentation = [title, emptyFieldString](const string& name, const string& actual, const std::optional<string>& expected) {
+  auto checkTextRepresentation = [&title, &emptyFieldString, &emptyFieldForReasonableString, &nextMoveTypes](const string& name, const NextMoveType nextMoveType, const std::optional<string>& expected) {
     cout << "  " + title + ": " << name << endl;
+    const string actualString = nextMoveTypes[nextMoveType].str();
     const string expectedString = expected.has_value()
       ? expected.value()
-      : emptyFieldString;
-    expect("", actual, expectedString);
+      : nextMoveType == NextMoveType::BlackReasonable || nextMoveType == NextMoveType::WhiteReasonable
+        ? emptyFieldForReasonableString
+        : emptyFieldString;
+    expect("", actualString, expectedString);
   };
 
-  checkTextRepresentation("black reasonable", nextMoveTypes[NextMoveType::BlackReasonable].str(), expectedBlackReasonableMoves);
-  checkTextRepresentation("white reasonable", nextMoveTypes[NextMoveType::WhiteReasonable].str(), expectedWhiteReasonableMoves);
-  checkTextRepresentation("one move captures", nextMoveTypes[NextMoveType::OneMoveCapture].str(), expectedOneMoveCaptures);
-  checkTextRepresentation("one move territory", nextMoveTypes[NextMoveType::OneMoveTerritory].str(), expectedOneMoveTerritory);
-  checkTextRepresentation("one move empty captures", nextMoveTypes[NextMoveType::OneMoveEmptyCapture].str(), expectedOneMoveEmptyCaptures);
-  checkTextRepresentation("one move empty territory", nextMoveTypes[NextMoveType::OneMoveEmptyTerritory].str(), expectedOneMoveEmptyTerritory);
-  checkTextRepresentation("zero move empty territory", nextMoveTypes[NextMoveType::ZeroMoveEmptyTerritory].str(), expectedZeroMoveEmptyTerritory);
+  checkTextRepresentation("black reasonable", NextMoveType::BlackReasonable, expectedBlackReasonableMoves);
+  checkTextRepresentation("white reasonable", NextMoveType::WhiteReasonable, expectedWhiteReasonableMoves);
+  checkTextRepresentation("one move captures", NextMoveType::OneMoveCapture, expectedOneMoveCaptures);
+  checkTextRepresentation("one move territory", NextMoveType::OneMoveTerritory, expectedOneMoveTerritory);
+  checkTextRepresentation("one move empty captures", NextMoveType::OneMoveEmptyCapture, expectedOneMoveEmptyCaptures);
+  checkTextRepresentation("one move empty territory", NextMoveType::OneMoveEmptyTerritory, expectedOneMoveEmptyTerritory);
+  checkTextRepresentation("zero move empty territory", NextMoveType::ZeroMoveEmptyTerritory, expectedZeroMoveEmptyTerritory);
 }
 
 void Tests::runDotsCapturesAndTerritoriesTests() {
@@ -626,11 +624,7 @@ x..o
 )",
     nullopt,
     nullopt,
-    R"(
-.  .  .  .
-.  .  .  .
-.  .  .  .
-)",
+    nullopt,
     R"(
 .  .  .  .
 .  X  O  .
@@ -657,11 +651,7 @@ x....o
 )",
     nullopt,
     nullopt,
-    R"(
-.  .  .  .  .  .
-.  .  .  .  .  .
-.  .  .  .  .  .
-)",
+    nullopt,
     R"(
 .  .  .  .  .  .
 .  X  X  O  O  .
@@ -1073,20 +1063,8 @@ x.x.
 x..x
 .xx.
 )",
-    R"(
-. . . .
-. . . .
-. . . .
-. . . .
-. . . .
-)",
-    R"(
-. . . .
-. . . .
-. . . .
-. . . .
-. . . .
-)",
+    nullopt,
+    nullopt,
     nullopt,
     nullopt,
     nullopt,
