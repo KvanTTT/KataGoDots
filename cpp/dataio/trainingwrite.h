@@ -95,6 +95,7 @@ struct FinishedGameData {
 
   //If false, then we don't have these below vectors and ownership information
   bool hasFullData;
+  bool selfPlay;
   std::vector<float> targetWeightByTurn;
   std::vector<float> targetWeightByTurnUnrounded;
   std::vector<PolicyTarget> policyTargetsByTurn;
@@ -268,20 +269,22 @@ struct TrainingWriteBuffers {
   void clear();
 
   void addRow(
-    const Board& board, const BoardHistory& hist, Player nextPlayer,
+    const Board& board,
+    const BoardHistory& hist,
+    Player nextPlayer,
     const BoardHistory& startHist,
     const BoardHistory& actualGameEndHist,
     int turnAfterStart,
     float targetWeight,
     int64_t unreducedNumVisits,
-    const std::vector<PolicyTargetMove>* policyTarget0, //can be null
-    const std::vector<PolicyTargetMove>* policyTarget1, //can be null
+    const std::vector<PolicyTargetMove>* policyTarget0, // can be null
+    const std::vector<PolicyTargetMove>* policyTarget1, // can be null
     double policySurprise,
     double policyEntropy,
     double searchEntropy,
     const std::vector<ValueTargets>& whiteValueTargets,
     const std::vector<QValueTargets>& whiteQValueTargets,
-    int whiteValueTargetsIdx, //index in whiteValueTargets corresponding to this turn.
+    int whiteValueTargetsIdx, // index in whiteValueTargets corresponding to this turn.
     float valueTargetWeight,
     float tdValueTargetWeight,
     float leadTargetWeightFactor,
@@ -290,7 +293,7 @@ struct TrainingWriteBuffers {
     const Color* finalFullArea,
     const Color* finalOwnership,
     const float* finalWhiteScoring,
-    const std::vector<Board>* posHistForFutureBoards, //can be null
+    const std::vector<Board>* posHistForFutureBoards, // can be null
     bool isSidePosition,
     int numNeuralNetsBehindLatest,
     double drawEquivalentWinsForWhite,
@@ -302,7 +305,8 @@ struct TrainingWriteBuffers {
     int numExtraBlack,
     int mode,
     SGFMetadata* sgfMeta,
-    Rand& rand
+    Rand& rand,
+    bool selfplay
   );
 
   void writeToZipFile(const std::string& fileName);

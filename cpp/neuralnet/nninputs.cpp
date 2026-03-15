@@ -1081,12 +1081,16 @@ int NNInputs::getNumberOfGlobalFeatures(const int version, const bool isDots) {
 
 void NNInputs::fillRowVN(
   const int version,
-  const Board& board, const BoardHistory& hist, Player nextPlayer,
+  const Board& board,
+  const BoardHistory& hist,
+  Player nextPlayer,
   const MiscNNInputParams& nnInputParams,
   const int nnXLen,
   const int nnYLen,
   const bool useNHWC,
-  float* rowBin, float* rowGlobal
+  float* rowBin,
+  float* rowGlobal,
+  const bool selfplay
 ) {
   switch(version) {
     case 3:
@@ -1105,7 +1109,7 @@ void NNInputs::fillRowVN(
       if (!hist.rules.isDots) {
         fillRowV7(board, hist, nextPlayer, nnInputParams, nnXLen, nnYLen, useNHWC, rowBin, rowGlobal);
       } else {
-        fillRowV7Dots(board, hist, nextPlayer, nnInputParams, nnXLen, nnYLen, useNHWC,rowBin,rowGlobal);
+        fillRowV7Dots(board, hist, nextPlayer, nnInputParams, nnXLen, nnYLen, useNHWC,rowBin,rowGlobal,selfplay);
       }
       break;
     default:
