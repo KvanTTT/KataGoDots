@@ -1483,6 +1483,7 @@ FinishedGameData* Play::runGame(
 
   //In selfplay, record all the policy maps and evals and such as well for training data
   bool recordFullData = playSettings.forSelfPlay;
+  gameData->selfPlay = playSettings.forSelfPlay;
 
   //NOTE: that checkForNewNNEval might also cause the old nnEval to be invalidated and freed. This is okay since the only
   //references we both hold on to and use are the ones inside the bots here, and we replace the ones in the botSpecs.

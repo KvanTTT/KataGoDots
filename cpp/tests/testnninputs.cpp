@@ -103,7 +103,8 @@ static Hash128 fillRowAndGetHash(
   float* rowGlobal
   ) {
   const Hash128 hash = NNInputs::getHash(board,hist,nextPla,nnInputParams);
-  NNInputs::fillRowVN(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
+  NNInputs::fillRowVN(
+    version, board, hist, nextPla, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, rowBin, rowGlobal, false);
   return hash;
 }
 

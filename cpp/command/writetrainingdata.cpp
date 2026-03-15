@@ -2359,12 +2359,12 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
           hists[m],
           nextPlas[m],
           hists[0],
-          hists[hists.size()-1],
+          hists[hists.size() - 1],
           turnIdx,
           (float)trainingWeights[m],
           unreducedNumVisits,
           &policyTargets[m],
-          (m+1 < policyTargets.size() && rand.nextDouble() < trainingWeights[m+1] ? &policyTargets[m+1] : NULL),
+          (m + 1 < policyTargets.size() && rand.nextDouble() < trainingWeights[m + 1] ? &policyTargets[m + 1] : NULL),
           policySurprise,
           policyEntropy,
           searchEntropy,
@@ -2375,7 +2375,7 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
           tdValueTargetWeight,
           leadTargetWeightFactor,
           nnRawStats,
-          &boards[boards.size()-1],
+          &boards[boards.size() - 1],
           (hasOwnershipTargets ? finalFullArea : NULL),
           (hasOwnershipTargets ? finalOwnership : NULL),
           (hasOwnershipTargets ? finalWhiteScoring : NULL),
@@ -2391,7 +2391,8 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
           numExtraBlack,
           mode,
           &sgfMeta,
-          rand
+          rand,
+          false
         );
       }
     }
