@@ -64,7 +64,7 @@ float BoardHistory::whiteScoreIfGroundingAlive(const Board& board, const Color g
 
 bool BoardHistory::isReasonableForDots(const Loc loc, const Board& board, const Color currentPla) {
   assert(loc != Board::PASS_LOC);
-  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots(currentPla);
+  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
   const bool result = isReasonableForDots(Location::getX(loc, board.x_size), Location::getY(loc, board.x_size), loc, board, currentPla, capturesAndTerritoriesInfos);
   delete capturesAndTerritoriesInfos;
   return result;

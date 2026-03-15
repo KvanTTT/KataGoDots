@@ -280,13 +280,13 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
   nextMoveTypeStreams.emplace(NextMoveType::OneMoveEmptyTerritory, std::ostringstream());
   nextMoveTypeStreams.emplace(NextMoveType::ZeroMoveEmptyTerritory, std::ostringstream());
 
+  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+
   const BoardHistory history(board);
-  const vector<Loc> reasonableBlackLocs = history.getReasonableMoves(board, P_BLACK, false);
-  const vector<Loc> reasonableWhiteLocs = history.getReasonableMoves(board, P_WHITE, false);
+  const vector<Loc> reasonableBlackLocs = history.getReasonableMoves(board, P_BLACK, false, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
+  const vector<Loc> reasonableWhiteLocs = history.getReasonableMoves(board, P_WHITE, false, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
   int currentReasonableBlackLocIndex = 0;
   int currentReasonableWhiteLocIndex = 0;
-
-  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
   for (int y = 0; y < board.y_size; y++) {
     for (int x = 0; x < board.x_size; x++) {
@@ -624,7 +624,11 @@ x..o
 )",
     nullopt,
     nullopt,
-    nullopt,
+    R"(
+.  .  .  .
+.  O  X  .
+.  .  .  .
+)",
     R"(
 .  .  .  .
 .  X  O  .
@@ -651,7 +655,11 @@ x....o
 )",
     nullopt,
     nullopt,
-    nullopt,
+    R"(
+.  .  .  .  .  .
+.  .  O  X  .  .
+.  .  .  .  .  .
+)",
     R"(
 .  .  .  .  .  .
 .  X  X  O  O  .
@@ -717,7 +725,7 @@ x...xo
 )",
     R"(
 .  .  .  .  .  .
-.  .  .  .  .  .
+.  .  .  X  .  .
 .  .  .  .  .  .
 )",
     R"(
@@ -756,7 +764,7 @@ xo...o
 )",
     R"(
 .  .  .  .  .  .
-.  .  .  .  .  .
+.  .  O  .  .  .
 .  .  .  .  .  .
 )",
     R"(

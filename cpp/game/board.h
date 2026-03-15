@@ -437,18 +437,6 @@ struct Board
     bool isMultiStoneSuicideLegal
   ) const;
 
-  enum class NewBaseInfoOpType : uint8_t {
-    ADD = 1 << 0,
-    IGNORE = 1 << 1,
-    SUPERSEDE = 1 << 2,
-    NO_CAPTURE_LOC = 1 << 3,
-    CHANGE_NO_CAPTURE_LOC = 1 << 4,
-    ADD_SUPERSEDE = ADD | SUPERSEDE,
-    ADD_NO_CAPTURE_LOC = ADD | NO_CAPTURE_LOC,
-    ADD_CHANGE_NO_CAPTURE_LOC = ADD | CHANGE_NO_CAPTURE_LOC,
-    ADD_NO_CAPTURE_LOC_CHANGE_NO_CAPTURE_LOC = ADD_NO_CAPTURE_LOC | CHANGE_NO_CAPTURE_LOC,
-  };
-
   struct BaseInfo {
     enum class RelationType : uint8_t {
       SUBSET,
@@ -460,10 +448,9 @@ struct Board
     Loc captureLoc{};
     Player player{};
     Base::Type type{};
-    bool nonCapturing{};
     std::unordered_set<Loc> territory;
 
-    BaseInfo(const Base& base, Loc newCaptureLoc, bool newNonCapturing);
+    BaseInfo(const Base& base, Loc newCaptureLoc);
     // Currently, it can't distinguish between OUTER_CAPTURE and UNRELATED
     [[nodiscard]] RelationType getRelationTo(const Base& other, Loc otherCaptureLoc) const;
   };
@@ -482,7 +469,7 @@ struct Board
     [[nodiscard]] Player getOneMoveEmptyTerritoryPlayer() const;
     [[nodiscard]] Player getZeroMoveEmptyTerritoryPlayer() const;
     [[nodiscard]] bool isReasonableMove(Player currentPla) const;
-    [[nodiscard]] bool hasAnyRealTerritory(Player pla) const;
+    [[nodiscard]] bool hasAnyTerritory(Player pla) const;
 
     CaptureAndTerritoryInfos() = default;
   };
@@ -496,7 +483,7 @@ struct Board
     CapturesAndTerritoriesInfos(const CapturesAndTerritoriesInfos&) = delete;
     CapturesAndTerritoriesInfos& operator=(const CapturesAndTerritoriesInfos&) = delete;
 
-    BaseInfo* addBaseInfo(const Base& base, Loc captureLoc, bool newNonCapturing);
+    BaseInfo* addBaseInfo(const Base& base, Loc captureLoc);
 
     ~CapturesAndTerritoriesInfos();
 
@@ -505,7 +492,7 @@ struct Board
     std::vector<BaseInfo*> baseInfos;
   };
 
-  CapturesAndTerritoriesInfos* calculateCapturesAndTerritoriesColorsForDots(Color currentPla = C_EMPTY) const;
+  CapturesAndTerritoriesInfos* calculateCapturesAndTerritoriesColorsForDots() const;
 
   //Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
@@ -615,7 +602,6 @@ struct Board
   void recalculateCapturesAndTerritories(
     Player pla,
     Loc loc,
-    Color currentPla,
     CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos) const;
 
   void setGrounded(Loc loc);

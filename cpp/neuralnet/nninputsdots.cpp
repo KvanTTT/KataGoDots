@@ -47,6 +47,9 @@ void NNInputs::fillRowV7Dots(
 
   const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
+  const vector<Loc> reasonableNonGroundMoves = hist.getReasonableMoves(board, nextPlayer, false, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
+  const bool hasReasonableNonGroundMove = !reasonableNonGroundMoves.empty();
+
   for(int y = 0; y<ySize; y++) {
     for(int x = 0; x<xSize; x++) {
       const int pos = NNPos::xyToPos(x,y,nnXLen);
