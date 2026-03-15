@@ -794,7 +794,19 @@ void NNEvaluator::evaluate(
     if(buf.rowMetaBuf.size() < rowMetaLen)
       buf.rowMetaBuf.resize(rowMetaLen);
 
-    NNInputs::fillRowVN(inputsVersion, board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
+    NNInputs::fillRowVN(
+      inputsVersion,
+      board,
+      history,
+      nextPlayer,
+      nnInputParams,
+      nnXLen,
+      nnYLen,
+      inputsUseNHWC,
+      buf.rowSpatialBuf.data(),
+      buf.rowGlobalBuf.data(),
+      false
+    );
 
     if(rowMetaLen > 0) {
       if(sgfMeta == NULL)

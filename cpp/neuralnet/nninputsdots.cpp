@@ -3,9 +3,16 @@
 using namespace std;
 
 void NNInputs::fillRowV7Dots(
-  const Board& board, const BoardHistory& hist, Player nextPlayer,
+  const Board& board,
+  const BoardHistory& hist,
+  Player nextPlayer,
   const MiscNNInputParams& nnInputParams,
-  int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
+  int nnXLen,
+  int nnYLen,
+  bool useNHWC,
+  float* rowBin,
+  float* rowGlobal,
+  const bool selfplay
 ) {
   assert(nnXLen <= NNPos::MAX_BOARD_LEN_X);
   assert(nnYLen <= NNPos::MAX_BOARD_LEN_Y);
@@ -41,9 +48,6 @@ void NNInputs::fillRowV7Dots(
   auto setGlobal = [&](const DotsGlobalFeature globalFeature, const float value = 1.0f) {
     rowGlobal[static_cast<int>(globalFeature)] = value;
   };
-
-  const vector<Loc> reasonableNonGroundMoves = hist.getReasonableMoves(board, nextPlayer, false);
-  const bool hasReasonableNonGroundMove = !reasonableNonGroundMoves.empty();
 
   const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
@@ -143,9 +147,10 @@ void NNInputs::fillRowV7Dots(
       continue;
     }
 
-    // Unreasonable moves can exist in a real game (suicides, corners), but not during training.
+    // Unreasonable moves can exist in a real game (suicides, corners), but not during selfplay training.
     // Ignore them for refinement because NN wasn't trained on them.
     if (!BoardHistory::isReasonableForDots(prevLoc, hist.getRecentBoard(i + 1), currentPla)) {
+      assert(!selfplay && "Unreasonable move during selfplay game!");
       continue;
     }
 

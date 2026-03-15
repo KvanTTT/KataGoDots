@@ -84,6 +84,7 @@ FinishedGameData::FinishedGameData(const Rules& rules)
    usedInitialPosition(0),
 
    hasFullData(false),
+   selfPlay(false),
    targetWeightByTurn(),
    targetWeightByTurnUnrounded(),
    policyTargetsByTurn(),
@@ -143,6 +144,7 @@ void FinishedGameData::printDebug(ostream& out) const {
   out << "beganInEncorePhase " << beganInEncorePhase << endl;
   out << "usedInitialPosition " << usedInitialPosition << endl;
   out << "hasFullData " << hasFullData << endl;
+  out << "selfPlay " << selfPlay << endl;
   for(int i = 0; i<targetWeightByTurn.size(); i++)
     out << "targetWeightByTurn " << i << " " << targetWeightByTurn[i] << " " << "unrounded" << " " << targetWeightByTurnUnrounded[i] << endl;
   for(int i = 0; i<policyTargetsByTurn.size(); i++) {
@@ -448,20 +450,22 @@ static void fillValueTDTargets(const vector<ValueTargets>& whiteValueTargetsByTu
 }
 
 void TrainingWriteBuffers::addRow(
-  const Board& board, const BoardHistory& hist, Player nextPlayer,
+  const Board& board,
+  const BoardHistory& hist,
+  Player nextPlayer,
   const BoardHistory& startHist,
   const BoardHistory& actualGameEndHist,
   int turnIdx,
   float targetWeight,
   int64_t unreducedNumVisits,
-  const vector<PolicyTargetMove>* policyTarget0, //can be null
-  const vector<PolicyTargetMove>* policyTarget1, //can be null
+  const vector<PolicyTargetMove>* policyTarget0, // can be null
+  const vector<PolicyTargetMove>* policyTarget1, // can be null
   double policySurprise,
   double policyEntropy,
   double searchEntropy,
   const vector<ValueTargets>& whiteValueTargets,
   const vector<QValueTargets>& whiteQValueTargets,
-  int whiteValueTargetsIdx, //index in whiteValueTargets corresponding to this turn.
+  int whiteValueTargetsIdx, // index in whiteValueTargets corresponding to this turn.
   float valueTargetWeight,
   float tdValueTargetWeight,
   float leadTargetWeightFactor,
@@ -470,7 +474,7 @@ void TrainingWriteBuffers::addRow(
   const Color* finalFullArea,
   const Color* finalOwnership,
   const float* finalWhiteScoring,
-  const vector<Board>* posHistForFutureBoards, //can be null
+  const vector<Board>* posHistForFutureBoards, // can be null
   bool isSidePosition,
   int numNeuralNetsBehindLatest,
   double drawEquivalentWinsForWhite,
@@ -482,8 +486,8 @@ void TrainingWriteBuffers::addRow(
   int numExtraBlack,
   int mode,
   SGFMetadata* sgfMeta,
-  Rand& rand
-) {
+  Rand& rand,
+  const bool selfplay) {
   static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
   if(inputsVersion < 3 || inputsVersion > 7)
     throw StringError("Training write buffers: Does not support input version: " + Global::intToString(inputsVersion));
@@ -509,7 +513,18 @@ void TrainingWriteBuffers::addRow(
     assert(NNInputs::getNumberOfSpatialFeatures(inputsVersion, hist.rules.isDots) == numBinaryChannels);
     assert(NNInputs::getNumberOfGlobalFeatures(inputsVersion, hist.rules.isDots) == numGlobalChannels);
 
-    NNInputs::fillRowVN(inputsVersion, board, hist, nextPlayer, nnInputParams, dataXLen, dataYLen, inputsUseNHWC, rowBin, rowGlobal);
+    NNInputs::fillRowVN(
+      inputsVersion,
+      board,
+      hist,
+      nextPlayer,
+      nnInputParams,
+      dataXLen,
+      dataYLen,
+      inputsUseNHWC,
+      rowBin,
+      rowGlobal,
+      selfplay);
 
     // Pack bools bitwise into uint8_t
     uint8_t* rowBinPacked = binaryInputNCHWPacked.data + curRows * numBinaryChannels * packedBoardArea;
@@ -1144,7 +1159,9 @@ void TrainingDataWriter::writeGame(const FinishedGameData& data) {
       if(targetWeight >= 1.0 || rand.nextBool(targetWeight)) {
         if(debugOut == NULL || rowCount % debugOnlyWriteEvery == 0) {
           writeBuffers->addRow(
-            board,hist,nextPlayer,
+            board,
+            hist,
+            nextPlayer,
             data.startHist,
             data.endHist,
             turnIdx,
@@ -1178,8 +1195,8 @@ void TrainingDataWriter::writeGame(const FinishedGameData& data) {
             data.numExtraBlack,
             data.mode,
             NULL,
-            rand
-          );
+            rand,
+            data.selfPlay);
           writeAndClearIfFull();
         }
         rowCount++;
@@ -1217,7 +1234,9 @@ void TrainingDataWriter::writeGame(const FinishedGameData& data) {
           float leadTargetWeightFactor = 1.0f;
 
           writeBuffers->addRow(
-            sp->board,sp->hist,sp->pla,
+            sp->board,
+            sp->hist,
+            sp->pla,
             data.startHist,
             data.endHist, // actual game ending hist, even for side position
             turnIdx,
@@ -1251,8 +1270,8 @@ void TrainingDataWriter::writeGame(const FinishedGameData& data) {
             data.numExtraBlack,
             data.mode,
             NULL,
-            rand
-          );
+            rand,
+            data.selfPlay);
           writeAndClearIfFull();
         }
         rowCount++;
