@@ -1957,12 +1957,12 @@ struct Model {
         nnYLen, NNPos::MAX_BOARD_LEN
       ));
 
-    int numFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion);
+    int numFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion, desc->isDotsGame);
     if(numInputChannels != numFeatures)
       throw StringError(Global::strprintf("Neural net numInputChannels (%d) was not the expected number based on version (%d)",
         numInputChannels, numFeatures
       ));
-    int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(modelVersion);
+    int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(modelVersion, desc->isDotsGame);
     if(numInputGlobalChannels != numGlobalFeatures)
       throw StringError(Global::strprintf("Neural net numInputGlobalChannels (%d) was not the expected number based on version (%d)",
         numInputGlobalChannels, numGlobalFeatures
@@ -2516,8 +2516,8 @@ struct InputBuffers {
     singleOwnershipResultElts = (size_t)m.numOwnershipChannels * nnXLen * nnYLen;
     singleOwnershipResultBytes = (size_t)m.numOwnershipChannels * nnXLen * nnYLen * sizeof(float);
 
-    assert(NNModelVersion::getNumSpatialFeatures(m.modelVersion) == m.numInputChannels);
-    assert(NNModelVersion::getNumGlobalFeatures(m.modelVersion) == m.numInputGlobalChannels);
+    assert(NNModelVersion::getNumSpatialFeatures(m.modelVersion, m.isDotsGame) == m.numInputChannels);
+    assert(NNModelVersion::getNumGlobalFeatures(m.modelVersion, m.isDotsGame) == m.numInputGlobalChannels);
     if(m.numInputMetaChannels > 0) {
       assert(SGFMetadata::METADATA_INPUT_NUM_CHANNELS == m.numInputMetaChannels);
     }
@@ -2579,7 +2579,8 @@ void NeuralNet::getOutput(
   InputBuffers* inputBuffers,
   int numBatchEltsFilled,
   NNResultBuf** inputBufs,
-  vector<NNOutput*>& outputs
+  const vector<NNOutput*>& outputs,
+  const bool dotsGame
 ) {
   assert(numBatchEltsFilled <= inputBuffers->maxBatchSize);
   assert(numBatchEltsFilled > 0);
@@ -2588,8 +2589,8 @@ void NeuralNet::getOutput(
   const int nnYLen = gpuHandle->nnYLen;
   const int modelVersion = gpuHandle->model->modelVersion;
 
-  const int numSpatialFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion);
-  const int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(modelVersion);
+  const int numSpatialFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion, dotsGame);
+  const int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(modelVersion, dotsGame);
   const int numMetaFeatures = inputBuffers->singleInputMetaElts;
   assert(numSpatialFeatures == gpuHandle->model->numInputChannels);
   assert(numSpatialFeatures * nnXLen * nnYLen == inputBuffers->singleInputElts);
