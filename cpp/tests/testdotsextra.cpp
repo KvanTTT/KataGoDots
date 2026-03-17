@@ -283,8 +283,8 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
   const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
   const BoardHistory history(board);
-  const vector<Loc> reasonableBlackLocs = history.getReasonableMoves(board, P_BLACK, false, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
-  const vector<Loc> reasonableWhiteLocs = history.getReasonableMoves(board, P_WHITE, false, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
+  const vector<Loc> reasonableBlackLocs = history.getReasonableMoves(board, P_BLACK, Board::PASS_LOC, false, capturesAndTerritoriesInfos);
+  const vector<Loc> reasonableWhiteLocs = history.getReasonableMoves(board, P_WHITE, Board::PASS_LOC, false, capturesAndTerritoriesInfos);
   int currentReasonableBlackLocIndex = 0;
   int currentReasonableWhiteLocIndex = 0;
 

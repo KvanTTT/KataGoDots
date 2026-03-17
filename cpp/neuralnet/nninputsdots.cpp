@@ -51,7 +51,7 @@ void NNInputs::fillRowV7Dots(
 
   const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
-  const vector<Loc> reasonableNonGroundMoves = hist.getReasonableMoves(board, nextPlayer, false, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
+  const vector<Loc> reasonableNonGroundMoves = hist.getReasonableMoves(board, nextPlayer, Board::PASS_LOC, false, capturesAndTerritoriesInfos);
   const bool hasReasonableNonGroundMove = !reasonableNonGroundMoves.empty();
 
   for(int y = 0; y<ySize; y++) {

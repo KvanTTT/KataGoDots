@@ -874,7 +874,7 @@ void NNEvaluator::evaluate(
     bool isLegal[NNPos::MAX_NN_POLICY_SIZE] = {};
     assert(nextPlayer == history.presumedNextMovePla);
 
-    vector<Loc> reasonableMoves = history.getReasonableMoves(board, nextPlayer, true, Board::NULL_LOC);
+    vector<Loc> reasonableMoves = history.getReasonableMoves(board, nextPlayer, Board::NULL_LOC);
     for (const auto& reasonableMove : reasonableMoves) {
       isLegal[NNPos::locToPos(reasonableMove, xSize, nnXLen, nnYLen)] = true;
     }

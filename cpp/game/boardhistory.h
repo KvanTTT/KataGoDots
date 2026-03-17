@@ -147,7 +147,6 @@ struct BoardHistory {
   std::vector<Loc> getReasonableMoves(
     const Board& board,
     Color currentPla,
-    bool allowPass = true,
     Loc banMove = Board::NULL_LOC,
     bool breakOnFirstReasonable = false,
     const Board::CapturesAndTerritoriesInfos* initializedCapturesAndTerritoriesInfos = nullptr) const;
