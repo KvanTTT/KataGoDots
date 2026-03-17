@@ -777,7 +777,7 @@ bool BoardHistory::endGameIfReasonable(const Board& board, const bool checkAllPa
       finalWhiteScore = whiteScoreIfAllDotsAreGrounded(board);
     }
 
-    if (std::isnan(finalWhiteScore) && getReasonableMoves(board, pla, false, Board::NULL_LOC, true).empty()) {
+    if (std::isnan(finalWhiteScore) && getReasonableMoves(board, pla, Board::PASS_LOC, true).empty()) {
       finalWhiteScore = static_cast<float>(board.numBlackCaptures - board.numWhiteCaptures) + getCompleteWhiteBonus();
     }
 
@@ -860,7 +860,6 @@ void BoardHistory::setKoRecapBlocked(Loc loc, bool b) {
 std::vector<Loc> BoardHistory::getReasonableMoves(
   const Board& board,
   const Color currentPla,
-  const bool allowPass,
   const Loc banMove,
   const bool breakOnFirstReasonable,
   const Board::CapturesAndTerritoriesInfos* initializedCapturesAndTerritoriesInfos) const {
@@ -913,8 +912,8 @@ std::vector<Loc> BoardHistory::getReasonableMoves(
     delete capturesAndTerritoriesInfos;
   }
 
-  // We need at least one reasonable move. If there is no any move on board, add the GROUND move
-  if (allowPass && banMove != Board::PASS_LOC && (!isDots || result.empty() || isGroundReasonable(board))) {
+  // We need at least one reasonable move. If there is no any move on board, add the PASS (GROUND) move
+  if (banMove != Board::PASS_LOC && (!isDots || result.empty() || isGroundReasonable(board))) {
     result.push_back(Board::PASS_LOC);
   }
 

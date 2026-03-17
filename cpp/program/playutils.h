@@ -48,7 +48,6 @@ namespace PlayUtils {
     Player pla,
     Rand& gameRand,
     double temperature,
-    bool allowPass,
     Loc banMove
   );
 
