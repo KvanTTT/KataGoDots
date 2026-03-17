@@ -870,11 +870,10 @@ static void logSearch(Search* bot, Logger& logger, Loc loc, OtherGameProperties 
 
 static Loc chooseRandomForkingMove(const NNOutput* nnOutput, const Board& board, const BoardHistory& hist, Player pla, Rand& gameRand, Loc banMove) {
   if(const double r = gameRand.nextDouble(); r < 0.95) {
-    constexpr bool allowPass = true;
     // 70% of the time, do a random temperature 1 policy move
     // 25% of the time, do a random temperature 2 policy move
     const double temperature = r < 0.70 ? 1.0 : 2.0;
-    return PlayUtils::chooseRandomPolicyMove(nnOutput, board, hist, pla, gameRand, temperature, allowPass, banMove);
+    return PlayUtils::chooseRandomPolicyMove(nnOutput, board, hist, pla, gameRand, temperature, banMove);
   }
   //5% of the time, do a random legal move
   return PlayUtils::chooseRandomLegalMove(board, hist, pla, gameRand, banMove);
@@ -2273,7 +2272,7 @@ void Play::maybeForkGame(
   assert(numChoices <= NNPos::MAX_NN_POLICY_SIZE);
 
   testAssert(pla == hist.presumedNextMovePla);
-  vector<Loc> shuffledReasonableMoves = hist.getReasonableMoves(board, pla, true);
+  vector<Loc> shuffledReasonableMoves = hist.getReasonableMoves(board, pla);
   if (shuffledReasonableMoves.empty()) {
     return;
   }

@@ -153,12 +153,12 @@ Loc PlayUtils::chooseRandomLegalMove(
   const Loc banMove
   ) {
   testAssert(pla == hist.presumedNextMovePla);
-  const vector<Loc> reasonableMoves = hist.getReasonableMoves(board, pla, true, banMove);
+  const vector<Loc> reasonableMoves = hist.getReasonableMoves(board, pla, banMove);
   return reasonableMoves.empty() ? Board::NULL_LOC : reasonableMoves[gameRand.nextUInt(reasonableMoves.size())];
 }
 
 Loc PlayUtils::chooseRandomPolicyMove(
-  const NNOutput* nnOutput, const Board& board, const BoardHistory& hist, Player pla, Rand& gameRand, double temperature, bool allowPass, Loc banMove
+  const NNOutput* nnOutput, const Board& board, const BoardHistory& hist, Player pla, Rand& gameRand, double temperature, Loc banMove
 ) {
   const float* policyProbs = nnOutput->policyProbs;
   int nnXLen = nnOutput->nnXLen;
@@ -171,7 +171,7 @@ Loc PlayUtils::chooseRandomPolicyMove(
 
   testAssert(pla == hist.presumedNextMovePla);
 
-  const vector<Loc> reasonableMoves = hist.getReasonableMoves(board, pla, allowPass, banMove);
+  const vector<Loc> reasonableMoves = hist.getReasonableMoves(board, pla, banMove);
 
   for (const Loc reasonableMove : reasonableMoves) {
     if (const int pos = NNPos::locToPos(reasonableMove, board.x_size, nnXLen, nnYLen); policyProbs[pos] > 0.0) {
@@ -295,9 +295,7 @@ vector<Loc> PlayUtils::playExtraBlack(
       bot->nnEvaluator->evaluate(board,hist,pla,nnInputParams,buf,false,false);
       std::shared_ptr<NNOutput> nnOutput = std::move(buf.result);
 
-      bool allowPass = false;
-      Loc banMove = Board::NULL_LOC;
-      Loc loc = chooseRandomPolicyMove(nnOutput.get(), board, hist, pla, gameRand, temperature, allowPass, banMove);
+      Loc loc = chooseRandomPolicyMove(nnOutput.get(), board, hist, pla, gameRand, temperature, Board::PASS_LOC);
       if(loc == Board::NULL_LOC)
         break;
 

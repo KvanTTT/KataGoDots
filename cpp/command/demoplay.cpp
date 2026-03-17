@@ -376,9 +376,7 @@ static BoardHistory initializeDemoGame(bool isDots, Rand& rand, AsyncBot* bot) {
           std::shared_ptr<NNOutput> nnOutput = std::move(buf.result);
 
           double temperature = 0.8;
-          bool allowPass = false;
-          Loc banMove = Board::NULL_LOC;
-          Loc loc = PlayUtils::chooseRandomPolicyMove(nnOutput.get(), board, hist, pla, rand, temperature, allowPass, banMove);
+          Loc loc = PlayUtils::chooseRandomPolicyMove(nnOutput.get(), board, hist, pla, rand, temperature, Board::PASS_LOC);
           nextMove.loc = loc;
         }
 
