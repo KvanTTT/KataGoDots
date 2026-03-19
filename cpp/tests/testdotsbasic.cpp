@@ -279,6 +279,29 @@ x.....x
       boardWithMoveRecords.playMove(4, 1, P_WHITE);
       testAssert(2 == boardWithMoveRecords.board.numWhiteCaptures);
     });
+
+  checkDotsField("Incorrect board state if outer empty surrounding encloses normal one with an empty location (https://github.com/KvanTTT/KataGoDots/issues/57)",
+    R"(
+..xxx..
+.x...x.
+x..x..x
+x.xox.x
+x.x.x.x
+x.....x
+.x...x.
+..x.x..
+)", [](const BoardWithMoveRecords& boardWithMoveRecords) {
+    boardWithMoveRecords.playMove(3, 5, P_BLACK);
+    boardWithMoveRecords.playMove(3, 7, P_BLACK);
+
+    const State emptyLocState = boardWithMoveRecords.getState(3, 4);
+    testAssert(isTerritory(emptyLocState));
+    testAssert(C_EMPTY == getEmptyTerritoryColor(emptyLocState));
+    testAssert(C_EMPTY == getPlacedDotColor(emptyLocState));
+    testAssert(P_BLACK == getActiveColor(emptyLocState));
+
+    boardWithMoveRecords.board.checkConsistency();
+  });
 }
 
 void Tests::runDotsGroundingTests() {
