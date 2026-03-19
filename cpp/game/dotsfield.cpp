@@ -98,10 +98,6 @@ Color getPlacedDotColor(const State s) {
   return static_cast<Player>(s >> PLACED_PLAYER_SHIFT & ACTIVE_MASK);
 }
 
-static bool isPlaced(const State s, const Player pla) {
-  return (s >> PLACED_PLAYER_SHIFT & ACTIVE_MASK) == pla;
-}
-
 static bool isActive(const State s, const Player pla) {
   return (s & ACTIVE_MASK) == pla;
 }
@@ -866,11 +862,10 @@ Board::Base Board::createBaseAndUpdateStates(const Player basePla, const int num
   for (const Loc& territoryLoc : territoryLocationsBuffer) {
     const State prevState = getState(territoryLoc);
     uint16_t prevCapturesDiff = 0;
-    const Color placedColor = getPlacedDotColor(prevState);
 
     State newState;
     if (isReal) {
-      if (placedColor != C_EMPTY && !isTerritory(prevState)) {
+      if (const Color placedColor = getPlacedDotColor(prevState); placedColor != C_EMPTY && !isTerritory(prevState)) {
         pos_hash ^= ZOBRIST_BOARD_HASH[territoryLoc][placedColor];
       }
 
@@ -888,9 +883,10 @@ Board::Base Board::createBaseAndUpdateStates(const Player basePla, const int num
       captures_diff_data[territoryLoc] = static_cast<uint16_t>(capturesDiff);
 
       newState = setTerritoryAndActivePlayer(prevState, basePla);
-    } else if (placedColor == C_EMPTY) {
+    } else if (getActiveColor(prevState) == C_EMPTY) {
       newState = static_cast<State>(basePla << EMPTY_TERRITORY_SHIFT);
     } else {
+      assert(getActiveColor(prevState) == basePla);
       continue;
     }
 
