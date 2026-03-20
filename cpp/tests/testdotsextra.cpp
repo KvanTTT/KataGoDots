@@ -259,73 +259,110 @@ R"(
 )", 1, {XYMove(0, 2, P_WHITE)});
 }
 
-static std::pair<string, string> getCapturingAndBases(
-  const string& boardData,
-  const bool suicide,
-  const bool captureEmptyBases,
-  const vector<XYMove>& extraMoves
-) {
-  const Board board = parseDotsField(boardData, false, suicide, captureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, extraMoves);
-
+static std::tuple<string, string, string, string, string> getCapturesAndTerritories(const Board& board) {
   const Board& copy(board);
 
-  const auto capturesAndBasesColors = copy.calculateOneMoveCaptureAndBasePositionsForDots();
+  const auto capturesAndTerritoriesColors = copy.calculateCapturesAndTerritoriesColorsForDots();
 
-  std::ostringstream capturesStringStream;
-  std::ostringstream basesStringStream;
+  std::ostringstream oneMoveCapturesStringStream;
+  std::ostringstream oneMoveTerritoryStringStream;
+  std::ostringstream oneMoveEmptyCapturesStringStream;
+  std::ostringstream oneMoveEmptyTerritoryStringStream;
+  std::ostringstream zeroMoveTerritoryStringStream;
 
   for (int y = 0; y < copy.y_size; y++) {
     for (int x = 0; x < copy.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, copy.x_size);
-      const auto captureAndBaseColors = capturesAndBasesColors[loc];
+      const auto captureAndTerritoryColors = capturesAndTerritoriesColors[loc];
 
-      if (const Color captureColor = captureAndBaseColors.getCaptureColor(); captureColor == C_WALL) {
-        capturesStringStream << PlayerIO::colorToChar(P_BLACK) << PlayerIO::colorToChar(P_WHITE);
-      } else {
-        capturesStringStream << PlayerIO::colorToChar(captureColor) << " ";
-      }
+      auto appendColor = [&](std::ostringstream& stream, const Color color) {
+        if (color == C_WALL) {
+          stream << PlayerIO::colorToChar(P_BLACK) << PlayerIO::colorToChar(P_WHITE);
+        } else {
+          stream << PlayerIO::colorToChar(color) << " ";
+        }
+      };
 
-      if (const Color baseColor = captureAndBaseColors.getBaseColor(); baseColor == C_WALL) {
-        basesStringStream << PlayerIO::colorToChar(P_BLACK) << PlayerIO::colorToChar(P_WHITE);
-      } else {
-        basesStringStream << PlayerIO::colorToChar(baseColor) << " ";
-      }
+      appendColor(oneMoveCapturesStringStream,  captureAndTerritoryColors.getOneMoveCaptureColor());
+      appendColor(oneMoveTerritoryStringStream,  captureAndTerritoryColors.getOneMoveTerritoryColor());
+      appendColor(oneMoveEmptyCapturesStringStream,  captureAndTerritoryColors.getOneMoveEmptyCaptureColor());
+
+      oneMoveEmptyTerritoryStringStream << PlayerIO::colorToChar(captureAndTerritoryColors.getOneMoveEmptyTerritoryColor()) << " ";
+      zeroMoveTerritoryStringStream << PlayerIO::colorToChar(captureAndTerritoryColors.getZeroMoveEmptyTerritoryColor()) << " ";
 
       if (x < copy.x_size - 1) {
-        capturesStringStream << " ";
-        basesStringStream << " ";
+        oneMoveCapturesStringStream << " ";
+        oneMoveTerritoryStringStream << " ";
+        oneMoveEmptyCapturesStringStream << " ";
+        oneMoveEmptyTerritoryStringStream << " ";
+        zeroMoveTerritoryStringStream << " ";
       }
     }
-    capturesStringStream << endl;
-    basesStringStream << endl;
+    oneMoveCapturesStringStream << endl;
+    oneMoveTerritoryStringStream << endl;
+    oneMoveEmptyCapturesStringStream << endl;
+    oneMoveEmptyTerritoryStringStream << endl;
+    zeroMoveTerritoryStringStream << endl;
   }
 
   // Make sure we didn't change an internal state during calculating
   testAssert(board.isEqualForTesting(copy));
 
-  return {capturesStringStream.str(), basesStringStream.str()};
+  return {
+    oneMoveCapturesStringStream.str(),
+    oneMoveTerritoryStringStream.str(),
+    oneMoveEmptyCapturesStringStream.str(),
+    oneMoveEmptyTerritoryStringStream.str(),
+    zeroMoveTerritoryStringStream.str()
+  };
 }
 
-static void checkCapturingAndBase(
+static void checkCapturesAndTerritories(
   const string& title,
   const string& boardData,
-  const string& expectedCaptures,
-  const string& expectedBases,
+  const std::optional<string>& expectedCaptures,
+  const std::optional<string>& expectedOneMoveTerritory,
+  const std::optional<string>& expectedOneMoveEmptyCaptures = std::nullopt,
+  const std::optional<string>& expectedOneMoveEmptyTerritory = std::nullopt,
+  const std::optional<string>& expectedZeroMoveEmptyTerritory = std::nullopt,
   const bool suicide = Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
   const bool captureEmptyBases = Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
   const vector<XYMove>& extraMoves = {}
 ) {
-  auto [capturing, bases] = getCapturingAndBases(boardData, suicide, captureEmptyBases, extraMoves);
-  cout << ("  " + title + ": capturing").c_str() << endl;
-  expect("", capturing, expectedCaptures);
-  cout << ("  " + title + ": bases").c_str() << endl;
-  expect("", bases, expectedBases);
+  const Board board = parseDotsField(boardData, false, suicide, captureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, extraMoves);
+  auto [captures, oneMoveTerritory, oneMoveEmptyCaptures, oneMoveEmptyTerritory, zeroMoveEmptyTerritory] = getCapturesAndTerritories(board);
+
+  std::ostringstream emptyFieldStream;
+  for (int y = 0; y < board.y_size; y++) {
+    for (int x = 0; x < board.x_size; x++) {
+      emptyFieldStream << ". ";
+      if (x < board.x_size - 1) {
+        emptyFieldStream << " ";
+      }
+    }
+    emptyFieldStream << endl;
+  }
+  string emptyFieldString = emptyFieldStream.str();
+
+  auto checkTextRepresentation = [title, emptyFieldString](const string& name, const string& actual, const std::optional<string>& expected) {
+    cout << "  " + title + ": " << name << endl;
+    const string expectedString = expected.has_value()
+      ? expected.value()
+      : emptyFieldString;
+    expect("", actual, expectedString);
+  };
+
+  checkTextRepresentation("one move captures", captures, expectedCaptures);
+  checkTextRepresentation("one move territory", oneMoveTerritory, expectedOneMoveTerritory);
+  checkTextRepresentation("one move empty captures", oneMoveEmptyCaptures, expectedOneMoveEmptyCaptures);
+  checkTextRepresentation("one move empty territory", oneMoveEmptyTerritory, expectedOneMoveEmptyTerritory);
+  checkTextRepresentation("zero move empty territory", zeroMoveEmptyTerritory, expectedZeroMoveEmptyTerritory);
 }
 
-void Tests::runDotsCapturingTests() {
-  cout << "Running dots capturing tests" << endl;
+void Tests::runDotsCapturesAndTerritoriesTests() {
+  cout << "Running dots captures and territories tests" << endl;
 
-  checkCapturingAndBase(
+  checkCapturesAndTerritories(
     "Two bases",
     R"(
 .x...o.
@@ -343,8 +380,8 @@ xox.oxo
 )"
 );
 
-  checkCapturingAndBase(
-    "Overlapping capturing location",
+  checkCapturesAndTerritories(
+    "Overlapping captures location",
     R"(
 .x.
 xox
@@ -367,128 +404,172 @@ oxo
 )"
 );
 
-  checkCapturingAndBase(
-  "Empty base (don't mark locations even if sui is allowed)",
+  checkCapturesAndTerritories(
+  "Empty territories",
   R"(
-.x.
-x.x
-.x.
-)", R"(
-.  .  .
-.  .  .
-.  .  .
+.x..o.
+x.xo.o
+.x..o.
 )",
-R"(
-.  .  .
-.  .  .
-.  .  .
-)"
-, true);
+  nullopt,
+  nullopt,
+  nullopt,
+  nullopt,
+  R"(
+.  .  .  .  .  .
+.  X  .  .  O  .
+.  .  .  .  .  .
+)");
 
-  checkCapturingAndBase(
-"Empty base (don't mark locations)",
+  checkCapturesAndTerritories(
+"One move empty territory",
 R"(
-.o.
-o.o
-.o.
-)", R"(
-.  .  .
-.  .  .
-.  .  .
+.x..o.
+x.xo.o
+......
 )",
-R"(
-.  .  .
-.  .  .
-.  .  .
-)"
-, false);
+  nullopt,
+  nullopt,
+  R"(
+.  .  .  .  .  .
+.  .  .  .  .  .
+.  X  .  .  O  .
+)",
+  R"(
+.  .  .  .  .  .
+.  X  .  .  O  .
+.  .  .  .  .  .
+)",
+  nullopt,
+  Rules::DEFAULT_DOTS.multiStoneSuicideLegal, false
+);
 
-  checkCapturingAndBase(
-"Empty base can be broken",
+  checkCapturesAndTerritories(
+"Empty territory can be broken",
 R"(
-.xx.
-x..x
-x.x.
-oxo.
-.o..
-)", R"(
-.  .  .  .
-.  .  .  .
-.  O  .  .
-.  .  .  .
-.  .  .  .
+.xx..oo.
+x..xo..o
+x.x..o.o
+oxo..xox
+.o....x.
 )",
-R"(
-.  .  .  .
-.  .  .  .
-.  .  .  .
-.  O  .  .
-.  .  .  .
+  R"(
+.  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .
+.  O  .  .  .  .  X  .
+.  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .
+)",
+  R"(
+.  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .
+.  O  .  .  .  .  X  .
+.  .  .  .  .  .  .  .
+)",
+  nullopt,
+  nullopt,
+  R"(
+.  .  .  .  .  .  .  .
+.  X  X  .  .  O  O  .
+.  X  .  .  .  .  O  .
+.  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .
 )"
 );
 
-  checkCapturingAndBase(
-"No empty base capturing",
-R"(
-.x.
-x.x
-...
-)", R"(
-.  .  .
-.  .  .
-.  .  .
+  checkCapturesAndTerritories(
+    "Overlapping one move empty captures",
+  R"(
+.xxoo.
+x....o
+.xxoo.
 )",
-R"(
-.  .  .
-.  .  .
-.  .  .
-)", Rules::DEFAULT_DOTS.multiStoneSuicideLegal, false
-);
-
-  checkCapturingAndBase(
-"Empty base capturing",
-R"(
-.x.
-x.x
-...
-)", R"(
-.  .  .
-.  .  .
-.  X  .
+  nullopt,
+  nullopt,
+  R"(
+.  .  .  .  .  .
+.  .  O  X  .  .
+.  .  .  .  .  .
 )",
-R"(
-.  .  .
-.  X  .
-.  .  .
-)", Rules::DEFAULT_DOTS.multiStoneSuicideLegal, true
-);
-
-  checkCapturingAndBase(
-    "Overlapping of capturing and bases",
-    R"(
-.ooxx.
-o.xo.x
-ox.ox.
-ox.ox.
-.o.x..
-)",
-    R"(
+  R"(
 .  .  .  .  .  .
-.  .  .  .  .  .
-.  .  .  .  .  .
-.  .  .  .  .  .
-.  .  XO .  .  .
-)",
-    R"(
-.  .  .  .  .  .
-.  O  O  X  X  .
-.  O  XO X  .  .
-.  O  XO X  .  .
+.  X  X  O  O  .
 .  .  .  .  .  .
 )"
 );
 
-  checkCapturingAndBase(
+  checkCapturesAndTerritories(
+    "Overlapping one move empty captures",
+  R"(
+.xo.
+x..o
+.xo.
+)",
+  nullopt,
+  nullopt,
+  R"(
+.  .  .  .
+.  O  X  .
+.  .  .  .
+)",
+  R"(
+.  .  .  .
+.  X  O  .
+.  .  .  .
+)"
+);
+
+
+  checkCapturesAndTerritories(
+    "Overlapping one move normal capture with empty loc",
+  R"(
+.xxoo.
+xo..xo
+.xxoo.
+)",
+  R"(
+.  .  .  .  .  .
+.  .  O  X  .  .
+.  .  .  .  .  .
+)",
+  R"(
+.  .  .  .  .  .
+.  X  X  O  O  .
+.  .  .  .  .  .
+)"
+);
+
+  checkCapturesAndTerritories(
+    "Overlapping one move normal and empty capture",
+  R"(
+.xxoo.
+x...xo
+.xxoo.
+)",
+  R"(
+.  .  .  .  .  .
+.  .  O  .  .  .
+.  .  .  .  .  .
+)",
+  R"(
+.  .  .  .  .  .
+.  .  .  O  O  .
+.  .  .  .  .  .
+)",
+  R"(
+.  .  .  .  .  .
+.  .  .  X  .  .
+.  .  .  .  .  .
+)",
+  R"(
+.  .  .  .  .  .
+.  X  X  .  .  .
+.  .  .  .  .  .
+)"
+);
+
+  checkCapturesAndTerritories(
     "Unrelated bases of same color",
     R"(
 .o...o.
@@ -507,7 +588,76 @@ oxo.oxo
 )"
   );
 
-  checkCapturingAndBase(
+  checkCapturesAndTerritories(
+  "Big territory supersedes multiple small ones",
+  R"(
+..O.
+.O.O
+O..O
+.O..
+)",
+  nullopt,
+  nullopt,
+  R"(
+.  .  .  .
+.  .  .  .
+.  .  .  .
+.  .  O  .
+)",
+  R"(
+.  .  .  .
+.  .  O  .
+.  O  O  .
+.  .  .  .
+)",
+  nullopt
+);
+
+  checkCapturesAndTerritories(
+    "No any captures and territory after grounding",
+    R"(
+.x..
+x.O.
+x.x.
+x..x
+.xx.
+)",
+    nullopt,
+    nullopt,
+    nullopt,
+    nullopt,
+    nullopt,
+    Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
+    Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
+    {XYMove::getGroundMove(P_WHITE)}
+);
+
+  checkCapturesAndTerritories(
+  "Overlapping of captures and territories",
+  R"(
+.ooxx.
+o.xo.x
+ox.ox.
+ox.ox.
+.o.x..
+)",
+  R"(
+.  .  .  .  .  .
+.  .  .  .  .  .
+.  .  .  .  .  .
+.  .  .  .  .  .
+.  .  XO .  .  .
+)",
+  R"(
+.  .  .  .  .  .
+.  O  O  X  X  .
+.  O  XO X  .  .
+.  O  XO X  .  .
+.  .  .  .  .  .
+)"
+);
+
+  checkCapturesAndTerritories(
     "Drop internal territory",
     R"(
 ..xxx..
@@ -541,7 +691,43 @@ x.....x
 )"
     );
 
-  checkCapturingAndBase(
+  checkCapturesAndTerritories(
+  "Drop internal empty territory",
+  R"(
+..xxx..
+.x...x.
+x..x..x
+x.x.x.x
+x..x..x
+.x...x.
+..x.x..
+.......
+)",
+  nullopt,
+  nullopt,
+  R"(
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  X  .  .  .
+)",
+  R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  X  .  X  X  .
+.  X  .  X  .  X  .
+.  X  X  .  X  X  .
+.  .  X  X  X  .  .
+.  .  .  X  .  .  .
+.  .  .  .  .  .  .
+)"
+  );
+
+  checkCapturesAndTerritories(
   "Drop dangling territory",
   R"(
 .......
@@ -572,8 +758,8 @@ o.....o
 )"
   );
 
-  checkCapturingAndBase(
-  "Drop internal opp capturing and territory",
+  checkCapturesAndTerritories(
+  "Drop internal opp captures and territory",
   R"(
 ..xxx..
 .x...x.
@@ -606,8 +792,8 @@ x.....x
 )"
 );
 
-  checkCapturingAndBase(
-  "Drop internal opp capturing and territory 2",
+  checkCapturesAndTerritories(
+  "Drop internal opp captures and territory 2",
   R"(
 .......
 .oo.oo.
@@ -636,6 +822,37 @@ o.....o
 .  .  .  .  .  .  .
 )"
 );
+
+  checkCapturesAndTerritories(
+    "Drop inner empty territory if outer captures",
+  R"(
+.oo.oo.
+o.....o
+o..x..o
+o.x.x.o
+o..x..o
+o.....o
+.ooooo.
+)",
+  R"(
+.  .  .  O  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+)",
+  R"(
+.  .  .  .  .  .  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  .  .  .  .  .  .
+)"
+  );
 }
 
 static Board initializeBoard(const int startPos, const vector<XYMove>& extraMoves = {}) {

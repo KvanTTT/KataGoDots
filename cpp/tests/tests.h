@@ -27,7 +27,7 @@ namespace Tests {
 
   void runDotsOwnershipTests();
   void runDotsSymmetryTests();
-  void runDotsCapturingTests();
+  void runDotsCapturesAndTerritoriesTests();
   void runDotsAcceptableKomiRange();
   void runDotsKomiRandomization();
 

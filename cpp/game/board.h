@@ -436,17 +436,23 @@ struct Board
     bool isMultiStoneSuicideLegal
   ) const;
 
-  struct CapturingAndBaseColors {
-    [[nodiscard]] Color getCaptureColor() const;
-    [[nodiscard]] Color getBaseColor() const;
-    void addCaptureColor(Color captureColor);
-    void addBaseColor(Color baseColor);
+  struct CaptureAndTerritoryColors {
+    [[nodiscard]] Color getOneMoveCaptureColor() const;
+    [[nodiscard]] Color getOneMoveEmptyCaptureColor() const;
+    [[nodiscard]] Color getOneMoveTerritoryColor() const;
+    [[nodiscard]] Color getOneMoveEmptyTerritoryColor() const;
+    [[nodiscard]] Color getZeroMoveEmptyTerritoryColor() const;
+    void addOneMoveCapturePlayer(Player capturePlayer);
+    void addOneMoveEmptyCapturePlayer(Player capturePlayer);
+    void addOneMoveTerritoryPlayer(Player territoryPlayer);
+    void addOneMoveEmptyTerritoryPlayer(Player territoryPlayer);
+    void addZeroMoveEmptyTerritoryPlayer(Player territoryPlayer);
 
   private:
-    int8_t packed = 0;
+    int16_t packed = 0;
   };
 
-  std::vector<CapturingAndBaseColors> calculateOneMoveCaptureAndBasePositionsForDots() const;
+  std::vector<CaptureAndTerritoryColors> calculateCapturesAndTerritoriesColorsForDots() const;
 
   //Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
@@ -556,6 +562,7 @@ struct Board
   struct BaseInfo {
     Player player;
     Loc captureLoc;
+    Base::Type type;
     std::unordered_set<Loc> territory;
 
     enum class RelationType {
