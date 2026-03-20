@@ -7,12 +7,13 @@
 #ifndef GAME_BOARD_H_
 #define GAME_BOARD_H_
 
+#include <array>
+#include <unordered_set>
 #include "../core/global.h"
 #include "../core/hash.h"
+#include "../core/rand.h"
 #include "../external/nlohmann_json/json.hpp"
 #include "rules.h"
-#include "../core/rand.h"
-#include <array>
 
 #ifndef COMPILE_MAX_BOARD_LEN
 #define COMPILE_MAX_BOARD_LEN 39
@@ -551,8 +552,23 @@ struct Board
     int numFreedDots,
     Base::Type baseType);
   void invalidateAdjacentEmptyTerritoryIfNeeded(Loc loc);
-  void makeMoveAndCalculateCapturesAndBases(Player pla, Loc loc, std::vector<CapturingAndBaseColors>& capturesAndBasesColors)
-    const;
+
+  struct BaseInfo {
+    Player player;
+    Loc captureLoc;
+    std::unordered_set<Loc> territory;
+
+    enum class RelationType {
+      UNRELATED_OR_INTERSECTED,
+      SUBSET,
+      SUPERSET
+    };
+
+    BaseInfo(Loc newCaptureLoc, const Base& base);
+    [[nodiscard]] RelationType getRelationTo(const BaseInfo& other) const;
+  };
+
+  void makeMoveAndRecalculateMaxBases(Player pla, Loc loc, std::vector<BaseInfo>& baseInfos) const;
 
   void setGrounded(Loc loc);
   void clearGrounded(Loc loc);
