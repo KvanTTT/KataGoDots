@@ -944,25 +944,52 @@ void Board::invalidateAdjacentEmptyTerritoryIfNeeded(const Loc loc) {
   clearVisited(closureOrInvalidateLocsBuffer);
 }
 
-Color Board::CapturingAndBaseColors::getCaptureColor() const {
+Color Board::CaptureAndTerritoryColors::getOneMoveCaptureColor() const {
   return static_cast<Color>(packed & 0b11);
 }
 
-Color Board::CapturingAndBaseColors::getBaseColor() const {
-  return static_cast<Color>((packed >> 2) & 0b11);
+Color Board::CaptureAndTerritoryColors::getOneMoveEmptyCaptureColor() const {
+  return static_cast<Player>((packed >> 2) & 0b11);
 }
 
-void Board::CapturingAndBaseColors::addCaptureColor(const Color captureColor) {
-  packed = static_cast<int8_t>(packed | captureColor);
+Color Board::CaptureAndTerritoryColors::getOneMoveTerritoryColor() const {
+  return static_cast<Player>((packed >> 4) & 0b11);
 }
 
-void Board::CapturingAndBaseColors::addBaseColor(const Color baseColor) {
-  packed = static_cast<int8_t>(packed | (baseColor << 2));
+Color Board::CaptureAndTerritoryColors::getOneMoveEmptyTerritoryColor() const {
+  return static_cast<Player>((packed >> 6) & 0b11);
+}
+
+Color Board::CaptureAndTerritoryColors::getZeroMoveEmptyTerritoryColor() const {
+  return static_cast<Player>((packed >> 8) & 0b11);
+}
+
+void Board::CaptureAndTerritoryColors::addOneMoveCapturePlayer(const Player capturePlayer) {
+  packed = static_cast<int16_t>(packed | capturePlayer);
+}
+
+void Board::CaptureAndTerritoryColors::addOneMoveEmptyCapturePlayer(const Player capturePlayer) {
+  packed = static_cast<int16_t>(packed | (capturePlayer << 2));
+}
+
+void Board::CaptureAndTerritoryColors::addOneMoveTerritoryPlayer(const Player territoryPlayer) {
+  packed = static_cast<int16_t>(packed | (territoryPlayer << 4));
+}
+
+void Board::CaptureAndTerritoryColors::addOneMoveEmptyTerritoryPlayer(const Player territoryPlayer) {
+  assert(getOneMoveEmptyTerritoryColor() == C_EMPTY && "One move territory color can be only single");
+  packed = static_cast<int16_t>(packed | (territoryPlayer << 6));
+}
+
+void Board::CaptureAndTerritoryColors::addZeroMoveEmptyTerritoryPlayer(const Player territoryPlayer) {
+  assert(getZeroMoveEmptyTerritoryColor() == C_EMPTY && "Zero move territory color can be only single");
+  packed = static_cast<int16_t>(packed | (territoryPlayer << 8));
 }
 
 Board::BaseInfo::BaseInfo(const Loc newCaptureLoc, const Base& base) {
   player = base.pla;
   captureLoc = newCaptureLoc;
+  type = base.type;
   territory.reserve(base.rollback_locs_states_captures.size());
 
   for(const auto& rollback_locs_states_capture: base.rollback_locs_states_captures) {
@@ -982,11 +1009,11 @@ Board::BaseInfo::RelationType Board::BaseInfo::getRelationTo(const BaseInfo& oth
   // No overlapping -> different or intersected bases
   if (commonLocsCount == 0) {
 #ifndef NDEBUG
-    const bool anyCaptureLocInAnTerritory =
+    const bool anyCaptureLocInAnyTerritory =
       territory.find(other.captureLoc) != territory.end() ||
       other.territory.find(captureLoc) != other.territory.end();
     // Bases of same color can't have intersection
-    assert(player != other.player || !anyCaptureLocInAnTerritory);
+    assert(player != other.player || !anyCaptureLocInAnyTerritory);
 #endif
     // Distinguish INTERSECTED if necessary (player != other.player && anyCaptureLocInAnTerritory)
     return RelationType::UNRELATED_OR_INTERSECTED;
@@ -1007,11 +1034,11 @@ Board::BaseInfo::RelationType Board::BaseInfo::getRelationTo(const BaseInfo& oth
     return RelationType::SUBSET;
   }
 
-  if(other.territory.size() == commonLocsCount) {
+  if (other.territory.size() == commonLocsCount) {
     return RelationType::SUPERSET;
   }
 
-  if(territory.size() == commonLocsCount) {
+  if (territory.size() == commonLocsCount) {
     return RelationType::SUBSET;
   }
 
@@ -1022,33 +1049,27 @@ void Board::makeMoveAndRecalculateMaxBases(
   const Player pla,
   const Loc loc,
   vector<BaseInfo>& baseInfos) const {
-  // Completely ignore suicide locations because they differ from one-move captures
-  if(!isLegal(loc, pla, false, false)) return;
 
   MoveRecord moveRecord = const_cast<Board*>(this)->playMoveRecordedDots(loc, pla);
 
   for (Base const& base: moveRecord.bases) {
-    assert(base.pla == pla);
-    // Completely ignore empty bases because they differ from one-move captures
-    if (base.type == Base::Type::EMPTY) continue;
+    if (base.pla != pla) continue; // Ignore suicidal moves because they are handled on higher level for the sake of optimization
 
     BaseInfo newBaseInfo(loc, base);
     bool shouldAddNewBaseInfo = true;
-    for (BaseInfo &baseInfo : baseInfos) {
-      const BaseInfo::RelationType relationType = newBaseInfo.getRelationTo(baseInfo);
-
-      if (relationType == BaseInfo::RelationType::UNRELATED_OR_INTERSECTED) continue;
-
-      shouldAddNewBaseInfo = false;
-
-      if (relationType == BaseInfo::RelationType::SUPERSET) {
-        baseInfo = newBaseInfo;
+    for (auto it = baseInfos.begin(); it != baseInfos.end();) {
+      if (const BaseInfo::RelationType relationType = newBaseInfo.getRelationTo(*it);
+        relationType == BaseInfo::RelationType::UNRELATED_OR_INTERSECTED) {
+        ++it;
+      } else if (relationType == BaseInfo::RelationType::SUPERSET) {
+        // Remove the subset. Don't break the loop because multiple subsets are legal.
+        it = baseInfos.erase(it);
       } else {
         assert(BaseInfo::RelationType::SUBSET == relationType);
+        // Optimization: superset supersedes the subset -> break the loop, because further traversal doesn't make sense
+        shouldAddNewBaseInfo = false;
+        break;
       }
-
-      // Optimization: always break if the bases somehow related
-      break;
     }
     if (shouldAddNewBaseInfo) {
       baseInfos.push_back(newBaseInfo);
@@ -1058,16 +1079,17 @@ void Board::makeMoveAndRecalculateMaxBases(
   const_cast<Board*>(this)->undo(moveRecord);
 }
 
-vector<Board::CapturingAndBaseColors> Board::calculateOneMoveCaptureAndBasePositionsForDots() const {
-  vector<CapturingAndBaseColors> capturesAndBasesColors((x_size + 1) * (y_size + 1));
+vector<Board::CaptureAndTerritoryColors> Board::calculateCapturesAndTerritoriesColorsForDots() const {
+  vector<CaptureAndTerritoryColors> capturesAndTerritoriesColors((x_size + 1) * (y_size + 1));
 
   // Don't calculate anything if the game is already over (finished) because it doesn't look correct
   if (is_finished) {
-    return capturesAndBasesColors;
+    return capturesAndTerritoriesColors;
   }
 
   // Firstly, calculate bases that surround max territory to filter out non-optimal moves that also might confuse NN
   vector<BaseInfo> baseInfos;
+  vector<Move> suicidalTerritory;
   for (int y = 0; y < y_size; y++) {
     for (int x = 0; x < x_size; x++) {
       const Loc loc = Location::getLoc(x, y, x_size);
@@ -1081,10 +1103,16 @@ vector<Board::CapturingAndBaseColors> Board::calculateOneMoveCaptureAndBasePosit
 
       // It doesn't make sense to calculate capturing when the dot placed into own empty territory
       if (emptyTerritoryColor != P_BLACK) {
+        if (emptyTerritoryColor == P_WHITE) {
+          suicidalTerritory.emplace_back(loc, P_WHITE);
+        }
         makeMoveAndRecalculateMaxBases(P_BLACK, loc, baseInfos);
       }
 
       if (emptyTerritoryColor != P_WHITE) {
+        if (emptyTerritoryColor == P_BLACK) {
+          suicidalTerritory.emplace_back(loc, P_BLACK);
+        }
         makeMoveAndRecalculateMaxBases(P_WHITE, loc, baseInfos);
       }
     }
@@ -1092,14 +1120,33 @@ vector<Board::CapturingAndBaseColors> Board::calculateOneMoveCaptureAndBasePosit
 
   // Secondly, fill the resulting array
   for (const BaseInfo& baseInfo: baseInfos) {
-    capturesAndBasesColors[baseInfo.captureLoc].addCaptureColor(baseInfo.player);
+    auto& captureAndTerritoryColorAtCaptureLoc = capturesAndTerritoriesColors[baseInfo.captureLoc];
+    if (baseInfo.type != Base::Type::EMPTY) {
+      captureAndTerritoryColorAtCaptureLoc.addOneMoveCapturePlayer(baseInfo.player);
+    } else {
+      captureAndTerritoryColorAtCaptureLoc.addOneMoveEmptyCapturePlayer(baseInfo.player);
+    }
 
     for (const Loc& territoryLoc: baseInfo.territory) {
-      capturesAndBasesColors[territoryLoc].addBaseColor(baseInfo.player);
+      auto& captureAndTerritoryColorAtTerritoryLoc = capturesAndTerritoriesColors[territoryLoc];
+      if (baseInfo.type != Base::Type::EMPTY) {
+        captureAndTerritoryColorAtTerritoryLoc.addOneMoveTerritoryPlayer(baseInfo.player);
+      } else {
+        captureAndTerritoryColorAtTerritoryLoc.addOneMoveEmptyTerritoryPlayer(baseInfo.player);
+      }
     }
   }
 
-  return capturesAndBasesColors;
+  for (const Move& suicidalTerritoryMove: suicidalTerritory) {
+    if (auto& captureAndTerritoryColor = capturesAndTerritoriesColors[suicidalTerritoryMove.loc];
+       captureAndTerritoryColor.getOneMoveTerritoryColor() == C_EMPTY &&
+       captureAndTerritoryColor.getOneMoveEmptyTerritoryColor() == C_EMPTY)
+    {
+      captureAndTerritoryColor.addZeroMoveEmptyTerritoryPlayer(suicidalTerritoryMove.pla);
+    }
+  }
+
+  return capturesAndTerritoriesColors;
 }
 
 std::pair<float, float> Board::getAcceptableKomiRange(const bool allowDraw, const int extraBlack) const {

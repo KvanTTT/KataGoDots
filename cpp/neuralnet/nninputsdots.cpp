@@ -32,7 +32,7 @@ void NNInputs::fillRowV7Dots(
 
   const Rules& rules = hist.rules;
 
-  const auto capturesAndBasesColors = board.calculateOneMoveCaptureAndBasePositionsForDots();
+  const auto capturesAndTerritoriesColors = board.calculateCapturesAndTerritoriesColorsForDots();
   [[maybe_unused]] int deadDotsCount = 0;
 
   auto setSpatial = [&](const int pos, const DotsSpatialFeature spatialFeature) {
@@ -82,9 +82,9 @@ void NNInputs::fillRowV7Dots(
         setSpatial(pos, DotsSpatialFeature::Grounded_8);
       }
 
-      const auto captureAndBaseColors = capturesAndBasesColors[loc];
+      const auto captureAndTerritoryColors = capturesAndTerritoriesColors[loc];
 
-      const Color captureColor = captureAndBaseColors.getCaptureColor();
+      const Color captureColor = captureAndTerritoryColors.getOneMoveCaptureColor();
       if ((pla & captureColor) != 0) {
         setSpatial(pos, DotsSpatialFeature::PlayerCaptures_18);
       }
@@ -92,11 +92,11 @@ void NNInputs::fillRowV7Dots(
         setSpatial(pos, DotsSpatialFeature::PlayerOppCaptures_19);
       }
 
-      const Color baseColor = captureAndBaseColors.getBaseColor();
-      if ((pla & baseColor) != 0) {
+      const Color territoryColor = captureAndTerritoryColors.getOneMoveTerritoryColor();
+      if ((pla & territoryColor) != 0) {
         setSpatial(pos, DotsSpatialFeature::PlayerSurroundings_20);
       }
-      if ((opp & baseColor) != 0) {
+      if ((opp & territoryColor) != 0) {
         setSpatial(pos, DotsSpatialFeature::PlayerOppSurroundings_21);
       }
 
