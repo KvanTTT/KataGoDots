@@ -987,21 +987,11 @@ Board::BaseInfo::RelationType Board::BaseInfo::getRelationTo(const Base& other, 
       return RelationType::SUBSET;
     }
 
-    if (other.rollback_locs_states_captures.size() == commonLocsCount || other.type == Base::Type::SUICIDAL) {
-      // There is a rare case when a suicidal base overlaps a normal one.
-      // Effectively, it's a SUPERSET because the only capturing loc isn't common.
-      assert(other.type != Base::Type::SUICIDAL ||
-        other.rollback_locs_states_captures.size() == commonLocsCount ||
-        other.rollback_locs_states_captures.size() == commonLocsCount + 1 && otherContainsCaptureLoc);
+    if (other.rollback_locs_states_captures.size() == commonLocsCount) {
       return RelationType::SUPERSET;
     }
 
-    if (territory.size() == commonLocsCount || type == Base::Type::SUICIDAL) {
-      // There is a rare case when a suicidal base overlaps a normal one.
-      // Effectively, it's a SUBSET because the only capturing loc isn't common.
-      assert(type != Base::Type::SUICIDAL ||
-        territory.size() == commonLocsCount ||
-        territory.size() == commonLocsCount + 1 && containsCaptureLoc);
+    if (territory.size() == commonLocsCount) {
       return RelationType::SUBSET;
     }
   }

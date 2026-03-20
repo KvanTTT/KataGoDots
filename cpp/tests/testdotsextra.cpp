@@ -328,6 +328,8 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
             if (captureAndTerritoryInfos == nullptr) break;
             colorOrPlayer = captureAndTerritoryInfos->getZeroMoveEmptyTerritoryPlayer();
             break;
+          default:
+            ASSERT_UNREACHABLE;
         }
 
         if (colorOrPlayer == C_WALL) {
@@ -877,6 +879,16 @@ o.xxo
 .  O  O  O  .
 .  O  O  .  .
 .  O  O  O  .
+.  .  .  .  .
+)"
+    ,
+    nullopt,
+    nullopt,
+    R"(
+.  .  .  .  .
+.  .  .  .  .
+.  .  X  X  .
+.  .  .  .  .
 .  .  .  .  .
 )"
 );
