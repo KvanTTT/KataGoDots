@@ -448,7 +448,7 @@ void Board::undoDots(MoveRecord& moveRecord) {
         const auto rollbackCapturesDiff = locStateCaptureDiff.getCapturesDiff();
         const auto currentCapturesDiff = captures_diff_data[rollbackLoc];
         assert(currentCapturesDiff != UNINITIALIZED_CAPTURES_DIFF_DATA);
-        const auto capturesDiffHash = ZOBRIST_DOTS_CAPTURES_DIFF_HASH[rollbackLoc];
+        const auto& capturesDiffHash = ZOBRIST_DOTS_CAPTURES_DIFF_HASH[rollbackLoc];
 
         pos_hash ^= capturesDiffHash[currentCapturesDiff];
 
@@ -893,7 +893,7 @@ void Board::updateStatesAndAppend(
       prevCapturesDiff = captures_diff_data[territoryLoc];
 
       // Simulate unmaking the previous captures diff and applying the new one
-      const auto capturesDiffHash = ZOBRIST_DOTS_CAPTURES_DIFF_HASH[territoryLoc];
+      const auto& capturesDiffHash = ZOBRIST_DOTS_CAPTURES_DIFF_HASH[territoryLoc];
 
       // Ignore uninitialized diffs (it allows handling empty bases properly)
       if (prevCapturesDiff != UNINITIALIZED_CAPTURES_DIFF_DATA)

@@ -272,7 +272,7 @@ void Board::initHash()
   for (int i = 0; i < ZOBRIST_DOTS_CAPTURES_DIFF_HASH.size(); i++) {
     // Reinit at each iteration to make it invariant to max size
     rand.init("Board::initHash() for ZOBRIST_DOTS_CAPTURES_DIFF_HASH hashes " + std::to_string(i));
-    auto &secondArray = ZOBRIST_DOTS_CAPTURES_DIFF_HASH.at(i);
+    auto& secondArray = ZOBRIST_DOTS_CAPTURES_DIFF_HASH.at(i);
     for (int j = 0; j < MAX_CAPTURES_COUNT; j++) {
       secondArray.at(j) = nextHash();
     }

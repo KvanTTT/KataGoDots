@@ -719,29 +719,35 @@ Board SymmetryHelpers::getSymBoard(const Board& board, int symmetry) {
       const Loc symLoc = getSymLoc(x, y);
 
       const Loc loc = Location::getLoc(x,y,board.x_size);
-      if (symBoard.getColor(symLoc) == C_EMPTY) { // Ignore already initialized start poses
-        const Color color = board.getColor(loc);
-        if (!board.isDots()) {
-          const bool suc = symBoard.setStoneFailIfNoLibs(symLoc, color);
-          assert(suc);
-          (void)suc;
-          if(loc == board.ko_loc)
-            symKoLoc = symLoc;
-        } else {
-          const State state = board.getState(loc);
-          symBoard.setState(symLoc, state);
-
-          if (const Color placedColor = getPlacedDotColor(state); placedColor != C_EMPTY && !isTerritory(state)) {
-            symBoard.pos_hash ^= Board::ZOBRIST_BOARD_HASH[symLoc][placedColor];
+      if (!board.isDots()) {
+        const bool suc = symBoard.setStoneFailIfNoLibs(symLoc, board.getColor(loc));
+        assert(suc);
+        (void)suc;
+        if(loc == board.ko_loc)
+          symKoLoc = symLoc;
+      } else {
+        const auto updateDotsHashAndCapturesDiffData = [&](const State s, const uint16_t old_captures_diff_data, const uint16_t new_captures_diff_data) {
+          if (getActiveColor(s) != C_EMPTY) {
+            if (!isTerritory(s)) {
+              const Color placedColor = getPlacedDotColor(s);
+              assert(C_EMPTY != placedColor && "Non territory locs should have placed status");
+              symBoard.pos_hash ^= Board::ZOBRIST_BOARD_HASH[symLoc][placedColor];
+            } else {
+              assert(Board::UNINITIALIZED_CAPTURES_DIFF_DATA != old_captures_diff_data && "territory is expected to be initialized");
+              symBoard.pos_hash ^= Board::ZOBRIST_DOTS_CAPTURES_DIFF_HASH[symLoc][old_captures_diff_data];
+              symBoard.captures_diff_data[symLoc] = new_captures_diff_data;
+            }
           }
+        };
 
-          const auto capturesDiffAtLoc = board.captures_diff_data[loc];
-          if (capturesDiffAtLoc != Board::UNINITIALIZED_CAPTURES_DIFF_DATA) {
-            symBoard.pos_hash ^= Board::ZOBRIST_DOTS_CAPTURES_DIFF_HASH[symLoc][capturesDiffAtLoc];
-          }
+        // Undo the hash for already initialized start pos dots
+        updateDotsHashAndCapturesDiffData(symBoard.getState(symLoc), symBoard.captures_diff_data[symLoc], Board::UNINITIALIZED_CAPTURES_DIFF_DATA);
 
-          symBoard.captures_diff_data[symLoc] = capturesDiffAtLoc;
-        }
+        const State newState = board.getState(loc);
+        symBoard.setState(symLoc, newState);
+
+        const uint16_t board_captures_diff_data = board.captures_diff_data[loc];
+        updateDotsHashAndCapturesDiffData(newState, board_captures_diff_data, board_captures_diff_data);
       }
     }
   }
