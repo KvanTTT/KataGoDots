@@ -113,8 +113,11 @@ SymmetryHelpers::SYMMETRY_TRANSPOSE_FLIP_Y_X);
   auto board = Board(5, 4, originalRules);
   const Player pla = board.setStartPos(DOTS_RANDOM);
   board.playMoveAssumeLegal(Location::getLoc(1, 2, board.x_size), pla);
+  board.playMoveAssumeLegal(Location::getLoc(2, 3, board.x_size), pla);
+  testAssert(1 == board.numWhiteCaptures);
 
   const auto rotatedBoard = SymmetryHelpers::getSymBoard(board, SymmetryHelpers::SYMMETRY_TRANSPOSE_FLIP_X);
+  testAssert(1 == rotatedBoard.numWhiteCaptures);
 
   auto rulesAfterTransformation = originalRules;
   rulesAfterTransformation.startPosIsRandom = true;
@@ -126,6 +129,8 @@ SymmetryHelpers::SYMMETRY_TRANSPOSE_FLIP_Y_X);
     Move(Location::getLoc(1, 2,  expectedBoard.x_size), P_WHITE),
   }, true);
   expectedBoard.playMoveAssumeLegal(Location::getLoc(1, 1, expectedBoard.x_size), P_BLACK);
+  expectedBoard.playMoveAssumeLegal(Location::getLoc(0, 2, expectedBoard.x_size), P_BLACK);
+  testAssert(1 == expectedBoard.numWhiteCaptures);
 
   expect("Dots symmetry with start pos", Board::toStringSimple(rotatedBoard), Board::toStringSimple(expectedBoard));
   testAssert(rotatedBoard.isEqualForTesting(expectedBoard));
