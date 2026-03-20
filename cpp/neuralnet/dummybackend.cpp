@@ -110,13 +110,15 @@ void NeuralNet::getOutput(
   InputBuffers* inputBuffers,
   int numBatchEltsFilled,
   NNResultBuf** inputBufs,
-  vector<NNOutput*>& outputs
+  const vector<NNOutput*>& outputs,
+  const bool dotsGame
 ) {
   (void)gpuHandle;
   (void)inputBuffers;
   (void)numBatchEltsFilled;
   (void)inputBufs;
   (void)outputs;
+  (void)dotsGame;
   throw StringError("Dummy neural net backend: NeuralNet::getOutput unimplemented");
 }
 
