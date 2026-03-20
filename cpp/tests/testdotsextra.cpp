@@ -464,26 +464,176 @@ R"(
 );
 
   checkCapturingAndBase(
-    "Complex example with overlapping of capturing and bases",
+    "Overlapping of capturing and bases",
     R"(
 .ooxx.
 o.xo.x
 ox.ox.
 ox.ox.
 .o.x..
-)", R"(
+)",
+    R"(
 .  .  .  .  .  .
 .  .  .  .  .  .
 .  .  .  .  .  .
-.  .  XO .  .  .
+.  .  .  .  .  .
 .  .  XO .  .  .
 )",
-  R"(
+    R"(
 .  .  .  .  .  .
 .  O  O  X  X  .
 .  O  XO X  .  .
 .  O  XO X  .  .
 .  .  .  .  .  .
+)"
+);
+
+  checkCapturingAndBase(
+    "Unrelated bases of same color",
+    R"(
+.o...o.
+oxo.oxo
+.......
+)",
+    R"(
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  O  .  .  .  O  .
+)",
+    R"(
+.  .  .  .  .  .  .
+.  O  .  .  .  O  .
+.  .  .  .  .  .  .
+)"
+  );
+
+  checkCapturingAndBase(
+    "Drop internal territory",
+    R"(
+..xxx..
+.x...x.
+x..x..x
+x.xox.x
+x.....x
+.x...x.
+..x.x..
+.......
+)",
+    R"(
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  X  .  .  .
+)",
+    R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  X  X  X  X  .
+.  X  X  X  X  X  .
+.  X  X  X  X  X  .
+.  .  X  X  X  .  .
+.  .  .  X  .  .  .
+.  .  .  .  .  .  .
+)"
+    );
+
+  checkCapturingAndBase(
+  "Drop dangling territory",
+  R"(
+.......
+.oo.oo.
+o.....o
+o.oxo.o
+o..o..o
+o.....o
+.ooooo.
+)",
+  R"(
+.  .  .  O  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+)",
+  R"(
+.  .  .  .  .  .  .
+.  .  .  O  .  .  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  .  .  .  .  .  .
+)"
+  );
+
+  checkCapturingAndBase(
+  "Drop internal opp capturing and territory",
+  R"(
+..xxx..
+.x...x.
+x..o..x
+x.oxo.x
+x.....x
+.x...x.
+..x.x..
+...o...
+)",
+  R"(
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  X  .  .  .
+.  .  .  .  .  .  .
+)",
+  R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  X  X  X  X  .
+.  X  X  X  X  X  .
+.  X  X  X  X  X  .
+.  .  X  X  X  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+)"
+);
+
+  checkCapturingAndBase(
+  "Drop internal opp capturing and territory 2",
+  R"(
+.......
+.oo.oo.
+o.....o
+o.xox.o
+o..x..o
+o.....o
+.ooooo.
+)",
+  R"(
+.  .  .  O  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+)",
+  R"(
+.  .  .  .  .  .  .
+.  .  .  O  .  .  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  O  O  O  O  O  .
+.  .  .  .  .  .  .
 )"
 );
 }
