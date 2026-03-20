@@ -501,7 +501,7 @@ struct Board
   mutable std::vector<Loc> closureOrInvalidateLocsBuffer = std::vector<Loc>();
   mutable std::vector<Loc> territoryLocationsBuffer = std::vector<Loc>();
   mutable std::vector<Loc> walkStack = std::vector<Loc>();
-  mutable std::vector<bool> visited_data = std::vector<bool>();
+  mutable std::vector<char> visited_data = std::vector<char>();
 
   // Dots game functions
   [[nodiscard]] bool wouldBeCaptureDots(Loc loc, Player pla) const;
