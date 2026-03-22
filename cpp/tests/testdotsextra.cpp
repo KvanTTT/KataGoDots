@@ -289,6 +289,7 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
   for (int y = 0; y < board.y_size; y++) {
     for (int x = 0; x < board.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, board.x_size);
+      const Color activeColorAtLoc = board.getColor(loc);
       const auto* captureAndTerritoryInfos = capturesAndTerritoriesInfos->at(loc);
 
       auto appendColor = [&](const NextMoveType type, std::ostringstream& stream) {
@@ -310,7 +311,7 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
             break;
           case NextMoveType::OneMoveTerritory:
             if (captureAndTerritoryInfos == nullptr) break;
-            colorOrPlayer = captureAndTerritoryInfos->getOneMoveTerritoryColor();
+            colorOrPlayer = captureAndTerritoryInfos->getOneMoveTerritoryColor(activeColorAtLoc);
             break;
           case NextMoveType::OneMoveEmptyCapture:
             if (captureAndTerritoryInfos == nullptr) break;
@@ -318,11 +319,11 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
             break;
           case NextMoveType::OneMoveEmptyTerritory:
             if (captureAndTerritoryInfos == nullptr) break;
-            colorOrPlayer = captureAndTerritoryInfos->getOneMoveEmptyTerritoryPlayer();
+            colorOrPlayer = captureAndTerritoryInfos->getOneMoveEmptyTerritoryPlayer(activeColorAtLoc);
             break;
           case NextMoveType::ZeroMoveEmptyTerritory:
             if (captureAndTerritoryInfos == nullptr) break;
-            colorOrPlayer = captureAndTerritoryInfos->getZeroMoveEmptyTerritoryPlayer();
+            colorOrPlayer = captureAndTerritoryInfos->getZeroMoveEmptyTerritoryPlayer(activeColorAtLoc);
             break;
           default:
             ASSERT_UNREACHABLE;
@@ -1039,8 +1040,8 @@ XO XO .  .  .  XO XO
     R"(
 .  .  .  .  .  .  .
 .  .  X  X  X  .  .
-.  X  X  X  X  X  .
-.  X  X  X  X  X  .
+.  X  X  .  X  X  .
+.  X  .  X  .  X  .
 .  X  X  X  X  X  .
 .  .  X  X  X  .  .
 .  .  .  X  .  .  .
@@ -1126,9 +1127,9 @@ XO .  .  .  .  .  XO
     R"(
 .  .  .  .  .  .  .
 .  .  O  O  O  .  .
-.  O  O  O  O  O  .
-.  O  O  O  O  O  .
-.  O  O  O  O  O  .
+.  O  O  .  O  O  .
+.  O  .  O  .  O  .
+.  O  O  .  O  O  .
 .  .  O  O  O  .  .
 .  .  .  .  .  .  .
 )"
@@ -1167,8 +1168,8 @@ XO .  .  .  .  .  XO
 .  .  .  .  .  .  .
 .  .  .  O  .  .  .
 .  O  O  O  O  O  .
-.  O  O  O  O  O  .
-.  O  O  O  O  O  .
+.  O  .  O  .  O  .
+.  O  O  .  O  O  .
 .  O  O  O  O  O  .
 .  .  .  .  .  .  .
 )"
@@ -1210,7 +1211,7 @@ XO XO .  XO .  XO XO
 .  .  .  .  .  .  .
 .  .  X  X  X  .  .
 .  X  X  X  X  X  .
-.  X  X  X  X  X  .
+.  X  X  .  X  X  .
 .  X  X  X  X  X  .
 .  .  X  X  X  .  .
 .  .  .  .  .  .  .
@@ -1251,7 +1252,7 @@ XO .  .  .  .  .  XO
 .  .  .  .  .  .  .
 .  .  .  O  .  .  .
 .  O  O  O  O  O  .
-.  O  O  O  O  O  .
+.  O  O  .  O  O  .
 .  O  O  O  O  O  .
 .  O  O  O  O  O  .
 .  .  .  .  .  .  .
@@ -1297,6 +1298,182 @@ o.....o
 .  .  .  .  .  .  .
 )"
   );
+
+    checkNextMoveInfos(
+      "Ignore own territory with outer normal base",
+      R"(
+..xxx..
+.x.o.x.
+x..x..x
+x.xox.x
+x.....x
+.x...x.
+..x.x..
+)",
+      R"(
+.  XO .  .  .  XO .
+XO .  .  .  .  .  XO
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+XO .  .  .  .  .  XO
+.  XO .  XO .  XO .
+)",
+      R"(
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  X  .  .  .
+)",
+      R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  X  .  X  X  .
+.  X  .  .  .  X  .
+.  X  X  .  X  X  .
+.  .  X  X  X  .  .
+.  .  .  .  .  .  .
+)",
+      nullopt,
+      nullopt,
+      nullopt,
+      Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
+      Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
+      {XYMove(3, 4, P_BLACK)}
+   );
+
+    checkNextMoveInfos(
+      "Ignore own territory with outer empty base",
+      R"(
+..xxx..
+.x...x.
+x..x..x
+x.xox.x
+x.....x
+.x...x.
+..x.x..
+)",
+      R"(
+.  XO .  .  .  XO .
+XO .  X  X  X  .  XO
+.  X  X  .  X  X  .
+.  X  .  .  .  X  .
+.  X  X  .  X  X  .
+XO .  X  X  X  .  XO
+.  XO .  XO .  XO .
+)",
+      nullopt,
+      nullopt,
+      R"(
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  X  .  .  .
+)",
+      R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  X  .  X  X  .
+.  X  .  .  .  X  .
+.  X  X  .  X  X  .
+.  .  X  X  X  .  .
+.  .  .  .  .  .  .
+)",
+      nullopt,
+      Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
+      Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
+      {XYMove(3, 4, P_BLACK)}
+   );
+
+    checkNextMoveInfos(
+      "Ignore own territory with outer suicidal base",
+      R"(
+..xxx..
+.x...x.
+x..x..x
+x.xox.x
+x.....x
+.x...x.
+..x.x..
+)",
+      R"(
+.  XO .  .  .  XO .
+XO .  X  X  X  .  XO
+.  X  X  .  X  X  .
+.  X  .  .  .  X  .
+.  X  X  .  X  X  .
+XO .  X  X  X  .  XO
+.  XO .  .  .  XO .
+)",
+      nullopt,
+      nullopt,
+      nullopt,
+      nullopt,
+      R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  X  .  X  X  .
+.  X  .  .  .  X  .
+.  X  X  .  X  X  .
+.  .  X  X  X  .  .
+.  .  .  .  .  .  .
+)",
+      Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
+      Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
+      {XYMove(3, 4, P_BLACK), XYMove(3, 6, P_BLACK)}
+   );
+
+    checkNextMoveInfos(
+      "Capture opp territory with outer normal base",
+      R"(
+..xxx..
+.x...x.
+x..o..x
+x.oxo.x
+x.....x
+.x...x.
+..x.x..
+)",
+      R"(
+.  XO .  .  .  XO .
+XO .  .  .  .  .  XO
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+XO .  .  .  .  .  XO
+.  XO .  XO .  XO .
+)",
+      R"(
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  X  .  .  .
+)",
+      R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  X  X  X  X  .
+.  X  X  X  X  X  .
+.  X  X  X  X  X  .
+.  .  X  X  X  .  .
+.  .  .  .  .  .  .
+)",
+      nullopt,
+      nullopt,
+      nullopt,
+      Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
+      Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
+      {XYMove(3, 4, P_WHITE)}
+   );
 }
 
 static Board initializeBoard(const int startPos, const vector<XYMove>& extraMoves = {}) {

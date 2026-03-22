@@ -1068,11 +1068,33 @@ Color Board::CaptureAndTerritoryInfos::getOneMoveEmptyCaptureColor() const {
   return result;
 }
 
-Color Board::CaptureAndTerritoryInfos::getOneMoveTerritoryColor() const {
+Color Board::CaptureAndTerritoryInfos::getOneMoveTerritoryColor(const Color activeColorAtLoc) const {
   Color result = C_EMPTY;
   for (const BaseInfo* baseInfo : territoryBaseInfos) {
-    if (baseInfo != nullptr && baseInfo->type == Base::Type::NORMAL) {
+    if (baseInfo != nullptr && baseInfo->type == Base::Type::NORMAL && activeColorAtLoc != baseInfo->player) {
       result = static_cast<Color>(result | baseInfo->player);
+    }
+  }
+  return result;
+}
+
+Player Board::CaptureAndTerritoryInfos::getOneMoveEmptyTerritoryPlayer(const Color activeColorAtLoc) const {
+  Player result = C_EMPTY;
+  for (const BaseInfo* baseInfo : territoryBaseInfos) {
+    if (baseInfo != nullptr && baseInfo->type == Base::Type::EMPTY && activeColorAtLoc != baseInfo->player) {
+      assert(result == C_EMPTY && "One move empty territory color can be only single");
+      result = baseInfo->player;
+    }
+  }
+  return result;
+}
+
+Player Board::CaptureAndTerritoryInfos::getZeroMoveEmptyTerritoryPlayer(const Color activeColorAtLoc) const {
+  Player result = C_EMPTY;
+  for (const BaseInfo* baseInfo : territoryBaseInfos) {
+    if (baseInfo != nullptr && baseInfo->type == Base::Type::SUICIDAL && activeColorAtLoc != baseInfo->player) {
+      assert(result == C_EMPTY && "Zero move territory color can be only single");
+      result = baseInfo->player;
     }
   }
   return result;
@@ -1085,28 +1107,6 @@ bool Board::CaptureAndTerritoryInfos::hasAnyTerritory(const Player pla) const {
     }
   }
   return false;
-}
-
-Player Board::CaptureAndTerritoryInfos::getOneMoveEmptyTerritoryPlayer() const {
-  Player result = C_EMPTY;
-  for (const BaseInfo* baseInfo : territoryBaseInfos) {
-    if (baseInfo != nullptr && baseInfo->type == Base::Type::EMPTY) {
-      assert(result == C_EMPTY && "One move empty territory color can be only single");
-      result = baseInfo->player;
-    }
-  }
-  return result;
-}
-
-Player Board::CaptureAndTerritoryInfos::getZeroMoveEmptyTerritoryPlayer() const {
-  Player result = C_EMPTY;
-  for (const BaseInfo* baseInfo : territoryBaseInfos) {
-    if (baseInfo != nullptr && baseInfo->type == Base::Type::SUICIDAL) {
-      assert(result == C_EMPTY && "Zero move territory color can be only single");
-      result = baseInfo->player;
-    }
-  }
-  return result;
 }
 
 bool Board::CaptureAndTerritoryInfos::isReasonableMove(const Player currentPla) const {
