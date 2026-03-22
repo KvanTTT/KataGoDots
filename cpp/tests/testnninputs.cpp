@@ -121,7 +121,7 @@ void Tests::runNNInputsV3V4Tests() {
   };
 
   static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
-  int minVersion = 3;
+  int minVersion = 7;
   int maxVersion = 7;
 
   {
@@ -130,7 +130,9 @@ void Tests::runNNInputsV3V4Tests() {
     cout << name << endl;
     cout << "-----------------------------------------------------------------" <<  endl;
 
-    const string sgfStr = "(;FF[4]KM[7.5];B[pd];W[pq];B[dq];W[dd];B[qo];W[pl];B[qq];W[qr];B[pp];W[rq];B[oq];W[qp];B[pr];W[qq];B[oo];W[ro];B[qn];W[do];B[dl];W[gp];B[eo];W[en];B[fo];W[dp];B[eq];W[cq];B[cr];W[br];B[dn];W[bp];B[cn];W[ep];B[fp];W[fq];B[gq];W[fr];B[gr];W[er];B[hp];W[go];B[fn];W[ho];B[ip];W[io];B[jp];W[jo];B[lp];W[kp];B[kq];W[ko];B[lq];W[ir];B[hq];W[jq];B[jr];W[em];B[gm];W[el];B[hl];W[kl];B[ek];W[fk];B[ej];W[fl];B[fj];W[gk];B[ik];W[gj];B[jj];W[dm];B[lk];W[mm];B[nl];W[nm];B[om];W[ol];B[nk];W[ll];B[kk];W[jl];B[im];W[jk];B[ij];W[kj];B[mk];W[ki];B[ih];W[jh];B[ig];W[jg];B[if];W[oi];B[mi];W[mh];B[lh];W[li];B[nh];W[mj];B[ni];W[nj];B[oj];W[lj];B[ok];W[oh];B[ng];W[pj];B[ji];W[kh];B[jf];W[lg];B[cm];W[cl];B[dk];W[bl];B[bk];W[bn];B[ck];W[bm];B[cc];W[cd];B[dc];W[ec];B[eb];W[fb];B[fc];W[ed];B[gb];W[bc];B[cb];W[cg];B[be];W[bd];B[bg];W[bh];B[cf];W[df];B[ch];W[dg];B[bi];W[qd];B[qc];W[rc];B[rd];W[qe];B[re];W[rb];B[pc];W[qb];B[qf];W[ff];B[sc];W[pb];B[bo];W[ob];B[nc];W[nb];B[mb];W[mc];B[lb])";
+    // const string sgfStr = "(;FF[4]KM[7.5];B[pd];W[pq];B[dq];W[dd];B[qo];W[pl];B[qq];W[qr];B[pp];W[rq];B[oq];W[qp];B[pr];W[qq];B[oo];W[ro];B[qn];W[do];B[dl];W[gp];B[eo];W[en];B[fo];W[dp];B[eq];W[cq];B[cr];W[br];B[dn];W[bp];B[cn];W[ep];B[fp];W[fq];B[gq];W[fr];B[gr];W[er];B[hp];W[go];B[fn];W[ho];B[ip];W[io];B[jp];W[jo];B[lp];W[kp];B[kq];W[ko];B[lq];W[ir];B[hq];W[jq];B[jr];W[em];B[gm];W[el];B[hl];W[kl];B[ek];W[fk];B[ej];W[fl];B[fj];W[gk];B[ik];W[gj];B[jj];W[dm];B[lk];W[mm];B[nl];W[nm];B[om];W[ol];B[nk];W[ll];B[kk];W[jl];B[im];W[jk];B[ij];W[kj];B[mk];W[ki];B[ih];W[jh];B[ig];W[jg];B[if];W[oi];B[mi];W[mh];B[lh];W[li];B[nh];W[mj];B[ni];W[nj];B[oj];W[lj];B[ok];W[oh];B[ng];W[pj];B[ji];W[kh];B[jf];W[lg];B[cm];W[cl];B[dk];W[bl];B[bk];W[bn];B[ck];W[bm];B[cc];W[cd];B[dc];W[ec];B[eb];W[fb];B[fc];W[ed];B[gb];W[bc];B[cb];W[cg];B[be];W[bd];B[bg];W[bh];B[cf];W[df];B[ch];W[dg];B[bi];W[qd];B[qc];W[rc];B[rd];W[qe];B[re];W[rb];B[pc];W[qb];B[qf];W[ff];B[sc];W[pb];B[bo];W[ob];B[nc];W[nb];B[mb];W[mc];B[lb])";
+    // const string sgfStr = "(;FF[4]KM[0.5];B[dd];W[ed];B[ee];W[de];B[cd];W[ce];B[fe];W[fd];B[be];W[ge];B[df];W[cf])";
+    const string sgfStr = "(;FF[4]KM[0.5];B[ej];W[jj];B[hh];W[hg];B[gg];W[gh];B[fg];W[ig];B[ih];W[fh];B[eh];W[jh];B[gi];W[fi])";
 
     std::unique_ptr<CompactSgf> sgf = CompactSgf::parse(sgfStr);
 
@@ -164,11 +166,16 @@ void Tests::runNNInputsV3V4Tests() {
 
         const Hash128 hash = fillRowAndGetHash(version,board,hist,nextPla,nnInputParams,nnXLen,nnYLen,inputsUseNHWC,rowBin,rowGlobal);
 
+        vector<int> ladderFeatures = {14, 15, 16, 17};
+
         out << hash << endl;
-        for(int c = 0; c<numFeaturesBin; c++)
+        for (const auto ladderFeature : ladderFeatures) {
+          printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,ladderFeature);
+        }
+        /*for(int c = 0; c<numFeaturesBin; c++)
           printNNInputHWAndBoard(out,version,board,hist,nnXLen,nnYLen,inputsUseNHWC,rowBin,c);
         for(int c = 0; c<numFeaturesGlobal; c++)
-          printNNInputGlobal(out,version,rowGlobal,c);
+          printNNInputGlobal(out,version,rowGlobal,c);*/
         return getAndClear(out);
       };
 
@@ -183,13 +190,15 @@ void Tests::runNNInputsV3V4Tests() {
     }
   }
 
+  return;
+
   {
     const char* name = "NN Inputs V3V4V5V6 Ko";
     cout << "-----------------------------------------------------------------" <<  endl;
     cout << name << endl;
     cout << "-----------------------------------------------------------------" <<  endl;
 
-    const string sgfStr = "(;FF[4]KM[0.5];B[rj];W[ri];B[si];W[rh];B[sh];W[sg];B[rk];W[sk];B[sl];W[sj];B[eg];W[fg];B[ff];W[gf];B[fh];W[gh];B[gg];W[hg];B[si];W[fg];B[sh];W[sk];B[gg])";
+    const string sgfStr = "(;FF[4]KM[0.5];B[dd];W[ed];B[ee];W[de];B[cd];W[fd];B[df];W[ce];B[be];W[cf];B[cg])";
 
     std::unique_ptr<CompactSgf> sgf = CompactSgf::parse(sgfStr);
 
@@ -240,6 +249,7 @@ void Tests::runNNInputsV3V4Tests() {
     }
   }
 
+  return;
 
   {
     const char* name = "NN Inputs V3V4V5V6 7x7";

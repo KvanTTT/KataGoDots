@@ -23,6 +23,7 @@ namespace Tests {
   void runDotsBoardHistoryGroundingTests();
   void runDotsPosHashTests();
   void runDotsStartPosTests();
+  void runDotsLaddersTests();
   void runDotsStressTests();
 
   void runDotsOwnershipTests();

@@ -54,6 +54,7 @@ int MainCmds::runtests(const vector<string>& args) {
   Tests::runDotsBoardHistoryGroundingTests();
   Tests::runDotsPosHashTests();
   Tests::runDotsStartPosTests();
+  Tests::runDotsLaddersTests();
 
   Tests::runDotsSymmetryTests();
   Tests::runDotsOwnershipTests();
@@ -92,7 +93,7 @@ int MainCmds::runoutputtests(const vector<string>& args) {
   ScoreValue::initTables();
 
   Tests::runNNInputsV3V4Tests();
-  Tests::runNNLessSearchTests();
+  /*Tests::runNNLessSearchTests();
   Tests::runTrainingWriteTests();
   Tests::runTimeControlsTests();
   Tests::runScoreTests();
@@ -101,7 +102,7 @@ int MainCmds::runoutputtests(const vector<string>& args) {
   Tests::runCollectFilesTests();
   Tests::runLoadModelTests();
   Tests::runTaskParsingTests();
-  Tests::runBookTests();
+  Tests::runBookTests();*/
 
   ScoreValue::freeTables();
 

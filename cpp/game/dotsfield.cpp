@@ -1308,6 +1308,23 @@ Board::CapturesAndTerritoriesInfos* Board::calculateCapturesAndTerritoriesColors
   return capturesAndTerritoriesInfos;
 }
 
+void Board::iterDotsLadder() {
+  for (int y = 0; y < y_size; y++) {
+    for (int x = 0; x < x_size; x++) {
+      const Loc loc = Location::getLoc(x, y, x_size);
+
+      const State state = getState(loc);
+      // Optimization: perform fast check to avoid more heavy checks and extra allocations.
+      // The most frequent case is the case when the location is empty.
+      if (getActiveColor(state) != C_EMPTY) continue;
+
+      if (const Color emptyTerritoryColor = getEmptyTerritoryColor(state); emptyTerritoryColor != C_EMPTY) continue;
+
+      
+    }
+  }
+}
+
 std::pair<float, float> Board::getAcceptableKomiRange(const bool allowDraw, const int extraBlack) const {
   assert(rules.isDots);
   auto lowerBound = static_cast<float>(-whiteScoreIfBlackGrounds - extraBlack) + (allowDraw ? 0.0f : 0.5f);
