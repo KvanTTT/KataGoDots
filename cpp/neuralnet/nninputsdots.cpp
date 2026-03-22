@@ -99,7 +99,7 @@ void NNInputs::fillRowV7Dots(
           setSpatial(pos, DotsSpatialFeature::PlayerOppCaptures_19);
         }
 
-        const Color territoryColor = captureAndTerritoryInfos->getOneMoveTerritoryColor();
+        const Color territoryColor = captureAndTerritoryInfos->getOneMoveTerritoryColor(activeColor);
         if ((pla & territoryColor) != 0) {
           setSpatial(pos, DotsSpatialFeature::PlayerSurroundings_20);
         }
