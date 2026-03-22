@@ -465,9 +465,9 @@ struct Board
 
     [[nodiscard]] Color getOneMoveCaptureColor() const;
     [[nodiscard]] Color getOneMoveEmptyCaptureColor() const;
-    [[nodiscard]] Color getOneMoveTerritoryColor() const;
-    [[nodiscard]] Player getOneMoveEmptyTerritoryPlayer() const;
-    [[nodiscard]] Player getZeroMoveEmptyTerritoryPlayer() const;
+    [[nodiscard]] Color getOneMoveTerritoryColor(Color activeColorAtLoc) const;
+    [[nodiscard]] Player getOneMoveEmptyTerritoryPlayer(Color activeColorAtLoc) const;
+    [[nodiscard]] Player getZeroMoveEmptyTerritoryPlayer(Color activeColorAtLoc) const;
     [[nodiscard]] bool isReasonableMove(Player currentPla) const;
     [[nodiscard]] bool hasAnyTerritory(Player pla) const;
 
