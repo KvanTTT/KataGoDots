@@ -260,8 +260,7 @@ R"(
 }
 
 enum class NextMoveType {
-  BlackReasonable,
-  WhiteReasonable,
+  Reasonable,
   OneMoveCapture,
   OneMoveTerritory,
   OneMoveEmptyCapture,
@@ -272,8 +271,7 @@ enum class NextMoveType {
 static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& board) {
   std::map<NextMoveType, std::ostringstream> nextMoveTypeStreams;
 
-  nextMoveTypeStreams.emplace(NextMoveType::BlackReasonable, std::ostringstream());
-  nextMoveTypeStreams.emplace(NextMoveType::WhiteReasonable, std::ostringstream());
+  nextMoveTypeStreams.emplace(NextMoveType::Reasonable, std::ostringstream());
   nextMoveTypeStreams.emplace(NextMoveType::OneMoveCapture, std::ostringstream());
   nextMoveTypeStreams.emplace(NextMoveType::OneMoveTerritory, std::ostringstream());
   nextMoveTypeStreams.emplace(NextMoveType::OneMoveEmptyCapture, std::ostringstream());
@@ -296,15 +294,13 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
       auto appendColor = [&](const NextMoveType type, std::ostringstream& stream) {
         Color colorOrPlayer = C_EMPTY;
         switch (type) {
-          case NextMoveType::BlackReasonable:
+          case NextMoveType::Reasonable:
             if (currentReasonableBlackLocIndex < reasonableBlackLocs.size() && loc == reasonableBlackLocs[currentReasonableBlackLocIndex]) {
-              colorOrPlayer = P_BLACK;
+              colorOrPlayer |= P_BLACK;
               currentReasonableBlackLocIndex++;
             }
-            break;
-          case NextMoveType::WhiteReasonable:
             if (currentReasonableWhiteLocIndex < reasonableWhiteLocs.size() && loc == reasonableWhiteLocs[currentReasonableWhiteLocIndex]) {
-              colorOrPlayer = P_WHITE;
+              colorOrPlayer |= P_WHITE;
               currentReasonableWhiteLocIndex++;
             }
             break;
@@ -345,9 +341,7 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
 
       if (x < board.x_size - 1) {
         for (auto& [type, stream] : nextMoveTypeStreams) {
-          if (type != NextMoveType::BlackReasonable && type != NextMoveType::WhiteReasonable) {
-            stream << " ";
-          }
+          stream << " ";
         }
       }
     }
@@ -367,8 +361,7 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
 static void checkNextMoveInfos(
   const string& title,
   const string& boardData,
-  const std::optional<string>& expectedBlackReasonableMoves,
-  const std::optional<string>& expectedWhiteReasonableMoves,
+  const std::optional<string>& expectedReasonableMoves,
   const std::optional<string>& expectedOneMoveCaptures,
   const std::optional<string>& expectedOneMoveTerritory,
   const std::optional<string>& expectedOneMoveEmptyCaptures = std::nullopt,
@@ -381,36 +374,26 @@ static void checkNextMoveInfos(
   const Board board = parseDotsField(boardData, false, suicide, captureEmptyBases, Rules::DEFAULT_DOTS.dotsFreeCapturedDots, extraMoves);
   auto nextMoveTypes = getNextMoveTypes(board);
 
-  std::ostringstream emptyFieldForReasonableStream;
   std::ostringstream emptyFieldStream;
   for (int y = 0; y < board.y_size; y++) {
     for (int x = 0; x < board.x_size; x++) {
       emptyFieldStream << ". ";
-      emptyFieldForReasonableStream << ".";
       if (x < board.x_size - 1) {
         emptyFieldStream << " ";
-        emptyFieldForReasonableStream << " ";
       }
     }
     emptyFieldStream << endl;
-    emptyFieldForReasonableStream << endl;
   }
   string emptyFieldString = emptyFieldStream.str();
-  string emptyFieldForReasonableString = emptyFieldForReasonableStream.str();
 
-  auto checkTextRepresentation = [&title, &emptyFieldString, &emptyFieldForReasonableString, &nextMoveTypes](const string& name, const NextMoveType nextMoveType, const std::optional<string>& expected) {
+  auto checkTextRepresentation = [&title, &emptyFieldString, &nextMoveTypes](const string& name, const NextMoveType nextMoveType, const std::optional<string>& expected) {
     cout << "  " + title + ": " << name << endl;
     const string actualString = nextMoveTypes[nextMoveType].str();
-    const string expectedString = expected.has_value()
-      ? expected.value()
-      : nextMoveType == NextMoveType::BlackReasonable || nextMoveType == NextMoveType::WhiteReasonable
-        ? emptyFieldForReasonableString
-        : emptyFieldString;
+    const string expectedString = expected.has_value() ? expected.value() : emptyFieldString;
     expect("", actualString, expectedString);
   };
 
-  checkTextRepresentation("black reasonable", NextMoveType::BlackReasonable, expectedBlackReasonableMoves);
-  checkTextRepresentation("white reasonable", NextMoveType::WhiteReasonable, expectedWhiteReasonableMoves);
+  checkTextRepresentation("reasonable", NextMoveType::Reasonable, expectedReasonableMoves);
   checkTextRepresentation("one move captures", NextMoveType::OneMoveCapture, expectedOneMoveCaptures);
   checkTextRepresentation("one move territory", NextMoveType::OneMoveTerritory, expectedOneMoveTerritory);
   checkTextRepresentation("one move empty captures", NextMoveType::OneMoveEmptyCapture, expectedOneMoveEmptyCaptures);
@@ -430,16 +413,10 @@ xox.oxo
 .......
 )",
     R"(
-. . X X X . .
-. . . X . . .
-. . . X . . .
-. X X X X X .
-)",
-    R"(
-. . O O O . .
-. . . O . . .
-. . . O . . .
-. O O O O O .
+.  .  XO XO XO .  .
+.  .  .  XO .  .  .
+.  .  .  XO .  .  .
+.  XO XO XO XO XO .
 )",
     R"(
 .  .  .  .  .  .  .
@@ -465,18 +442,11 @@ oxo
 .o.
 )",
     R"(
-. . .
-. . .
-X X X
-. . .
-. . .
-)",
-    R"(
-. . .
-. . .
-O O O
-. . .
-. . .
+.  .  .
+.  .  .
+XO XO XO
+.  .  .
+.  .  .
 )",
     R"(
 .  .  .
@@ -503,16 +473,10 @@ x.xo.o
 .x..o.
 )",
     R"(
-. . X X . .
-. X . . . .
-. X . . . .
-. . X X . .
-)",
-    R"(
-. . O O . .
-. . . . O .
-. . . . O .
-. . O O . .
+.  .  XO XO .  .
+.  X  .  .  O  .
+.  X  .  .  O  .
+.  .  XO XO .  .
 )",
     nullopt,
     nullopt,
@@ -533,14 +497,9 @@ x.xo.o
 ......
 )",
     R"(
-. . X X . .
-. X . . . .
-. X X X X .
-)",
-    R"(
-. . O O . .
-. . . . O .
-. O O O O .
+.  .  XO XO .  .
+.  X  .  .  O  .
+.  XO XO XO XO .
 )",
     nullopt,
     nullopt,
@@ -569,18 +528,11 @@ oxo..xox
 .o....x.
 )",
     R"(
-. . . X X . . .
-. X X . . . . .
-. X . X X . X .
-. . . X X . . .
-. . X X X X . .
-)",
-    R"(
-. . . O O . . .
-. . . . . O O .
-. O . O O . O .
-. . . O O . . .
-. . O O O O . .
+.  .  .  XO XO .  .  .
+.  X  X  .  .  O  O  .
+.  XO .  XO XO .  XO .
+.  .  .  XO XO .  .  .
+.  .  XO XO XO XO .  .
 )",
     R"(
 .  .  .  .  .  .  .  .
@@ -615,14 +567,9 @@ x..o
 .xo.
 )",
     R"(
-. . . .
-. X . .
-. . . .
-)",
-    R"(
-. . . .
-. . O .
-. . . .
+.  .  .  .
+.  X  O  .
+.  .  .  .
 )",
     nullopt,
     nullopt,
@@ -646,14 +593,9 @@ x....o
 .xxoo.
 )",
     R"(
-. . . . . .
-. X X . . .
-. . . . . .
-)",
-    R"(
-. . . . . .
-. . . O O .
-. . . . . .
+.  .  .  .  .  .
+.  X  X  O  O  .
+.  .  .  .  .  .
 )",
     nullopt,
     nullopt,
@@ -677,14 +619,9 @@ xo..xo
 .xxoo.
 )",
     R"(
-. . . . . .
-. . . X . .
-. . . . . .
-)",
-    R"(
-. . . . . .
-. . O . . .
-. . . . . .
+.  .  .  .  .  .
+.  .  O  X  .  .
+.  .  .  .  .  .
 )",
     R"(
 .  .  .  .  .  .
@@ -706,14 +643,9 @@ x...xo
 .xxoo.
 )",
     R"(
-. . . . . .
-. X X . . .
-. . . . . .
-)",
-    R"(
-. . . . . .
-. . O . . .
-. . . . . .
+.  .  .  .  .  .
+.  X  XO .  .  .
+.  .  .  .  .  .
 )",
     R"(
 .  .  .  .  .  .
@@ -745,14 +677,9 @@ xo...o
 .xxoo.
 )",
     R"(
-. . . . . .
-. . . X . .
-. . . . . .
-)",
-    R"(
-. . . . . .
-. . . O O .
-. . . . . .
+.  .  .  .  .  .
+.  .  .  XO O  .
+.  .  .  .  .  .
 )",
     R"(
 .  .  .  .  .  .
@@ -784,14 +711,9 @@ xo...o
 .ooxx.
 )",
     R"(
-. . . . . .
-X . X . . .
-. . . . . .
-)",
-    R"(
-. . . . . .
-O O O . . .
-. . . . . .
+.  .  .  .  .  .
+XO O  XO .  .  .
+.  .  .  .  .  .
 )",
     R"(
 .  .  .  .  .  .
@@ -823,14 +745,9 @@ O  .  .  .  .  .
 .ooxx.
 )",
     R"(
-. . . . . .
-X . . . . X
-. . . . . .
-)",
-    R"(
-. . . . . .
-O . . . . O
-. . . . . .
+.  .  .  .  .  .
+XO .  .  .  .  XO
+.  .  .  .  .  .
 )",
     R"(
 .  .  .  .  .  .
@@ -854,18 +771,11 @@ o.xxo
 .ooo.
 )",
     R"(
-. . . . .
-. . . . .
-. . . X .
-. . . . .
-. . . . .
-)",
-    R"(
-. . . . .
-. . . . .
-. . . O .
-. . . . .
-. . . . .
+.  .  .  .  .
+.  .  .  .  .
+.  .  .  XO .
+.  .  .  .  .
+.  .  .  .  .
 )",
     R"(
 .  .  .  .  .
@@ -901,14 +811,9 @@ oxo.oxo
 .......
 )",
     R"(
-. . X X X . .
-. . . X . . .
-. X X X X X .
-)",
-    R"(
-. . O O O . .
-. . . O . . .
-. O O O O O .
+.  .  XO XO XO .  .
+.  .  .  XO .  .  .
+.  XO XO XO XO XO .
 )",
     R"(
 .  .  .  .  .  .  .
@@ -932,18 +837,11 @@ XO.OX
 .....
 )",
     R"(
-. X . X .
-X . . . X
-. . . . .
-X . . . X
-. X X X .
-)",
-    R"(
-. O . O .
-O . . . O
-. . . . .
-O . . . O
-. O O O .
+.  XO .  XO .
+XO .  .  .  XO
+.  .  .  .  .
+XO .  .  .  XO
+.  XO XO XO .
 )",
     R"(
 .  .  .  .  .
@@ -970,16 +868,10 @@ O..O
 .O..
 )",
     R"(
-. X . .
-X . . .
-. . . .
-. . X .
-)",
-    R"(
-. O . .
-O . O .
-. O O .
-. . O .
+.  XO .  .
+XO .  O  .
+.  O  O  .
+.  .  XO .
 )",
     nullopt,
     nullopt,
@@ -1006,16 +898,10 @@ xo..
 .x..
 )",
     R"(
-. . . .
-. . . .
-. . X X
-. . X .
-)",
-    R"(
-. . . .
-. . . .
-. . O O
-. . O .
+.  .  .  .
+.  .  .  .
+.  .  XO XO
+.  .  XO .
 )",
     R"(
 .  .  .  .
@@ -1042,20 +928,12 @@ oxoxo.o
 ..ooo..
 )",
     R"(
-. . . . X . .
-. . . . . . .
-. . . . X . .
-. . . . . . .
-X . . . . . X
-. X . . . X .
-)",
-    R"(
-. . . . O . .
-. . . . . . .
-. . . O . . .
-. . . . . . .
-O . . . . . O
-. O . . . O .
+.  .  .  .  XO .  .
+.  .  .  .  .  .  .
+.  .  .  O  X  .  .
+.  .  .  .  .  .  .
+XO .  .  .  .  .  XO
+.  XO .  .  .  XO .
 )",
     R"(
 .  .  .  .  .  .  .
@@ -1089,7 +967,6 @@ x..x
     nullopt,
     nullopt,
     nullopt,
-    nullopt,
     Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
     Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
     {XYMove::getGroundMove(P_WHITE)}
@@ -1105,18 +982,11 @@ ox.ox.
 .o.x..
 )",
     R"(
-. . . . . .
-. . . . . .
-. . . . . X
-. . . . . X
-. . X . X .
-)",
-    R"(
-. . . . . .
-. . . . . .
-. . . . . O
-. . . . . O
-. . O . O .
+.  .  .  .  .  .
+.  .  .  .  .  .
+.  .  .  .  .  XO
+.  .  .  .  .  XO
+.  .  XO .  XO .
 )",
     R"(
 .  .  .  .  .  .
@@ -1147,24 +1017,14 @@ x.....x
 .......
 )",
     R"(
-. X . . . X .
-X . . . . . X
-. . . . . . .
-. . . . . . .
-. . . . . . .
-X . . . . . X
-X X . . . X X
-. X X X X X .
-)",
-    R"(
-. O . . . O .
-O . . . . . O
-. . . . . . .
-. . . . . . .
-. . . . . . .
-O . . . . . O
-O O . . . O O
-. O O O O O .
+.  XO .  .  .  XO .
+XO .  .  .  .  .  XO
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+XO .  .  .  .  .  XO
+XO XO .  .  .  XO XO
+.  XO XO XO XO XO .
 )",
     R"(
 .  .  .  .  .  .  .
@@ -1201,24 +1061,14 @@ x..x..x
 .......
 )",
     R"(
-. X . . . X .
-X . X X X . X
-. X X . X X .
-. X . X . X .
-. X X . X X .
-X . X X X . X
-X X . X . X X
-. X X X X X .
-)",
-    R"(
-. O . . . O .
-O . . . . . O
-. . . . . . .
-. . . . . . .
-. . . . . . .
-O . . . . . O
-O O . . . O O
-. O O O O O .
+.  XO .  .  .  XO .
+XO .  X  X  X  .  XO
+.  X  X  .  X  X  .
+.  X  .  X  .  X  .
+.  X  X  .  X  X  .
+XO .  X  X  X  .  XO
+XO XO .  X  .  XO XO
+.  XO XO XO XO XO .
 )",
     nullopt,
     nullopt,
@@ -1256,22 +1106,13 @@ o..o..o
 ..ooo..
 )",
     R"(
-. X . X . X .
-X . . . . . X
-. . . . . . .
-. . . . . . .
-. . . . . . .
-X . . . . . X
-. X . . . X .
-)",
-    R"(
-. O . O . O .
-O . . . . . O
-. . . . . . .
-. . . . . . .
-. . . . . . .
-O . . . . . O
-. O . . . O .
+.  XO .  XO .  XO .
+XO .  .  .  .  .  XO
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+XO .  .  .  .  .  XO
+.  XO .  .  .  XO .
 )",
     R"(
 .  .  .  O  .  .  .
@@ -1305,22 +1146,13 @@ o.....o
 .ooooo.
 )",
     R"(
-. X X X X X .
-X . . . . . X
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-)",
-    R"(
-. O O O O O .
-O . . . . . O
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
+.  XO XO XO XO XO .
+XO .  .  .  .  .  XO
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
 )",
     R"(
 .  .  .  O  .  .  .
@@ -1355,24 +1187,14 @@ x.....x
 ...o...
 )",
     R"(
-. X . . . X .
-X . . . . . X
-. . . . . . .
-. . . . . . .
-. . . . . . .
-X . . . . . X
-X X . X . X X
-. X X . X X .
-)",
-    R"(
-. O . . . O .
-O . . . . . O
-. . . . . . .
-. . . . . . .
-. . . . . . .
-O . . . . . O
-O O . O . O O
-. O O . O O .
+.  XO .  .  .  XO .
+XO .  .  .  .  .  XO
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+XO .  .  .  .  .  XO
+XO XO .  XO .  XO XO
+.  XO XO .  XO XO .
 )",
     R"(
 .  .  .  .  .  .  .
@@ -1408,22 +1230,13 @@ o.....o
 .ooooo.
 )",
     R"(
-. X X X X X .
-X . . . . . X
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-)",
-    R"(
-. O O O O O .
-O . . . . . O
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
+.  XO XO XO XO XO .
+XO .  .  .  .  .  XO
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
 )",
     R"(
 .  .  .  O  .  .  .
@@ -1457,22 +1270,13 @@ o.....o
 .ooooo.
 )",
     R"(
-. . . X . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-)",
-    R"(
-. . . O . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
-. . . . . . .
+.  .  .  XO .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
 )",
     R"(
 .  .  .  O  .  .  .
