@@ -35,9 +35,9 @@ void Tests::runDotsFieldTests() {
 
   checkDotsField("Simple capturing",
     R"(
-.x.
-xox
-...
+. x .
+x o x
+. . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
   boardWithMoveRecords.playMove(1, 2, P_BLACK);
   testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
@@ -47,9 +47,9 @@ xox
 
   checkDotsField("Capturing with empty loc inside",
     R"(
-.oo.
-ox..
-.oo.
+. o o .
+o x . .
+. o o .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     testAssert(boardWithMoveRecords.isLegal(2, 1, P_BLACK));
     testAssert(boardWithMoveRecords.isLegal(2, 1, P_WHITE));
@@ -62,10 +62,10 @@ ox..
 
   checkDotsField("Triple capture",
     R"(
-.x.x.
-xo.ox
-.xox.
-..x..
+. x . x .
+x o . o x
+. x o x .
+. . x . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
   boardWithMoveRecords.playMove(2, 1, P_BLACK);
   testAssert(3 == boardWithMoveRecords.board.numWhiteCaptures);
@@ -74,13 +74,13 @@ xo.ox
 
   checkDotsField("Base inside base inside base",
     R"(
-.xxxxxxx.
-x..ooo..x
-x.o.x.o.x
-x.oxoxo.x
-x.o...o.x
-x..o.o..x
-.xxx.xxx.
+. x x x x x x x .
+x . . o o o . . x
+x . o . x . o . x
+x . o x o x o . x
+x . o . . . o . x
+x . . o . o . . x
+. x x x . x x x .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
   boardWithMoveRecords.playMove(4, 4, P_BLACK);
   testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
@@ -97,14 +97,14 @@ x..o.o..x
 
   /*checkDotsField("Base inside base inside base don't free captured dots",
   R"(
-.xxxxxxxxx..
-x..oooooo.x.
-x.o.xx...o.x
-x.oxo.xo.o.x
-x.o.x.o..o.x
-x..o....ox.x
-x...o.oo...x
-.xxxx.xxxxx.
+. x x x x x x x x x . .
+x . . o o o o o o . x .
+x . o . x x . . . o . x
+x . o x o . x o . o . x
+x . o . x . o . . o . x
+x . . o . . . . o x . x
+x . . . o . o o . . . x
+. x x x x . x x x x x .
 )", true, false, [](const BoardWithMoveRecords& boardWithMoveRecords) {
 boardWithMoveRecords.playMove(5, 4, P_BLACK);
 testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
@@ -121,9 +121,9 @@ testAssert(6 == boardWithMoveRecords.board.numBlackCaptures);  // Don't free the
 
   checkDotsField("Empty bases and suicide",
     R"(
-.x..o.
-x.xo.o
-.x..o.
+. x . . o .
+x . x o . o
+. x . . o .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     const auto& moveRecords = boardWithMoveRecords.moveRecords;
 
@@ -148,9 +148,9 @@ x.xo.o
 
   checkDotsField("Empty base creation",
   R"(
-.x..o.
-x.xo.o
-......
+. x . . o .
+x . x o . o
+. . . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     const auto& moveRecords = boardWithMoveRecords.moveRecords;
     boardWithMoveRecords.playMove(1, 2, P_BLACK);
@@ -161,9 +161,9 @@ x.xo.o
 
   checkDotsField("Empty bases when they are treated as normal",
   R"(
-.x..o.
-x.xo.o
-......
+. x . . o .
+x . x o . o
+. . . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
   boardWithMoveRecords.playMove(1, 2, P_BLACK);
   boardWithMoveRecords.playMove(4, 2, P_WHITE);
@@ -180,9 +180,9 @@ x.xo.o
 
   checkDotsField("Capture wins suicide",
     R"(
-.xo.
-xo.o
-.xo.
+. x o .
+x o . o
+. x o .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     testAssert(!boardWithMoveRecords.isSuicide(2, 1, P_BLACK));
     boardWithMoveRecords.playMove(2, 1, P_BLACK);
@@ -192,11 +192,11 @@ xo.o
 
   checkDotsField("Single dot doesn't break searching inside empty base",
     R"(
-.oooo.
-o....o
-o.o..o
-o....o
-.oooo.
+. o o o o .
+o . . . . o
+o . o . . o
+o . . . . o
+. o o o o .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playMove(4, 2, P_BLACK);
     testAssert(1 == boardWithMoveRecords.board.numBlackCaptures);
@@ -204,13 +204,13 @@ o....o
 
   checkDotsField("Ignored already surrounded territory",
     R"(
-..xxx...
-.x...x..
-x..x..x.
-x.x.x..x
-x..x..x.
-.x...x..
-..x.x...
+. . x x x . . .
+. x . . . x . .
+x . . x . . x .
+x . x . x . . x
+x . . x . . x .
+. x . . . x . .
+. . x . x . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playMove(3, 6, P_BLACK);
 
@@ -223,9 +223,9 @@ x..x..x.
 
   checkDotsField("Invalidation of empty base locations",
     R"(
-.oox.
-o..ox
-.oox.
+. o o x .
+o . . o x
+. o o x .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playMove(2, 1, P_BLACK);
     boardWithMoveRecords.playMove(1, 1, P_BLACK);
@@ -234,13 +234,13 @@ o..ox
 
   checkDotsField("Invalidation of empty base locations ignoring borders",
     R"(
-..xxx....
-.x...x...
-x..x..xo.
-x.x.x..xo
-x..x..xo.
-.x...x...
-..xxx....
+. . x x x . . . .
+. x . . . x . . .
+x . . x . . x o .
+x . x . x . . x o
+x . . x . . x o .
+. x . . . x . . .
+. . x x x . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playMove(6, 3, P_WHITE);
     testAssert(1 == boardWithMoveRecords.board.numBlackCaptures);
@@ -254,12 +254,12 @@ x..x..xo.
 
   checkDotsField("Dangling dots removing",
     R"(
-.xx.xx.
-x..xo.x
-x.x.x.x
-x..x..x
-.x...x.
-..x.x..
+. x x . x x .
+x . . x o . x
+x . x . x . x
+x . . x . . x
+. x . . . x .
+. . x . x . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
       boardWithMoveRecords.playMove(3, 5, P_BLACK);
       testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
@@ -270,13 +270,13 @@ x..x..x
 
   checkDotsField("Recalculate square during dangling dots removing",
     R"(
-.ooo..
-o...o.
-o.o..o
-..xo.o
-o.o..o
-o...o.
-.ooo..
+. o o o . .
+o . . . o .
+o . o . . o
+. . x o . o
+o . o . . o
+o . . . o .
+. o o o . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
       boardWithMoveRecords.playMove(1, 3, P_WHITE);
       testAssert(1 == boardWithMoveRecords.board.numBlackCaptures);
@@ -287,12 +287,12 @@ o...o.
 
   checkDotsField("Base sorting by size",
     R"(
-..xxx..
-.x...x.
-x..x..x
-x.xox.x
-x.....x
-.xx.xx.
+. . x x x . .
+. x . . . x .
+x . . x . . x
+x . x o x . x
+x . . . . . x
+. x x . x x .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
       boardWithMoveRecords.playMove(3, 4, P_BLACK);
       testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
@@ -303,14 +303,14 @@ x.....x
 
   checkDotsField("Incorrect board state if outer empty surrounding encloses normal one with an empty location (https://github.com/KvanTTT/KataGoDots/issues/57)",
     R"(
-..xxx..
-.x...x.
-x..x..x
-x.xox.x
-x.x.x.x
-x.....x
-.x...x.
-..x.x..
+. . x x x . .
+. x . . . x .
+x . . x . . x
+x . x o x . x
+x . x . x . x
+x . . . . . x
+. x . . . x .
+. . x . x . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playMove(3, 5, P_BLACK);
     boardWithMoveRecords.playMove(3, 7, P_BLACK);
@@ -326,9 +326,9 @@ x.....x
 
   checkDotsField("Resignation",
     R"(
-...
-...
-...
+. . .
+. . .
+. . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playResignationMove(P_BLACK);
     testAssert(boardWithMoveRecords.board.is_finished);
@@ -343,9 +343,9 @@ x.....x
   checkDotsField(
     "Drop redundant empty enclosure in case of suicidal surrounding",
   R"(
-.x.xx.
-x.x..x
-.x.xx.
+. x . x x .
+x . x . . x
+. x . x x .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     testAssert(getEmptyTerritoryColor(boardWithMoveRecords.getState(3, 1)) == P_BLACK);
     testAssert(getEmptyTerritoryColor(boardWithMoveRecords.getState(4, 1)) == P_BLACK);
@@ -367,12 +367,12 @@ void Tests::runDotsGroundingTests() {
 
     checkDotsField("Grounding propagation",
 R"(
-.x..
-o.o.
-.x..
-.xo.
-..x.
-....
+. x . .
+o . o .
+. x . .
+. x o .
+. . x .
+. . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     testAssert(2 == boardWithMoveRecords.board.blackScoreIfWhiteGrounds);
     testAssert(3 == boardWithMoveRecords.board.whiteScoreIfBlackGrounds);
@@ -410,11 +410,11 @@ o.o.
 
   checkDotsField("Grounding propagation with empty base",
   R"(
-..x..
-.x.x.
-.x.x.
-..x..
-.....
+. . x . .
+. x . x .
+. x . x .
+. . x . .
+. . . . .
 )",
   [](const BoardWithMoveRecords& boardWithMoveRecords) {
     testAssert(0 == boardWithMoveRecords.board.blackScoreIfWhiteGrounds);
@@ -438,9 +438,9 @@ o.o.
 
   checkDotsField("Grounding score with grounded base",
 R"(
-.x.
-xox
-...
+. x .
+x o x
+. . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playMove(1, 2, P_BLACK);
 
@@ -451,11 +451,11 @@ xox
 
   checkDotsField("Grounding score with ungrounded base",
 R"(
-.....
-..o..
-.oxo.
-.....
-.....
+. . . . .
+. . o . .
+. o x o .
+. . . . .
+. . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playMove(2, 3, P_WHITE);
 
@@ -466,11 +466,11 @@ R"(
 
   checkDotsField("Grounding score with grounded and ungrounded bases",
 R"(
-.x.....
-xox.o..
-...oxo.
-.......
-.......
+. x . . . . .
+x o x . o . .
+. . . o x o .
+. . . . . . .
+. . . . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playMove(1, 2, P_BLACK);
     boardWithMoveRecords.playMove(4, 3, P_WHITE);
@@ -482,11 +482,11 @@ xox.o..
 
   checkDotsField("Grounding draw with ungrounded bases",
 R"(
-.........
-..x...o..
-.xox.oxo.
-.........
-.........
+. . . . . . . . .
+. . x . . . o . .
+. x o x . o x o .
+. . . . . . . . .
+. . . . . . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playMove(2, 3, P_BLACK);
     boardWithMoveRecords.playMove(6, 3, P_WHITE);
@@ -501,13 +501,13 @@ R"(
 
   checkDotsField("Grounding of real and empty adjacent bases",
 R"(
-..x..
-..x..
-.xox.
-.....
-.x.x.
-..x..
-.....
+. . x . .
+. . x . .
+. x o x .
+. . . . .
+. x . x .
+. . x . .
+. . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     testAssert(1 == boardWithMoveRecords.board.blackScoreIfWhiteGrounds);
     testAssert(5 == boardWithMoveRecords.board.whiteScoreIfBlackGrounds);
@@ -533,12 +533,12 @@ R"(
 
   checkDotsField("Grounding of real base when it touches grounded",
 R"(
-..x..
-..x..
-.....
-.xox.
-..x..
-.....
+. . x . .
+. . x . .
+. . . . .
+. x o x .
+. . x . .
+. . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     testAssert(1 == boardWithMoveRecords.board.blackScoreIfWhiteGrounds);
     testAssert(3 == boardWithMoveRecords.board.whiteScoreIfBlackGrounds);
@@ -558,13 +558,13 @@ R"(
 
   checkDotsField("Base inside base inside base and grounding score",
 R"(
-.......
-..ooo..
-.o.x.o.
-.oxoxo.
-.o...o.
-..o.o..
-.......
+. . . . . . .
+. . o o o . .
+. o . x . o .
+. o x o x o .
+. o . . . o .
+. . o . o . .
+. . . . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
   testAssert(12 == boardWithMoveRecords.board.blackScoreIfWhiteGrounds);
   testAssert(3 == boardWithMoveRecords.board.whiteScoreIfBlackGrounds);
@@ -586,14 +586,14 @@ R"(
 });
 
   const auto fieldInCaseOfDanglingLocsRemoving = R"(
-.........
-..xxx....
-.x....x..
-.x.xx..x.
-.x.x.x.x.
-.x.xxx.x.
-.x..xo.x.
-..xxxxx..
+. . . . . . . . .
+. . x x x . . . .
+. x . . . . x . .
+. x . x x . . x .
+. x . x . x . x .
+. x . x x x . x .
+. x . . x o . x .
+. . x x x x x . .
 )";
 
   checkDotsField("Ground empty territory in case of dangling locs removing (first)", fieldInCaseOfDanglingLocsRemoving, [](const BoardWithMoveRecords& boardWithMoveRecords) {
@@ -615,16 +615,16 @@ R"(
   });
 
   const auto fieldInCaseOfDanglingLocsAndDotsRemoving = R"(
-...........
-.xxxxxxx...
-.x.........
-.x.xxxx..x.
-.x.x...x.x.
-.x.x.x.x.x.
-.x.x...x.x.
-.x.xxxxx.x.
-.x..xo...x.
-.xxxxxxxxx.
+. . . . . . . . . . .
+. x x x x x x x . . .
+. x . . . . . . . . .
+. x . x x x x . . x .
+. x . x . . . x . x .
+. x . x . x . x . x .
+. x . x . . . x . x .
+. x . x x x x x . x .
+. x . . x o . . . x .
+. x x x x x x x x x .
 )";
 
   checkDotsField("Ground empty territory with dot inside in case of dangling dots removing (first)",
@@ -659,9 +659,9 @@ R"(
 
   checkDotsField("Simple",
   R"(
-.....
-.xxo.
-.....
+. . . . .
+. x x o .
+. . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playGroundingMove(P_BLACK);
     testAssert(boardWithMoveRecords.board.is_finished);
@@ -704,9 +704,9 @@ R"(
 
   checkDotsField("Draw",
 R"(
-.x...
-.xxo.
-...o.
+. x . . .
+. x x o .
+. . . o .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     boardWithMoveRecords.playGroundingMove(P_BLACK);
     testAssert(0 == boardWithMoveRecords.board.numBlackCaptures);
@@ -728,11 +728,11 @@ R"(
 
   checkDotsField("Bases",
 R"(
-.........
-..xx...x.
-.xo.x.xox
-..x......
-.........
+. . . . . . . . .
+. . x x . . . x .
+. x o . x . x o x
+. . x . . . . . .
+. . . . . . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
   boardWithMoveRecords.playMove(3, 3, P_BLACK);
   boardWithMoveRecords.playMove(7, 3, P_BLACK);
@@ -747,12 +747,12 @@ R"(
 
   checkDotsField("Multiple groups",
 R"(
-......
-xxo..o
-.ox...
-x...oo
-...o..
-......
+. . . . . .
+x x o . . o
+. o x . . .
+x . . . o o
+. . . o . .
+. . . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
   boardWithMoveRecords.playGroundingMove(P_BLACK);
   testAssert(1 == boardWithMoveRecords.board.numBlackCaptures);
@@ -770,11 +770,11 @@ x...oo
 
   checkDotsField("Invalidate empty territory",
 R"(
-......
-..oo..
-.o..o.
-..oo..
-......
+. . . . . .
+. . o o . .
+. o . . o .
+. . o o . .
+. . . . . .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     const Board board = boardWithMoveRecords.board;
 
@@ -799,9 +799,9 @@ R"(
 
   checkDotsField("Don't invalidate empty territory for strong connection",
 R"(
-.x.
-x.x
-.x.
+. x .
+x . x
+. x .
 )", [](const BoardWithMoveRecords& boardWithMoveRecords) {
     const Board board = boardWithMoveRecords.board;
 
@@ -822,10 +822,10 @@ x.x
 void Tests::runDotsBoardHistoryGroundingTests() {
   {
     const Board board = parseDotsFieldDefault(R"(
-....
-.xo.
-.ox.
-....
+. . . .
+. x o .
+. o x .
+. . . .
 )");
     auto boardHistory = BoardHistory(board);
 
@@ -858,10 +858,10 @@ void Tests::runDotsBoardHistoryGroundingTests() {
 
   {
     const Board board = parseDotsFieldDefault(R"(
-.xo.
-.xo.
-.ox.
-.ox.
+. x o .
+. x o .
+. o x .
+. o x .
 )");
     auto boardHistory = BoardHistory(board);
 
@@ -885,11 +885,11 @@ void Tests::runDotsBoardHistoryGroundingTests() {
   {
     const Board board = parseDotsFieldDefault(
       R"(
-.x....
-xox...
-....o.
-...oxo
-......
+. x . . . .
+x o x . . .
+. . . . o .
+. . . o x o
+. . . . . .
 )",
       {XYMove(1, 2, P_BLACK), XYMove(4, 4, P_WHITE)});
     const auto boardHistory = BoardHistory(board);
@@ -904,12 +904,12 @@ xox...
   {
     const Board board = parseDotsFieldDefault(
       R"(
-.x....
-xox.x.
-......
-....o.
-.o.oxo
-......
+. x . . . .
+x o x . x .
+. . . . . .
+. . . . o .
+. o . o x o
+. . . . . .
 )",
       {XYMove(1, 2, P_BLACK), XYMove(4, 5, P_WHITE)});
     const auto boardHistory = BoardHistory(board);
@@ -924,10 +924,10 @@ xox.x.
   {
     Board board = parseDotsFieldDefault(
       R"(
-.....
-..o..
-.oxo.
-.....
+. . . . .
+. . o . .
+. o x o .
+. . . . .
 )",
       {XYMove(2, 3, P_WHITE)});
     testAssert(1 == board.numBlackCaptures);
@@ -944,10 +944,10 @@ xox.x.
   {
     const Board board = parseDotsFieldDefault(
       R"(
-.....
-..x..
-.xox.
-.....
+. . . . .
+. . x . .
+. x o x .
+. . . . .
 )",
       {XYMove(2, 3, P_BLACK)});
     testAssert(1 == board.numWhiteCaptures);
@@ -974,11 +974,11 @@ xox.x.
   {
     const Board board = parseDotsFieldDefault(
       R"(
-.....
-..x..
-.xox.
-.....
-.....
+. . . . .
+. . x . .
+. x o x .
+. . . . .
+. . . . .
 )",
       {XYMove(2, 3, P_BLACK)});
     testAssert(1 == board.numWhiteCaptures);
@@ -990,9 +990,9 @@ xox.x.
 
   {
     const Board board = parseDotsFieldDefault(R"(
-...
-.o.
-...
+. . .
+. o .
+. . .
 )");
     const auto boardHistory = BoardHistory(board);
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
@@ -1001,9 +1001,9 @@ xox.x.
 
   {
     const Board board = parseDotsFieldDefault(R"(
-...
-.x.
-...
+. . .
+. x .
+. . .
 )");
     const auto boardHistory = BoardHistory(board);
     testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board)));
@@ -1013,10 +1013,10 @@ xox.x.
   {
     const Board board = parseDotsFieldDefault(
       R"(
-.x....
-xox...
-....x.
-......
+. x . . . .
+x o x . . .
+. . . . x .
+. . . . . .
 )",
       {XYMove(1, 2, P_BLACK)});
     const auto boardHistory = BoardHistory(board);
@@ -1031,11 +1031,11 @@ xox...
   {
     Board board = parseDotsFieldDefault(
       R"(
-.x....
-xox...
-xox.x.
-......
-......
+. x . . . .
+x o x . . .
+x o x . x .
+. . . . . .
+. . . . . .
 )",
       {XYMove(1, 3, P_BLACK)});
     auto boardHistory = BoardHistory(board);
@@ -1056,11 +1056,11 @@ xox.x.
   {
     const Board board = parseDotsFieldDefault(
       R"(
-.x....
-xox...
-xox.o.
-......
-......
+. x . . . .
+x o x . . .
+x o x . o .
+. . . . . .
+. . . . . .
 )",
       {XYMove(1, 3, P_BLACK)});
     const auto boardHistory = BoardHistory(board);
@@ -1076,11 +1076,11 @@ xox.o.
     {
       const Board board = parseDotsFieldDefault(
         R"(
-.o....
-oxo...
-oxo.x.
-......
-......
+. o . . . .
+o x o . . .
+o x o . x .
+. . . . . .
+. . . . . .
 )",
         {XYMove(1, 3, P_WHITE)});
       const auto boardHistory = BoardHistory(board);
@@ -1096,10 +1096,10 @@ oxo.x.
   {
     const Board board = parseDotsFieldDefault(
       R"(
-.o....
-oxo...
-....o.
-......
+. o . . . .
+o x o . . .
+. . . . o .
+. . . . . .
 )",
       {XYMove(1, 2, P_WHITE)});
     const auto boardHistory = BoardHistory(board);
@@ -1114,11 +1114,11 @@ oxo...
   {
     Board board = parseDotsFieldDefault(
       R"(
-.o....
-oxo...
-oxo.o.
-......
-......
+. o . . . .
+o x o . . .
+o x o . o .
+. . . . . .
+. . . . . .
 )",
       {XYMove(1, 3, P_WHITE)});
     auto boardHistory = BoardHistory(board);
@@ -1139,11 +1139,11 @@ oxo.o.
   {
     const Board board = parseDotsFieldDefault(
       R"(
-.o....
-oxo...
-oxo.x.
-......
-......
+. o . . . .
+o x o . . .
+o x o . x .
+. . . . . .
+. . . . . .
 )",
       {XYMove(1, 3, P_WHITE)});
     const auto boardHistory = BoardHistory(board);
@@ -1159,8 +1159,8 @@ oxo.x.
   {
     const Board board = parseDotsField(
       R"(
-xo
-xo
+x o
+x o
 )",
       Rules::DEFAULT_DOTS.startPosIsRandom,
       true,
@@ -1176,8 +1176,8 @@ xo
   {
     const Board board = parseDotsField(
       R"(
-xo
-xo
+x o
+x o
 )",
       Rules::DEFAULT_DOTS.startPosIsRandom,
       true,
@@ -1193,9 +1193,9 @@ xo
   {
     const Board board = parseDotsField(
       R"(
-ooo
-oxo
-o.o
+o o o
+o x o
+o . o
 )",
       Rules::DEFAULT_DOTS.startPosIsRandom,
       true,
@@ -1211,9 +1211,9 @@ o.o
   {
     const Board board = parseDotsField(
       R"(
-xxxxx
-x.xox
-xxx.x
+x x x x x
+x . x o x
+x x x . x
 )",
       Rules::DEFAULT_DOTS.startPosIsRandom,
       true,
@@ -1229,9 +1229,9 @@ xxx.x
   {
     const Board board = parseDotsField(
       R"(
-xxxxx
-x.xox
-xxx.x
+x x x x x
+x . x o x
+x x x . x
 )",
       Rules::DEFAULT_DOTS.startPosIsRandom,
       false,
@@ -1250,11 +1250,11 @@ xxx.x
   {
     const Board board = parseDotsField(
       R"(
-xxxxx
-x...x
-x.x.x
-x...x
-xxxxx
+x x x x x
+x . . . x
+x . x . x
+x . . . x
+x x x x x
 )",
       Rules::DEFAULT_DOTS.startPosIsRandom,
       false,
@@ -1360,14 +1360,14 @@ void Tests::runDotsPosHashTests() {
   checkHashAfterMovesAndRollback(
      "Simple",
      R"(
-...
-.x.
-...
+. . .
+. x .
+. . .
 )",
      R"(
-...
-.o.
-...
+. . .
+. o .
+. . .
 )",
      {},
      {},
@@ -1378,14 +1378,14 @@ void Tests::runDotsPosHashTests() {
   checkHashAfterMovesAndRollback(
    "Different moves order doesn't affect hash",
    R"(
-...
-...
-...
+. . .
+. . .
+. . .
 )",
    R"(
-...
-...
-...
+. . .
+. . .
+. . .
 )",
    {
      XYMove(0, 1, P_WHITE),
@@ -1407,14 +1407,14 @@ void Tests::runDotsPosHashTests() {
   checkHashAfterMovesAndRollback(
        "Capturing order doesn't affect hash",
        R"(
-.x.
-x.x
-.x.
+. x .
+x . x
+. x .
 )",
        R"(
-.x.
-xox
-...
+. x .
+x o x
+. . .
 )",
        { XYMove(1, 1, P_WHITE)},
        { XYMove(1, 2, P_BLACK) },
@@ -1424,15 +1424,15 @@ xox
   checkHashAfterMovesAndRollback(
      "Field with different sizes have different hashes",
      R"(
-...
-.x.
-...
+. . .
+. x .
+. . .
 )",
      R"(
-....
-.x..
-....
-....
+. . . .
+. x . .
+. . . .
+. . . .
 )",
      {},
      {},
@@ -1443,14 +1443,14 @@ xox
   checkHashAfterMovesAndRollback(
 "Same shape and same captures but different captures locations",
 R"(
-.xx.
-xo..
-.xx.
+. x x .
+x o . .
+. x x .
 )",
 R"(
-.xx.
-x.o.
-.xx.
+. x x .
+x . o .
+. x x .
 )",
     { XYMove(3, 1, P_BLACK) },
     { XYMove(3, 1, P_BLACK) },
@@ -1460,14 +1460,14 @@ x.o.
   checkHashAfterMovesAndRollback(
     "Field captures affects hash (https://github.com/KvanTTT/KataGoDots/issues/45)",
     R"(
-.xxx.
-.o..x
-.xxx.
+. x x x .
+. o . . x
+. x x x .
 )",
     R"(
-.xxx.
-.ooxx
-.xxx.
+. x x x .
+. o o x x
+. x x x .
 )",
     { XYMove(0, 1, P_BLACK) },
     { XYMove(0, 1, P_BLACK) },
@@ -1478,14 +1478,14 @@ x.o.
   checkHashAfterMovesAndRollback(
   "Equal captures diff affects hash (https://github.com/KvanTTT/KataGoDots/issues/45)",
   R"(
-.xx..oo.
-xo....xo
-.xx..oo.
+. x x . . o o .
+x o . . . . x o
+. x x . . o o .
 )",
   R"(
-.xx..oo.
-xoo..xxo
-.xx..oo.
+. x x . . o o .
+x o o . . x x o
+. x x . . o o .
 )",
     { XYMove(3, 1, P_BLACK), XYMove(4, 1, P_WHITE) },
     { XYMove(3, 1, P_BLACK), XYMove(4, 1, P_WHITE) },
@@ -1494,9 +1494,9 @@ xoo..xxo
   );
 
   const string& fieldForSameShapeButDifferentCaptures = R"(
-.xx.
-xo..
-.xx.
+. x x .
+x o . .
+. x x .
 )";
   checkHashAfterMovesAndRollback(
     "Different hashes when same shape but different captures",
@@ -1509,11 +1509,11 @@ xo..
 );
 
   const string& fieldForSameShapeButDifferentCapturesWithFree = R"(
-..oooo..
-.oxxxxo.
-ox.o....
-.oxxxxo.
-..oooo..
+. . o o o o . .
+. o x x x x o .
+o x . o . . . .
+. o x x x x o .
+. . o o o o . .
 )";
   checkHashAfterMovesAndRollback(
     "Different hashes when for same shape but different captures with free",
@@ -1526,22 +1526,22 @@ ox.o....
 );
 
   const auto field1WhenSurroundLocsDontAffectHash = R"(
-..xxxxxx..
-.x......x.
-x..x..o..x
-x.xoxoxo.x
-x........x
-.x......x.
-..xxx.xx..
+. . x x x x x x . .
+. x . . . . . . x .
+x . . x . . o . . x
+x . x o x o x o . x
+x . . . . . . . . x
+. x . . . . . . x .
+. . x x x . x x . .
 )";
   const auto field2WhenSurroundLocsDontAffectHash = R"(
-..xxxxxx..
-.x......x.
-x..o..x..x
-x.oxoxox.x
-x........x
-.x......x.
-..xxx.xx..
+. . x x x x x x . .
+. x . . . . . . x .
+x . . o . . x . . x
+x . o x o x o x . x
+x . . . . . . . . x
+. x . . . . . . x .
+. . x x x . x x . .
 )";
 
   checkHashAfterMovesAndRollback(
@@ -1563,10 +1563,10 @@ x........x
   );
 
   const string fieldWithAllGroundedDots = R"(
-.xo.
-.xo.
-.ox.
-.ox.
+. x o .
+. x o .
+. o x .
+. o x .
 )";
   checkHashAfterMovesAndRollback(
     "Grounding with all grounded dots doesn't affect hash",
@@ -1578,10 +1578,10 @@ x........x
   );
 
   const string fieldWithSomeUngroundedDots = R"(
-....
-.xo.
-.ox.
-....
+. . . .
+. x o .
+. o x .
+. . . .
 )";
   checkHashAfterMovesAndRollback(
     "Grounding with some ungrounded dots affects hash",
@@ -1594,9 +1594,9 @@ x........x
   );
 
   const string emptyBaseField = R"(
-.o.
-o.o
-...
+. o .
+o . o
+. . .
 )";
   checkHashAfterMovesAndRollback(
     "Different hash for empty base when it's enabled and not",
@@ -1613,9 +1613,9 @@ o.o
   "Different hash for empty base and non-empty base",
   emptyBaseField,
   R"(
-.o.
-oxo
-...
+. o .
+o x o
+. . .
 )",
     { XYMove(1, 2, P_WHITE) },
     { XYMove(1, 2, P_WHITE) },
@@ -1628,14 +1628,14 @@ oxo
   checkHashAfterMovesAndRollback(
   "Expected false negative (limitation of current hashing approach)",
   R"(
-.x..
-xxox
-.xx.
+. x . .
+x x o x
+. x x .
 )",
   R"(
-..x.
-xoxx
-.xx.
+. . x .
+x o x x
+. x x .
 )",
     { XYMove(2, 0, P_BLACK) },
     { XYMove(1, 0, P_BLACK) },

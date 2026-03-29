@@ -39,7 +39,9 @@ Board parseDotsField(
         ySize++;
       }
     } else {
-      currentXSize++;
+      if (input[i] != ' ') { // skip whitespaces
+        currentXSize++;
+      }
     }
   }
 
@@ -60,10 +62,10 @@ string invertColors(const string& input) {
   for(const auto c : input) {
     char outputChar;
     switch (c) {
-      case 'x': outputChar = 'o'; break;
-      case 'X': outputChar = 'O'; break;
-      case 'o': outputChar = 'x'; break;
-      case 'O': outputChar = 'X'; break;
+      case FIRST_PLA_LOWER: outputChar = SECOND_PLA_LOWER; break;
+      case FIRST_PLA_UPPER: outputChar = SECOND_PLA_UPPER; break;
+      case SECOND_PLA_LOWER: outputChar = FIRST_PLA_LOWER; break;
+      case SECOND_PLA_UPPER: outputChar = FIRST_PLA_UPPER; break;
       default: outputChar = c;
     }
     output.push_back(outputChar);

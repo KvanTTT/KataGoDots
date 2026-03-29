@@ -116,15 +116,15 @@ void Tests::runDotsStartPosTests() {
 )");
 
   checkStartPosRecognition("Single first player", Rules::START_POS_SINGLE, false, R"(
-...
-.x.
-...
+. . .
+. x .
+. . .
 )");
 
   checkStartPosRecognition("Single second player", Rules::START_POS_SINGLE, true, R"(
-...
-.o.
-...
+. . .
+. o .
+. . .
 )");
 
   checkStartPos("Cross on minimal size", Rules::START_POS_CROSS, false, 2, 2, R"(
@@ -142,17 +142,17 @@ void Tests::runDotsStartPosTests() {
 )", {XYMove(2, 3, P_BLACK)});
 
   checkStartPosRecognition("Empty start pos with three extra moves", Rules::START_POS_EMPTY, false, R"(
-....
-.xo.
-.o..
-....
+. . . .
+. x o .
+. o . .
+. . . .
 )");
 
   checkStartPosRecognition("Reversed cross should be recognized as random", Rules::START_POS_CROSS, true, R"(
-....
-.ox.
-.xo.
-....
+. . . .
+. o x .
+. x o .
+. . . .
 )");
 
   checkStartPos("Cross on odd size", Rules::START_POS_CROSS, false, 3, 3, R"(

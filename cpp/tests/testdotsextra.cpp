@@ -24,86 +24,86 @@ void Tests::runDotsSymmetryTests() {
   cout << "Running dots symmetry tests" << endl;
 
   Board initialBoard = parseDotsFieldDefault(R"(
-...ox
-..ox.
-.o.ox
-.xo..
+. . . o x
+. . o x .
+. o . o x
+. x o . .
 )");
   initialBoard.playMoveAssumeLegal(Location::getLoc(4, 1, initialBoard.x_size), P_WHITE);
   testAssert(1 == initialBoard.numBlackCaptures);
 
   checkSymmetry(initialBoard, R"(
-...ox
-..ox.
-.o.ox
-.xo..
+. . . o x
+. . o x .
+. o . o x
+. x o . .
 )",
 { XYMove(4, 1, P_WHITE)},
 SymmetryHelpers::SYMMETRY_NONE);
 
   checkSymmetry(initialBoard, R"(
-.xo..
-.o.ox
-..ox.
-...ox
+. x o . .
+. o . o x
+. . o x .
+. . . o x
 )",
 { XYMove(4, 1, P_WHITE)},
 SymmetryHelpers::SYMMETRY_FLIP_Y);
 
   checkSymmetry(initialBoard, R"(
-xo...
-.xo..
-xo.o.
-..ox.
+x o . . .
+. x o . .
+x o . o .
+. . o x .
 )",
 { XYMove(4, 1, P_WHITE)},
   SymmetryHelpers::SYMMETRY_FLIP_X);
 
   checkSymmetry(initialBoard, R"(
-..ox.
-xo.o.
-.xo..
-xo...
+. . o x .
+x o . o .
+. x o . .
+x o . . .
 )",
 { XYMove(4, 1, P_WHITE)},
 SymmetryHelpers::SYMMETRY_FLIP_Y_X);
 
   checkSymmetry(initialBoard, R"(
-....
-..ox
-.o.o
-oxo.
-x.x.
+. . . .
+. . o x
+. o . o
+o x o .
+x . x .
 )",
 { XYMove(4, 1, P_WHITE)},
 SymmetryHelpers::SYMMETRY_TRANSPOSE);
 
   checkSymmetry(initialBoard, R"(
-....
-xo..
-o.o.
-.oxo
-.x.x
+. . . .
+x o . .
+o . o .
+. o x o
+. x . x
 )",
 { XYMove(4, 1, P_WHITE)},
 SymmetryHelpers::SYMMETRY_TRANSPOSE_FLIP_X);
 
   checkSymmetry(initialBoard, R"(
-x.x.
-oxo.
-.o.o
-..ox
-....
+x . x .
+o x o .
+. o . o
+. . o x
+. . . .
 )",
 { XYMove(4, 1, P_WHITE)},
 SymmetryHelpers::SYMMETRY_TRANSPOSE_FLIP_Y);
 
   checkSymmetry(initialBoard, R"(
-.x.x
-.oxo
-o.o.
-xo..
-....
+. x . x
+. o x o
+o . o .
+x o . .
+. . . .
 )",
 { XYMove(4, 1, P_WHITE)},
 SymmetryHelpers::SYMMETRY_TRANSPOSE_FLIP_Y_X);
@@ -151,7 +151,7 @@ static string getOwnership(const string& boardData, const Color groundingPlayer,
   for (int y = 0; y < board.y_size; y++) {
     for (int x = 0; x < board.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, board.x_size);
-      oss << PlayerIO::colorToChar(result[loc]);
+      oss << PlayerIO::colorToChar(result[loc]) << ' ';
     }
     oss << endl;
   }
@@ -159,7 +159,7 @@ static string getOwnership(const string& boardData, const Color groundingPlayer,
   return oss.str();
 }
 
-static void expect(
+static void expectOwnership(
   const char* name,
   const Color groundingPlayer,
   const std::string& actualField,
@@ -173,89 +173,89 @@ static void expect(
 
 void Tests::runDotsOwnershipTests() {
   cout << "Running dots ownership tests" << endl;
-  expect("Start Cross", C_EMPTY, R"(
-......
-......
-..ox..
-..xo..
-......
-......
+  expectOwnership("Start Cross", C_EMPTY, R"(
+. . . . . .
+. . . . . .
+. . o x . .
+. . x o . .
+. . . . . .
+. . . . . .
 )",
   R"(
-......
-......
-......
-......
-......
-......
+. . . . . .
+. . . . . .
+. . . . . .
+. . . . . .
+. . . . . .
+. . . . . .
 )", 0);
 
-  expect("Wins by a base", C_EMPTY, R"(
-......
-......
-..ox..
-.oxo..
-......
-......
+  expectOwnership("Wins by a base", C_EMPTY, R"(
+. . . . . .
+. . . . . .
+. . o x . .
+. o x o . .
+. . . . . .
+. . . . . .
 )",
 R"(
-......
-......
-......
-..O...
-......
-......
+. . . . . .
+. . . . . .
+. . . . . .
+. . O . . .
+. . . . . .
+. . . . . .
 )", 1, {XYMove(2, 4, P_WHITE)});
 
-  expect("Loss by grounding", C_BLACK, R"(
-..o...
-..o...
-..ox..
-..xo..
-...o..
-...o..
+  expectOwnership("Loss by grounding", C_BLACK, R"(
+. . o . . .
+. . o . . .
+. . o x . .
+. . x o . .
+. . . o . .
+. . . o . .
 )",
 R"(
-......
-......
-...O..
-..O...
-......
-......
+. . . . . .
+. . . . . .
+. . . O . .
+. . O . . .
+. . . . . .
+. . . . . .
 )", 2);
 
-  expect("Loss by grounding", C_WHITE, R"(
-...x..
-...x..
-..ox..
-..xo..
-..x...
-..x...
+  expectOwnership("Loss by grounding", C_WHITE, R"(
+. . . x . .
+. . . x . .
+. . o x . .
+. . x o . .
+. . x . . .
+. . x . . .
 )",
 R"(
-......
-......
-..X...
-...X..
-......
-......
+. . . . . .
+. . . . . .
+. . X . . .
+. . . X . .
+. . . . . .
+. . . . . .
 )", -2);
 
-  expect("Wins by grounding with an ungrounded dot", C_WHITE, R"(
-......
-.oox..
-.xxo..
-.oo...
-....o.
-......
+  expectOwnership("Wins by grounding with an ungrounded dot", C_WHITE, R"(
+. . . . . .
+. o o x . .
+. x x o . .
+. o o . . .
+. . . . o .
+. . . . . .
 )",
 R"(
-......
-......
-.OO...
-......
-....X.
-......
+. . . . . .
+. . . . . .
+. O O . . .
+. . . . . .
+. . . . X .
+. . . . . .
 )", 1, {XYMove(0, 2, P_WHITE)});
 }
 
@@ -408,10 +408,10 @@ void Tests::runDotsCapturesAndTerritoriesTests() {
   checkNextMoveInfos(
     "Two bases",
     R"(
-.x...o.
-xox.oxo
-xox.oxo
-.......
+.  x  .  .  .  o  .
+x  o  x  .  o  x  o
+x  o  x  .  o  x  o
+.  .  .  .  .  .  .
 )",
     R"(
 .  .  XO XO XO .  .
@@ -436,11 +436,11 @@ xox.oxo
   checkNextMoveInfos(
     "Overlapping captures location",
     R"(
-.x.
-xox
-...
-oxo
-.o.
+.  x  .
+x  o  x
+.  .  .
+o  x  o
+.  o  .
 )",
     R"(
 .  .  .
@@ -468,10 +468,10 @@ XO XO XO
   checkNextMoveInfos(
     "Empty territories",
     R"(
-.x..o.
-x.xo.o
-x.xo.o
-.x..o.
+.  x  .  .  o  .
+x  .  x  o  .  o
+x  .  x  o  .  o
+.  x  .  .  o  .
 )",
     R"(
 .  .  XO XO .  .
@@ -493,9 +493,9 @@ x.xo.o
   checkNextMoveInfos(
     "One move empty territory",
     R"(
-.x..o.
-x.xo.o
-......
+.  x  .  .  o  .
+x  .  x  o  .  o
+.  .  .  .  .  .
 )",
     R"(
 .  .  XO XO .  .
@@ -522,11 +522,11 @@ x.xo.o
   checkNextMoveInfos(
     "Empty territory can be broken",
     R"(
-.xx..oo.
-x..xo..o
-x.x..o.o
-oxo..xox
-.o....x.
+.  x  x  .  .  o  o  .
+x  .  .  x  o  .  .  o
+x  .  x  .  .  o  .  o
+o  x  o  .  .  x  o  x
+.  o  .  .  .  .  x  .
 )",
     R"(
 .  .  .  XO XO .  .  .
@@ -563,9 +563,9 @@ oxo..xox
   checkNextMoveInfos(
     "Trivial overlapping of captures with empty territory",
     R"(
-.xo.
-x..o
-.xo.
+.  x  o  .
+x  .  .  o
+.  x  o  .
 )",
     R"(
 .  .  .  .
@@ -589,9 +589,9 @@ x..o
   checkNextMoveInfos(
     "Overlapping of captures with empty territory",
     R"(
-.xxoo.
-x....o
-.xxoo.
+.  x  x  o  o  .
+x  .  .  .  .  o
+.  x  x  o  o  .
 )",
     R"(
 .  .  .  .  .  .
@@ -615,9 +615,9 @@ x....o
   checkNextMoveInfos(
     "Overlapping one move normal capture with empty loc",
     R"(
-.xxoo.
-xo..xo
-.xxoo.
+.  x  x  o  o  .
+x  o  .  .  x  o
+.  x  x  o  o  .
 )",
     R"(
 .  .  .  .  .  .
@@ -639,9 +639,9 @@ xo..xo
   checkNextMoveInfos(
     "Overlapping with one move normal and empty capture",
     R"(
-.xxoo.
-x...xo
-.xxoo.
+.  x  x  o  o  .
+x  .  .  .  x  o
+.  x  x  o  o  .
 )",
     R"(
 .  .  .  .  .  .
@@ -673,9 +673,9 @@ x...xo
   checkNextMoveInfos(
     "Overlapping with one move normal and empty capture (reversed)",
     R"(
-.xxoo.
-xo...o
-.xxoo.
+.  x  x  o  o  .
+x  o  .  .  .  o
+.  x  x  o  o  .
 )",
     R"(
 .  .  .  .  .  .
@@ -707,9 +707,9 @@ xo...o
   checkNextMoveInfos(
     "Outer empty and inner normal captures",
     R"(
-.ooxx.
-...o.x
-.ooxx.
+.  o  o  x  x  .
+.  .  .  o  .  x
+.  o  o  x  x  .
 )",
     R"(
 .  .  .  .  .  .
@@ -741,9 +741,9 @@ O  .  .  .  .  .
   checkNextMoveInfos(
     "Outer normal and inner normal captures",
     R"(
-.ooxx.
-..xo..
-.ooxx.
+.  o  o  x  x  .
+.  .  x  o  .  .
+.  o  o  x  x  .
 )",
     R"(
 .  .  .  .  .  .
@@ -765,11 +765,11 @@ O  .  .  .  .  X
   checkNextMoveInfos(
     "Normal base supersedes suicidal without capturing location",
     R"(
-.ooo.
-o.xxo
-ox..x
-o.xxo
-.ooo.
+.  o  o  o  .
+o  .  x  x  o
+o  x  .  .  x
+o  .  x  x  o
+.  o  o  o  .
 )",
     R"(
 .  .  .  .  .
@@ -807,9 +807,9 @@ o.xxo
   checkNextMoveInfos(
     "Unrelated bases of same color",
     R"(
-.o...o.
-oxo.oxo
-.......
+.  o  .  .  .  o  .
+o  x  o  .  o  x  o
+.  .  .  .  .  .  .
 )",
     R"(
 .  .  XO XO XO .  .
@@ -831,11 +831,11 @@ oxo.oxo
   checkNextMoveInfos(
     "Big territory supersedes multiple small ones",
     R"(
-..X..
-.XOX.
-XO.OX
-.X.X.
-.....
+.  .  x  .  .
+.  x  o  x  .
+x  o  .  o  x
+.  x  .  x  .
+.  .  .  .  .
 )",
     R"(
 .  XO .  XO .
@@ -863,10 +863,10 @@ XO .  .  .  XO
   checkNextMoveInfos(
     "Big empty territory supersedes multiple small ones",
     R"(
-..O.
-.O.O
-O..O
-.O..
+.  .  o  .
+.  o  .  o
+o  .  .  o
+.  o  .  .
 )",
     R"(
 .  XO .  .
@@ -893,10 +893,10 @@ XO .  O  .
   checkNextMoveInfos(
     "Mutual capturing location",
     R"(
-.xo.
-xoxo
-xo..
-.x..
+.  x  o  .
+x  o  x  o
+x  o  .  .
+.  x  .  .
 )",
     R"(
 .  .  .  .
@@ -921,12 +921,12 @@ xo..
   checkNextMoveInfos(
     "4 captures locs (3 of the pla, 1 of the opp)",
     R"(
-.oxx.o.
-oxoxo.o
-ox...xo
-oxoxo.o
-.ox..o.
-..ooo..
+.  o  x  x  .  o  .
+o  x  o  x  o  .  o
+o  x  .  .  .  x  o
+o  x  o  x  o  .  o
+.  o  x  .  .  o  .
+.  .  o  o  o  .  .
 )",
     R"(
 .  .  .  .  XO .  .
@@ -956,11 +956,11 @@ XO .  .  .  .  .  XO
   checkNextMoveInfos(
     "No any captures and territory after grounding",
     R"(
-.x..
-x.O.
-x.x.
-x..x
-.xx.
+.  x  .  .
+x  .  O  .
+x  .  x  .
+x  .  .  x
+.  x  x  .
 )",
     nullopt,
     nullopt,
@@ -976,11 +976,11 @@ x..x
   checkNextMoveInfos(
     "Overlapping of captures and territories",
     R"(
-.ooxx.
-o.xo.x
-ox.ox.
-ox.ox.
-.o.x..
+.  o  o  x  x  .
+o  .  x  o  .  x
+o  x  .  o  x  .
+o  x  .  o  x  .
+.  o  .  x  .  .
 )",
     R"(
 .  .  .  .  .  .
@@ -1008,14 +1008,14 @@ ox.ox.
   checkNextMoveInfos(
     "Drop internal territory",
     R"(
-..xxx..
-.x...x.
-x..x..x
-x.xox.x
-x.....x
-.x...x.
-..x.x..
-.......
+.  .  x  x  x  .  .
+.  x  .  .  .  x  .
+x  .  .  x  .  .  x
+x  .  x  o  x  .  x
+x  .  .  .  .  .  x
+.  x  .  .  .  x  .
+.  .  x  .  x  .  .
+.  .  .  .  .  .  .
 )",
     R"(
 .  XO .  .  .  XO .
@@ -1052,14 +1052,14 @@ XO XO .  .  .  XO XO
   checkNextMoveInfos(
     "Drop internal empty territory",
     R"(
-..xxx..
-.x...x.
-x..x..x
-x.x.x.x
-x..x..x
-.x...x.
-..x.x..
-.......
+.  .  x  x  x  .  .
+.  x  .  .  .  x  .
+x  .  .  x  .  .  x
+x  .  x  .  x  .  x
+x  .  .  x  .  .  x
+.  x  .  .  .  x  .
+.  .  x  .  x  .  .
+.  .  .  .  .  .  .
 )",
     R"(
 .  XO .  .  .  XO .
@@ -1098,13 +1098,13 @@ XO XO .  X  .  XO XO
   checkNextMoveInfos(
     "Drop internal empty territory 2",
     R"(
-..o.o..
-.o...o.
-o..o..o
-o.o.o.o
-o..o..o
-.o.x.o.
-..ooo..
+.  .  o  .  o  .  .
+.  o  .  .  .  o  .
+o  .  .  o  .  .  o
+o  .  o  .  o  .  o
+o  .  .  o  .  .  o
+.  o  .  x  .  o  .
+.  .  o  o  o  .  .
 )",
     R"(
 .  XO .  XO .  XO .
@@ -1138,13 +1138,13 @@ XO .  .  .  .  .  XO
   checkNextMoveInfos(
     "Drop dangling territory",
     R"(
-.......
-.oo.oo.
-o.....o
-o.oxo.o
-o..o..o
-o.....o
-.ooooo.
+.  .  .  .  .  .  .
+.  o  o  .  o  o  .
+o  .  .  .  .  .  o
+o  .  o  x  o  .  o
+o  .  .  o  .  .  o
+o  .  .  .  .  .  o
+.  o  o  o  o  o  .
 )",
     R"(
 .  XO XO XO XO XO .
@@ -1178,14 +1178,14 @@ XO .  .  .  .  .  XO
   checkNextMoveInfos(
     "Drop internal opp captures and territory",
     R"(
-..xxx..
-.x...x.
-x..o..x
-x.oxo.x
-x.....x
-.x...x.
-..x.x..
-...o...
+.  .  x  x  x  .  .
+.  x  .  .  .  x  .
+x  .  .  o  .  .  x
+x  .  o  x  o  .  x
+x  .  .  .  .  .  x
+.  x  .  .  .  x  .
+.  .  x  .  x  .  .
+.  .  .  o  .  .  .
 )",
     R"(
 .  XO .  .  .  XO .
@@ -1222,13 +1222,13 @@ XO XO .  XO .  XO XO
   checkNextMoveInfos(
     "Drop internal opp captures and territory 2",
     R"(
-.......
-.oo.oo.
-o.....o
-o.xox.o
-o..x..o
-o.....o
-.ooooo.
+.  .  .  .  .  .  .
+.  o  o  .  o  o  .
+o  .  .  .  .  .  o
+o  .  x  o  x  .  o
+o  .  .  x  .  .  o
+o  .  .  .  .  .  o
+.  o  o  o  o  o  .
 )",
     R"(
 .  XO XO XO XO XO .
@@ -1262,13 +1262,13 @@ XO .  .  .  .  .  XO
   checkNextMoveInfos(
     "Drop inner empty territory if outer captures",
     R"(
-.oo.oo.
-o.....o
-o..x..o
-o.x.x.o
-o..x..o
-o.....o
-.ooooo.
+.  o  o  .  o  o  .
+o  .  .  .  .  .  o
+o  .  .  x  .  .  o
+o  .  x  .  x  .  o
+o  .  .  x  .  .  o
+o  .  .  .  .  .  o
+.  o  o  o  o  o  .
 )",
     R"(
 .  .  .  XO .  .  .
@@ -1302,13 +1302,13 @@ o.....o
     checkNextMoveInfos(
       "Ignore own territory with outer normal base",
       R"(
-..xxx..
-.x.o.x.
-x..x..x
-x.xox.x
-x.....x
-.x...x.
-..x.x..
+.  .  x  x  x  .  .
+.  x  .  o  .  x  .
+x  .  .  x  .  .  x
+x  .  x  o  x  .  x
+x  .  .  .  .  .  x
+.  x  .  .  .  x  .
+.  .  x  .  x  .  .
 )",
       R"(
 .  XO .  .  .  XO .
@@ -1348,13 +1348,13 @@ XO .  .  .  .  .  XO
     checkNextMoveInfos(
       "Ignore own territory with outer empty base",
       R"(
-..xxx..
-.x...x.
-x..x..x
-x.xox.x
-x.....x
-.x...x.
-..x.x..
+.  .  x  x  x  .  .
+.  x  .  .  .  x  .
+x  .  .  x  .  .  x
+x  .  x  o  x  .  x
+x  .  .  .  .  .  x
+.  x  .  .  .  x  .
+.  .  x  .  x  .  .
 )",
       R"(
 .  XO .  .  .  XO .
@@ -1394,13 +1394,13 @@ XO .  X  X  X  .  XO
     checkNextMoveInfos(
       "Ignore own territory with outer suicidal base",
       R"(
-..xxx..
-.x...x.
-x..x..x
-x.xox.x
-x.....x
-.x...x.
-..x.x..
+.  .  x  x  x  .  .
+.  x  .  .  .  x  .
+x  .  .  x  .  .  x
+x  .  x  o  x  .  x
+x  .  .  .  .  .  x
+.  x  .  .  .  x  .
+.  .  x  .  x  .  .
 )",
       R"(
 .  XO .  .  .  XO .
@@ -1432,13 +1432,13 @@ XO .  X  X  X  .  XO
     checkNextMoveInfos(
       "Capture opp territory with outer normal base",
       R"(
-..xxx..
-.x...x.
-x..o..x
-x.oxo.x
-x.....x
-.x...x.
-..x.x..
+.  .  x  x  x  .  .
+.  x  .  .  .  x  .
+x  .  .  o  .  .  x
+x  .  o  x  o  .  x
+x  .  .  .  .  .  x
+.  x  .  .  .  x  .
+.  .  x  .  x  .  .
 )",
       R"(
 .  XO .  .  .  XO .
