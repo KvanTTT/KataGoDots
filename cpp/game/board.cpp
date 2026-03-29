@@ -2602,8 +2602,8 @@ bool Board::isEqualForTesting(const Board& other, const bool checkNumCaptures,
 char PlayerIO::colorToChar(Color c)
 {
   switch(c) {
-  case C_BLACK: return 'X';
-  case C_WHITE: return 'O';
+  case C_BLACK: return FIRST_PLA_UPPER;
+  case C_WHITE: return SECOND_PLA_UPPER;
   case C_EMPTY: return '.';
   default:  return '#';
   }
@@ -2617,8 +2617,8 @@ char PlayerIO::stateToChar(const State s, const bool isDots) {
   const bool captured = activeColor != placedColor;
 
   switch (placedColor) {
-    case C_BLACK: return captured ? 'x' : 'X';
-    case C_WHITE: return captured ? 'o' : 'O';
+    case C_BLACK: return captured ? FIRST_PLA_LOWER : FIRST_PLA_UPPER;
+    case C_WHITE: return captured ? SECOND_PLA_LOWER : SECOND_PLA_UPPER;
     case C_EMPTY: return captured ? '\'' : '.';
     default: return '#';
   }
@@ -2922,39 +2922,49 @@ Board Board::parseBoard(const int xSize,
     line.erase(0,firstNonDigitIdx);
     line = Global::trim(line);
 
-    if(line.length() != xSize && line.length() != 2*xSize-1)
-      throw StringError("Board::parseBoard - line length not compatible with xSize");
-
-    for (int x = 0; x < xSize; x++) {
-      const char c = line[(line.length() == xSize ? x : x*2)];
-
-      Color stoneColor;
-      switch (c) {
-        case '.':
+    int x = 0;
+    for (int index = 0; index < line.length(); index++) {
+      Color color;
+      switch (const char c = line[index]) {
         case ' ':
+          continue;
+        case '.':
         case '*':
         case ',':
         case '`':
-          continue;
-        case 'o':
-        case 'O':
-          stoneColor = C_WHITE;
+          color = C_EMPTY;
           break;
-        case 'x':
-        case 'X':
-          stoneColor = C_BLACK;
+        case SECOND_PLA_LOWER:
+        case SECOND_PLA_UPPER:
+          color = C_WHITE;
+          break;
+        case FIRST_PLA_LOWER:
+        case FIRST_PLA_UPPER:
+          color = C_BLACK;
           break;
         default:
           throw StringError(string("Board::parseBoard - could not parse board character: ") + c);
       }
 
-      const Loc loc = Location::getLoc(x,y,board.x_size);
-      if (const bool suc = board.setStoneFailIfNoLibs(loc, stoneColor); !suc) {
-        const string message = rules.isDots
-          ? "Capturing is disallowed in raw fields (at " + Location::toString(loc, board) + ")"
-          : "Board::parseBoard - zero-liberty group near " + Location::toString(loc, board);
-        throw StringError(message);
+      if (x >= xSize) {
+        throw StringError("Board::parseBoard - line length not compatible with xSize");
       }
+
+      if (color != C_EMPTY) {
+        const Loc loc = Location::getLoc(x,y,board.x_size);
+        if (const bool suc = board.setStoneFailIfNoLibs(loc, color); !suc) {
+          const string message = rules.isDots
+            ? "Capturing is disallowed in raw fields (at " + Location::toString(loc, board) + ")"
+            : "Board::parseBoard - zero-liberty group near " + Location::toString(loc, board);
+          throw StringError(message);
+        }
+      }
+
+      x++;
+    }
+
+    if (x != xSize) {
+      throw StringError("Board::parseBoard - line length not compatible with xSize");
     }
   }
   return board;

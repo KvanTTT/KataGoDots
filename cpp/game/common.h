@@ -75,6 +75,11 @@ static constexpr Color C_WHITE = 2;
 static constexpr Color C_WALL = 3;
 static constexpr int NUM_BOARD_COLORS = 4;
 
+static constexpr char FIRST_PLA_UPPER = 'X';
+static constexpr char FIRST_PLA_LOWER = 'x';
+static constexpr char SECOND_PLA_UPPER = 'O';
+static constexpr char SECOND_PLA_LOWER = 'o';
+
 typedef int8_t State;
 
 //Location of a point on the board
