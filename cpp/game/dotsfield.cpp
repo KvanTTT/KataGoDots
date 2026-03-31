@@ -1292,14 +1292,25 @@ Board::CapturesAndTerritoriesInfos* Board::calculateCapturesAndTerritoriesColors
       // The most frequent case is the case when the location is empty.
       if (getActiveColor(state) != C_EMPTY) continue;
 
+      int numBlackAdjDots = 0;
+      int numWhiteAdjDots = 0;
+      for (const short adj_offset : adj_offsets) {
+        if (const Color adjPlacedColor = getPlacedDotColor(getState(static_cast<Loc>(loc + adj_offset))); adjPlacedColor == P_BLACK) {
+          numBlackAdjDots++;
+        } else if (adjPlacedColor == P_WHITE) {
+          numWhiteAdjDots++;
+        }
+      }
+
       const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
 
       // It doesn't make sense to calculate capturing when the dot placed into own empty territory
-      if (emptyTerritoryColor != P_BLACK) {
+      // Also, consider only potentially unconnected locs because `playMoveRecordedDots` with `undo` is expensive
+      if (emptyTerritoryColor == P_WHITE || (emptyTerritoryColor == C_EMPTY && numBlackAdjDots >= 2)) {
         recalculateCapturesAndTerritories(P_BLACK, loc, capturesAndTerritoriesInfos);
       }
 
-      if (emptyTerritoryColor != P_WHITE) {
+      if (emptyTerritoryColor == P_BLACK || (emptyTerritoryColor == C_EMPTY && numWhiteAdjDots >= 2)) {
         recalculateCapturesAndTerritories(P_WHITE, loc, capturesAndTerritoriesInfos);
       }
     }
