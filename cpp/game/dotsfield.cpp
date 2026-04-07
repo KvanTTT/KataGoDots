@@ -690,7 +690,7 @@ std::array<Loc, 4> Board::getUnconnectedLocations(const Loc loc, const Player pl
   return unconnectedLocationsBuffer;
 }
 
-void Board::checkAndAddUnconnectedLocation(std::array<Loc, 4>& unconnectedLocationsBuffer, int& size, const Player checkPla, const Player currentPla, const Loc addLoc1, const Loc addLoc2) const {
+inline void Board::checkAndAddUnconnectedLocation(std::array<Loc, 4>& unconnectedLocationsBuffer, int& size, const Player checkPla, const Player currentPla, const Loc addLoc1, const Loc addLoc2) const {
   if (checkPla != currentPla) {
     if (getColor(addLoc1) == currentPla) {
       unconnectedLocationsBuffer[size++] = addLoc1;
@@ -698,6 +698,52 @@ void Board::checkAndAddUnconnectedLocation(std::array<Loc, 4>& unconnectedLocati
       unconnectedLocationsBuffer[size++] = addLoc2;
     }
   }
+}
+
+Color Board::getColorsOfPotentialCapturing(const Loc loc) const {
+  const Color xm1ym1Color = getColor(Location::xm1ym1(loc, x_size));
+  const Color xym1Color = getColor(Location::xym1(loc, x_size));
+  const Color xp1ym1Color = getColor(Location::xp1ym1(loc, x_size));
+
+  const Color xm1yColor = getColor(Location::xm1y(loc));
+  const Color xp1yColor = getColor(Location::xp1y(loc));
+
+  const Color xm1yp1Color = getColor(Location::xm1yp1(loc, x_size));
+  const Color xyp1Color = getColor(Location::xyp1(loc, x_size));
+  const Color xp1yp1Color = getColor(Location::xp1yp1(loc, x_size));
+
+  int numBlackUnconnectedDots = 0;
+  int numWhiteUnconnectedDots = 0;
+
+  const auto checkUnconnectedLocs = [&](const Color color, int& unconnectedLocs) {
+    if (xp1yColor != color && (xp1yp1Color == color || xyp1Color == color)) {
+      unconnectedLocs++;
+    }
+
+    if (xyp1Color != color && (xm1yp1Color == color || xm1yColor == color)) {
+      unconnectedLocs++;
+    }
+
+    if (xm1yColor != color && (xm1ym1Color == color || xym1Color == color)) {
+      unconnectedLocs++;
+    }
+
+    if (xym1Color != color && (xp1ym1Color == color || xp1yColor == color)) {
+      unconnectedLocs++;
+    }
+  };
+
+  checkUnconnectedLocs(P_BLACK, numBlackUnconnectedDots);
+  checkUnconnectedLocs(P_WHITE, numWhiteUnconnectedDots);
+
+  Color result = C_EMPTY;
+  if (numBlackUnconnectedDots >= 2) {
+    result |= C_BLACK;
+  }
+  if (numWhiteUnconnectedDots >= 2) {
+    result |= C_WHITE;
+  }
+  return result;
 }
 
 void Board::tryGetCounterClockwiseClosure(const Loc initialLoc, const Loc startLoc, const Player pla) const {
@@ -1292,25 +1338,16 @@ Board::CapturesAndTerritoriesInfos* Board::calculateCapturesAndTerritoriesColors
       // The most frequent case is the case when the location is empty.
       if (getActiveColor(state) != C_EMPTY) continue;
 
-      int numBlackAdjDots = 0;
-      int numWhiteAdjDots = 0;
-      for (const short adj_offset : adj_offsets) {
-        if (const Color adjPlacedColor = getPlacedDotColor(getState(static_cast<Loc>(loc + adj_offset))); adjPlacedColor == P_BLACK) {
-          numBlackAdjDots++;
-        } else if (adjPlacedColor == P_WHITE) {
-          numWhiteAdjDots++;
-        }
-      }
-
       const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
+      const Color colorsOfPotentialCapturing = getColorsOfPotentialCapturing(loc);
 
       // It doesn't make sense to calculate capturing when the dot placed into own empty territory
-      // Also, consider only potentially unconnected locs because `playMoveRecordedDots` with `undo` is expensive
-      if (emptyTerritoryColor == P_WHITE || (emptyTerritoryColor == C_EMPTY && numBlackAdjDots >= 2)) {
+      // Also, consider only potentially unconnected locs because `playMoveRecordedDots` with `undo` calls are expensive
+      if (emptyTerritoryColor == P_WHITE || (emptyTerritoryColor == C_EMPTY && colorsOfPotentialCapturing & C_BLACK)) {
         recalculateCapturesAndTerritories(P_BLACK, loc, capturesAndTerritoriesInfos);
       }
 
-      if (emptyTerritoryColor == P_BLACK || (emptyTerritoryColor == C_EMPTY && numWhiteAdjDots >= 2)) {
+      if (emptyTerritoryColor == P_BLACK || (emptyTerritoryColor == C_EMPTY && colorsOfPotentialCapturing & C_WHITE)) {
         recalculateCapturesAndTerritories(P_WHITE, loc, capturesAndTerritoriesInfos);
       }
     }

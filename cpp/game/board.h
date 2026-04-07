@@ -589,6 +589,7 @@ struct Board
     Player currentPla,
     Loc addLoc1,
     Loc addLoc2) const;
+  Color getColorsOfPotentialCapturing(Loc loc) const;
   void tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
   void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, int &numCapturedDots, int &numFreedDots) const;
   void updateStatesAndAppend(
