@@ -632,7 +632,7 @@ void Board::tryCapture(
       baseType = Base::Type::EMPTY;
     }
 
-    updateStatesAndAppend(bases, pla, numCapturedDots, numFreeDots, baseType);
+    updateStatesAndAppendBase(bases, pla, numCapturedDots, numFreeDots, baseType, currentClosure);
 
     if (!atLeastOneRealBaseIsGrounded && baseType != Base::Type::EMPTY) {
       for (const Loc& closureLoc : currentClosure) {
@@ -666,7 +666,7 @@ void Board::ground(const Player pla, vector<Loc>& emptyBaseInvalidatePositions, 
           }
         }
 
-        updateStatesAndAppend(bases, opp, numCapturedDots, numFreedDots, Base::Type::UNGROUNDED);
+        updateStatesAndAppendBase(bases, opp, numCapturedDots, numFreedDots, Base::Type::UNGROUNDED, {});
       }
     }
   }
@@ -898,12 +898,14 @@ void Board::getTerritoryLocations(const Player pla,
   clearVisited(territoryLocationsBuffer);
 }
 
-void Board::updateStatesAndAppend(
-  vector<Base>& bases,
+void Board::updateStatesAndAppendBase(
+  vector<Base> &bases,
   const Player basePla,
   const int numCapturedDots,
   const int numFreedDots,
-  const Base::Type baseType) {
+  const Base::Type baseType,
+  const vector<Loc>& surround_locs
+  ) {
   auto locStateAndCapturesDiffs = vector<LocStateAndCapturesDiff>();
   locStateAndCapturesDiffs.reserve(territoryLocationsBuffer.size());
 
@@ -962,7 +964,7 @@ void Board::updateStatesAndAppend(
     setState(territoryLoc, newState);
   }
 
-  bases.emplace_back(basePla, baseType, blackCapturesDiff, whiteCapturesDiff, locStateAndCapturesDiffs);
+  bases.emplace_back(basePla, baseType, blackCapturesDiff, whiteCapturesDiff, locStateAndCapturesDiffs, surround_locs);
 }
 
 void Board::invalidateAdjacentEmptyTerritoryIfNeeded(const Loc loc) {
@@ -1381,7 +1383,18 @@ uint16_t Board::LocStateAndCapturesDiff::getCapturesDiff() const {
   return static_cast<uint16_t>((packed >> (LOC_BITS_COUNT + STATE_BITS_COUNT)) & CAPTURES_BITS_MASK);
 }
 
-Board::Base::Base(const Player newPla, const Type newType, const short newBlackCapturesDiff, const short newWhiteCapturesDiff, const std::vector<LocStateAndCapturesDiff>& newRollbackLocStateCapturesDiff) :
-pla(newPla), type(newType), black_captures_diff(newBlackCapturesDiff), white_captures_diff(newWhiteCapturesDiff), rollback_locs_states_captures(newRollbackLocStateCapturesDiff) {
+Board::Base::Base(
+  const Player newPla,
+  const Type newType,
+  const short newBlackCapturesDiff,
+  const short newWhiteCapturesDiff,
+  const std::vector<LocStateAndCapturesDiff>& newRollbackLocStateCapturesDiff,
+  const std::vector<Loc>& newSurroundingLocs) :
+pla(newPla),
+type(newType),
+black_captures_diff(newBlackCapturesDiff),
+white_captures_diff(newWhiteCapturesDiff),
+rollback_locs_states_captures(newRollbackLocStateCapturesDiff),
+surrounding_locs(newSurroundingLocs) {
 }
 
