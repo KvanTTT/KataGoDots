@@ -236,8 +236,15 @@ struct Board
     short black_captures_diff;
     short white_captures_diff;
     std::vector<LocStateAndCapturesDiff> rollback_locs_states_captures;
+    std::vector<Loc> surrounding_locs;
 
-    Base(Player newPla, Type newType, short newBlackCapturesDiff, short newWhiteCapturesDiff, const std::vector<LocStateAndCapturesDiff>& newRollbackLocStateCapturesDiff);
+    Base(
+      Player newPla,
+      Type newType,
+      short newBlackCapturesDiff,
+      short newWhiteCapturesDiff,
+      const std::vector<LocStateAndCapturesDiff>& newRollbackLocStateCapturesDiff,
+      const std::vector<Loc>& newSurroundingLocs);
   };
 
   //Move data passed back when moves are made to allow for undos
@@ -604,12 +611,13 @@ struct Board
   Color getColorsOfPotentialCapturing(Loc loc) const;
   void tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
   void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, int &numCapturedDots, int &numFreedDots) const;
-  void updateStatesAndAppend(
-    std::vector<Base>& bases,
+  void updateStatesAndAppendBase(
+    std::vector<Base> &bases,
     Player basePla,
     int numCapturedDots,
     int numFreedDots,
-    Base::Type baseType);
+    Base::Type baseType,
+    const std::vector<short>& surround_locs);
   void invalidateAdjacentEmptyTerritoryIfNeeded(Loc loc);
 
   void recalculateCapturesAndTerritories(
