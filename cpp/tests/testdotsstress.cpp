@@ -156,6 +156,12 @@ static void validateStatesAndCaptures(const Board& board, const vector<Board::Mo
   testAssert(expectedNumWhiteCaptures == board.numWhiteCaptures);
 }
 
+enum CheckingMode {
+  REGULAR,
+  UNDO_AND_STATES,
+  CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE, // It's quite an expensive mode
+};
+
 static void runDotsStressTestsInternal(
   int x_size,
   int y_size,
@@ -168,7 +174,7 @@ static void runDotsStressTestsInternal(
   bool suicideAllowed,
   float groundingStartCoef,
   float groundingEndCoef,
-  bool performExtraChecks,
+  CheckingMode checkingMode,
   int randSeed
   ) {
   testAssert(groundingStartCoef >= 0 && groundingStartCoef <= 1);
@@ -182,7 +188,14 @@ static void runDotsStressTestsInternal(
   if (dotsGame) {
     cout << "    Capture empty bases: " << boolalpha << dotsCaptureEmptyBase << endl;
   }
-  cout << "    Extra checks: " << boolalpha << performExtraChecks << endl;
+  cout << "    CheckingMode: ";
+  switch (checkingMode) {
+    case REGULAR: cout << "Regular"; break;
+    case UNDO_AND_STATES: cout << "Undo and States"; break;
+    case CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE: cout << "Capture territory and ladders on each move"; break;
+    default: ASSERT_UNREACHABLE;
+  }
+  cout << endl;
   cout << "    Build type: " << Version::getBuildType() << endl;
   cout << "    Size: " << x_size << ":" << y_size << endl;
   cout << "    Komi: " << komi << endl;
@@ -219,9 +232,16 @@ static void runDotsStressTestsInternal(
     rand.shuffle(randomMoves);
     moveRecords.clear();
 
-    auto initialBoard = Board(x_size, y_size, rules);
-    initialBoard.setStartPos(rand);
-    auto board = initialBoard;
+    auto board = Board(x_size, y_size, rules);
+    board.setStartPos(rand);
+
+    std::unique_ptr<Board> initialBoard;
+    std::unique_ptr<BoardHistory> boardHistory;
+    if (checkingMode == UNDO_AND_STATES) {
+      initialBoard = std::make_unique<Board>(Board(board));
+    } else if (checkingMode == CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE) {
+      boardHistory = std::make_unique<BoardHistory>(BoardHistory(board));
+    }
 
     Loc lastLoc = Board::NULL_LOC;
 
@@ -232,11 +252,20 @@ static void runDotsStressTestsInternal(
       lastLoc = currentGameMovesCount >= tryGroundingAfterMove ? Board::PASS_LOC : randomMove;
 
       if (board.isLegal(lastLoc, pla, suicideAllowed, false)) {
-        if (performExtraChecks) {
+        if (checkingMode == UNDO_AND_STATES) {
           Board::MoveRecord moveRecord = board.playMoveRecorded(lastLoc, pla);
           moveRecords.push_back(moveRecord);
         } else {
           board.playMoveAssumeLegal(lastLoc, pla);
+
+          if (checkingMode == CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE) {
+            Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+
+            (void)boardHistory->getReasonableMoves(board, P_BLACK, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
+            (void)boardHistory->getReasonableMoves(board, P_WHITE, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
+
+            delete capturesAndTerritoriesInfos;
+          }
         }
         currentGameMovesCount++;
         pla = getOpp(pla);
@@ -254,29 +283,18 @@ static void runDotsStressTestsInternal(
           oppScoreIfGrounding = board.blackScoreIfWhiteGrounds;
         }
         if (scoreDiff != oppScoreIfGrounding) {
-          Global::fatalError("scoreDiff (" + to_string(scoreDiff) + ") == oppScoreIfGrounding (" + to_string(oppScoreIfGrounding) + ") check is failed. " +
-            "Sgf: " + moveRecordsToSgf(initialBoard, moveRecords));
+          Global::fatalError("scoreDiff (" + to_string(scoreDiff) + ") == oppScoreIfGrounding (" + to_string(oppScoreIfGrounding) + ") check is failed. ");
         }
         break;
       }
     }
 
-    if (performExtraChecks) {
-      Board boardWithoutGrounding;
+    if (checkingMode == UNDO_AND_STATES) {
       if (lastLoc == Board::PASS_LOC) {
-        boardWithoutGrounding = board;
+        Board boardWithoutGrounding = board;
         boardWithoutGrounding.undo(moveRecords.back());
         validateGrounding(boardWithoutGrounding, board, moveRecords.back().pla, moveRecords);
-      } else {
-        boardWithoutGrounding = board;
       }
-
-      Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos = boardWithoutGrounding.calculateCapturesAndTerritoriesColorsForDots();
-      delete capturesAndTerritoriesInfos;
-
-      BoardHistory boardHistory(boardWithoutGrounding);
-      (void)boardHistory.getReasonableMoves(boardWithoutGrounding, P_BLACK);
-      (void)boardHistory.getReasonableMoves(boardWithoutGrounding, P_WHITE);
 
       validateStatesAndCaptures(board, moveRecords);
     }
@@ -290,13 +308,13 @@ static void runDotsStressTestsInternal(
       drawsCount++;
     }
 
-    if (performExtraChecks) {
+    if (checkingMode == UNDO_AND_STATES) {
       while (!moveRecords.empty()) {
         board.undo(moveRecords.back());
         moveRecords.pop_back();
       }
 
-      testAssert(initialBoard.isEqualForTesting(board));
+      testAssert(initialBoard->isEqualForTesting(board));
     }
   }
 
@@ -344,9 +362,96 @@ void Tests::runDotsStressTests() {
   maxTerritory(P_BLACK);
   maxTerritory(P_WHITE);
 
-  runDotsStressTestsInternal(39, 32, 10000, true, Rules::START_POS_CROSS, false, false, 0.0f, true, 0.8f, 1.0f, true, 0);
-  runDotsStressTestsInternal(39, 32, 10000, true, Rules::START_POS_CROSS_4, true, true, 0.5f, false, 0.8f, 1.0f, true, 1);
+  runDotsStressTestsInternal(
+    39,
+    32,
+    100,
+    true,
+    Rules::START_POS_CROSS,
+    false,
+    false,
+    0.0f,
+    true,
+    0.95f,
+    1.0f,
+    CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE,
+    0
+  );
+  runDotsStressTestsInternal(
+    39,
+    32,
+    100,
+    true,
+    Rules::START_POS_CROSS_4,
+    false,
+    false,
+    0.0f,
+    true,
+    0.95f,
+    1.0f,
+    CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE,
+    1
+  );
 
-  runDotsStressTestsInternal(39, 32, 50000, true, Rules::START_POS_CROSS, false, false, 0.0f, true, 0.8f, 1.0f, false, 2);
-  runDotsStressTestsInternal(39, 32, 50000, true, Rules::START_POS_CROSS_4, true, false, 0.0f, true, 0.8f, 1.0f, false, 3);
+  runDotsStressTestsInternal(
+    39,
+    32,
+    10000,
+    true,
+    Rules::START_POS_CROSS,
+    false,
+    false,
+    0.0f,
+    true,
+    0.8f,
+    1.0f,
+    UNDO_AND_STATES,
+    0
+  );
+  runDotsStressTestsInternal(
+    39,
+    32,
+    10000,
+    true,
+    Rules::START_POS_CROSS_4,
+    true,
+    true,
+    0.5f,
+    false,
+    0.8f,
+    1.0f,
+    UNDO_AND_STATES,
+    1
+  );
+
+  runDotsStressTestsInternal(
+    39,
+    32,
+    50000,
+    true,
+    Rules::START_POS_CROSS,
+    false,
+    false,
+    0.0f,
+    true,
+    0.8f,
+    1.0f,
+    REGULAR,
+    2
+  );
+  runDotsStressTestsInternal(
+    39,
+    32,
+    50000,
+    true,
+    Rules::START_POS_CROSS_4,
+    true,
+    false,
+    0.0f,
+    true,
+    0.8f,
+    1.0f,
+    REGULAR,
+    3
+  );
 }
