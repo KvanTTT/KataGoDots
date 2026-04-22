@@ -401,8 +401,8 @@ struct GTPEngine {
 
   GTPEngine(
     const string& modelFile, const string& hModelFile,
-    SearchParams initialGenmoveParams, SearchParams initialAnalysisParams,
-    Rules initialRules,
+    const SearchParams& initialGenmoveParams, const SearchParams& initialAnalysisParams,
+    const Rules& initialRules,
     bool assumeMultiBlackHandicap, bool prevtEncore, bool autoPattern,
     double dynamicPDACapPerOppLead, bool staticPDAPrecedence,
     double normAvoidRepeatedPatternUtility, double hcapAvoidRepeatedPatternUtility,
@@ -599,7 +599,7 @@ struct GTPEngine {
   }
 
   void clearBoard() {
-    assert(bot->getRootHist().rules == currentRules);
+    testAssert(bot->getRootHist().rules == currentRules);
     int newXSize = bot->getRootBoard().x_size;
     int newYSize = bot->getRootBoard().y_size;
     Board board(newXSize,newYSize,currentRules);
@@ -611,7 +611,7 @@ struct GTPEngine {
   }
 
   bool setPosition(const vector<Move>& initialStones) {
-    assert(bot->getRootHist().rules == currentRules);
+    testAssert(bot->getRootHist().rules == currentRules);
     const int newXSize = bot->getRootBoard().x_size;
     const int newYSize = bot->getRootBoard().y_size;
 
@@ -631,7 +631,6 @@ struct GTPEngine {
     //Sanity check
     for (const auto initialStone : initialStones) {
       if(board.getPlacedColor(initialStone.loc) != initialStone.pla) {
-        assert(false);
         return false;
       }
     }
@@ -660,7 +659,7 @@ struct GTPEngine {
 
   bool play(Loc loc, Player pla) {
     auto& hist = bot->getRootHist();
-    assert(hist.rules == currentRules);
+    testAssert(hist.rules == currentRules);
     if (hist.isGameFinished) {
       return false;
     }
@@ -684,6 +683,7 @@ struct GTPEngine {
     if (newMovesCount < 0) {
       return false;
     }
+    testAssert(bot->getRootHist().rules == currentRules);
 
     if(moveHistory.empty())
       return false;
@@ -699,15 +699,14 @@ struct GTPEngine {
     for(int i = 0; i < newMovesCount; i++) {
       const Move newMove = moveHistoryCopy[i];
       const bool suc = play(newMove.loc, newMove.pla);
-      assert(suc);
-      (void)suc; //Avoid warning when asserts are off
+      testAssert(suc);
     }
     return true;
   }
 
   bool setRulesNotIncludingKomi(Rules newRules, string& error) {
-    assert(nnEval != NULL);
-    assert(bot->getRootHist().rules == currentRules);
+    testAssert(nnEval != NULL);
+    testAssert(bot->getRootHist().rules == currentRules);
     newRules.komi = currentRules.komi;
 
     bool rulesWereSupported;
@@ -791,7 +790,7 @@ struct GTPEngine {
     buf.resize(keptMoves);
   }
 
-  std::function<void(const Search* search)> getAnalyzeCallback(Player pla, AnalyzeArgs args) {
+  std::function<void(const Search* search)> getAnalyzeCallback(Player pla, const AnalyzeArgs& args) {
     std::function<void(const Search* search)> callback;
     //lz-analyze
     if(args.lz && !args.kata) {
@@ -1052,7 +1051,7 @@ struct GTPEngine {
     const GenmoveArgs& gargs,
     const AnalyzeArgs& args,
     bool playChosenMove,
-    std::function<void(const string&, bool)> printGTPResponse,
+    const std::function<void(const string&, bool)>& printGTPResponse,
     bool& maybeStartPondering
   ) {
     bool onMoveWasCalled = false;
@@ -1073,9 +1072,16 @@ struct GTPEngine {
     if(moveLocToPlay != Board::NULL_LOC && playChosenMove) {
       bool suc = bot->makeMove(moveLocToPlay,pla,preventEncore);
       if(suc)
-        moveHistory.push_back(Move(moveLocToPlay,pla));
-      assert(suc);
-      (void)suc; //Avoid warning when asserts are off
+        moveHistory.emplace_back(moveLocToPlay,pla);
+      if(!suc) {
+        ostringstream sout;
+        sout << "Engine chose move but makeMove failed" << "\n";
+        sout << bot->getRootBoard() << "\n";
+        sout << "Pla: " << PlayerIO::playerToString(pla, bot->getRootHist().rules.isDots) << "\n";
+        sout << "MoveLoc: " << Location::toString(moveLocToPlay,bot->getRootBoard()) << "\n";
+        logger.write(sout.str());
+        Global::fatalError(sout.str());
+      }
 
       maybeStartPondering = true;
     }
@@ -1086,7 +1092,7 @@ struct GTPEngine {
     Logger& logger,
     const GenmoveArgs& gargs,
     const AnalyzeArgs& args,
-    std::function<void(const string&, bool)> printGTPResponse
+    const std::function<void(const string&, bool)>& printGTPResponse
   ) {
     // Make sure to capture things by value unless they're long-lived, since the callback needs to survive past the current scope.
     auto onMove = [pla,&logger,gargs,args,printGTPResponse,this](Loc moveLoc, int searchId, Search* search) {
@@ -1110,9 +1116,9 @@ struct GTPEngine {
 
   void launchGenMove(
     Player pla,
-    GenmoveArgs gargs,
-    AnalyzeArgs args,
-    std::function<void(Loc, int, Search*)> onMove
+    const GenmoveArgs& gargs,
+    const AnalyzeArgs& args,
+    const std::function<void(Loc, int, Search*)>& onMove
   ) {
     genmoveTimer.reset();
 
@@ -1137,7 +1143,8 @@ struct GTPEngine {
         (paramsToUse.playoutDoublingAdvantagePla == P_BLACK) ? -desiredDynamicPDAForWhite :
         (paramsToUse.playoutDoublingAdvantagePla == C_EMPTY && pla == P_WHITE) ? desiredDynamicPDAForWhite :
         (paramsToUse.playoutDoublingAdvantagePla == C_EMPTY && pla == P_BLACK) ? -desiredDynamicPDAForWhite :
-        (assert(false),0.0);
+        NAN;
+      testAssert(!std::isnan(desiredDynamicPDA));
 
       paramsToUse.playoutDoublingAdvantage = desiredDynamicPDA;
     }
@@ -1359,7 +1366,7 @@ struct GTPEngine {
       response = string(e.what()) + ", try place_free_handicap";
       return;
     }
-    assert(bot->getRootHist().rules == currentRules);
+    testAssert(bot->getRootHist().rules == currentRules);
 
     BoardHistory hist(board,pla,currentRules,0);
 
@@ -1393,7 +1400,7 @@ struct GTPEngine {
     if(n > maxHandicap)
       n = maxHandicap;
 
-    assert(bot->getRootHist().rules == currentRules);
+    testAssert(bot->getRootHist().rules == currentRules);
 
     Board board(xSize,ySize,currentRules);
     Player pla = board.setStartPos(rand);
@@ -1418,8 +1425,8 @@ struct GTPEngine {
     clearStatsForNewGame();
   }
 
-  void analyze(Player pla, AnalyzeArgs args) {
-    assert(args.analyzing);
+  void analyze(Player pla, const AnalyzeArgs& args) {
+    testAssert(args.analyzing);
     if(isGenmoveParams) {
       bot->setParams(analysisParams);
       isGenmoveParams = false;
@@ -1551,7 +1558,7 @@ struct GTPEngine {
     return isAlive;
   }
 
-  string rawNNBrief(std::vector<Loc> branch, int whichSymmetry) {
+  string rawNNBrief(const std::vector<Loc>& branch, int whichSymmetry) {
     if(nnEval == NULL)
       return "";
     ostringstream out;
@@ -2097,7 +2104,7 @@ int MainCmds::gtp(const vector<string>& args) {
   std::unique_ptr<PatternBonusTable> patternBonusTable = nullptr;
   {
     std::vector<std::unique_ptr<PatternBonusTable>> tables = Setup::loadAvoidSgfPatternBonusTables(cfg,logger);
-    assert(tables.size() == 1);
+    testAssert(tables.size() == 1);
     patternBonusTable = std::move(tables[0]);
   }
 
@@ -2241,7 +2248,7 @@ int MainCmds::gtp(const vector<string>& args) {
       pieces = Global::split(line,' ');
       for(size_t i = 0; i<pieces.size(); i++)
         pieces[i] = Global::trim(pieces[i]);
-      assert(pieces.size() > 0);
+      testAssert(pieces.size() > 0);
 
       command = pieces[0];
       pieces.erase(pieces.begin());
@@ -2558,15 +2565,15 @@ int MainCmds::gtp(const vector<string>& args) {
 
     else if(command == "kata-list-params") {
       std::vector<string> paramsList;
-      paramsList.push_back("analysisWideRootNoise");
-      paramsList.push_back("analysisIgnorePreRootHistory");
-      paramsList.push_back("genmoveAntiMirror");
-      paramsList.push_back("antiMirror");
-      paramsList.push_back("humanSLProfile");
-      paramsList.push_back("allowResignation");
-      paramsList.push_back("ponderingEnabled");
-      paramsList.push_back("delayMoveScale");
-      paramsList.push_back("delayMoveMax");
+      paramsList.emplace_back("analysisWideRootNoise");
+      paramsList.emplace_back("analysisIgnorePreRootHistory");
+      paramsList.emplace_back("genmoveAntiMirror");
+      paramsList.emplace_back("antiMirror");
+      paramsList.emplace_back("humanSLProfile");
+      paramsList.emplace_back("allowResignation");
+      paramsList.emplace_back("ponderingEnabled");
+      paramsList.emplace_back("delayMoveScale");
+      paramsList.emplace_back("delayMoveMax");
       nlohmann::json params = engine->getGenmoveParams().changeableParametersToJson();
       for(auto& elt : params.items()) {
         paramsList.push_back(elt.key());

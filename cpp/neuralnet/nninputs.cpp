@@ -1,38 +1,8 @@
 #include "../neuralnet/nninputs.h"
 
+#include "../core/test.h"
+
 using namespace std;
-
-int NNPos::xyToPos(int x, int y, int nnXLen) {
-  return y * nnXLen + x;
-}
-int NNPos::locToPos(Loc loc, int boardXSize, int nnXLen, int nnYLen) {
-  if(loc == Board::PASS_LOC)
-    return nnXLen * nnYLen;
-  if(loc == Board::NULL_LOC || loc == Board::RESIGN_LOC) // NN normally shouldn't return a resigning move
-    return nnXLen * (nnYLen + 1);
-  return Location::getY(loc,boardXSize) * nnXLen + Location::getX(loc,boardXSize);
-}
-Loc NNPos::posToLoc(int pos, int boardXSize, int boardYSize, int nnXLen, int nnYLen) {
-  if(pos == nnXLen * nnYLen)
-    return Board::PASS_LOC;
-  int x = pos % nnXLen;
-  int y = pos / nnXLen;
-  if(x < 0 || x >= boardXSize || y < 0 || y >= boardYSize)
-    return Board::NULL_LOC;
-  return Location::getLoc(x,y,boardXSize);
-}
-
-int NNPos::getPassPos(int nnXLen, int nnYLen) {
-  return nnXLen * nnYLen;
-}
-
-bool NNPos::isPassPos(int pos, int nnXLen, int nnYLen) {
-  return pos == nnXLen * nnYLen;
-}
-
-int NNPos::getPolicySize(int nnXLen, int nnYLen) {
-  return nnXLen * nnYLen + 1;
-}
 
 //-----------------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------------
@@ -63,7 +33,7 @@ double ScoreValue::whiteWinsOfWinner(Player winner, double drawEquivalentWinsFor
   else if(winner == P_BLACK)
     return 0.0;
 
-  assert(winner == C_EMPTY);
+  testAssert(winner == C_EMPTY);
   return drawEquivalentWinsForWhite;
 }
 
@@ -105,13 +75,13 @@ static double inverse_atan(double x) {
 }
 
 double ScoreValue::approxWhiteScoreOfScoreValueSmooth(double scoreValue, double center, double scale, double sqrtBoardArea) {
-  assert(scoreValue >= -1 && scoreValue <= 1);
+  testAssert(scoreValue >= -1 && scoreValue <= 1);
   double scoreUnscaled = inverse_atan(scoreValue * piOverTwo);
   return scoreUnscaled * (scale * sqrtBoardArea) + center;
 }
 
 double ScoreValue::whiteScoreMeanSqOfScoreGridded(double finalWhiteMinusBlackScore, double drawEquivalentWinsForWhite) {
-  assert((int)(finalWhiteMinusBlackScore * 2) == finalWhiteMinusBlackScore * 2);
+  testAssert((int)(finalWhiteMinusBlackScore * 2) == finalWhiteMinusBlackScore * 2);
   bool finalScoreIsInteger = ((int)finalWhiteMinusBlackScore == finalWhiteMinusBlackScore);
   if(!finalScoreIsInteger)
     return finalWhiteMinusBlackScore * finalWhiteMinusBlackScore;
@@ -141,7 +111,7 @@ void ScoreValue::freeTables() {
 }
 
 void ScoreValue::initTables() {
-  assert(!scoreValueTablesInitialized);
+  testAssert(!scoreValueTablesInitialized);
   expectedSVTable = new double[svTableMeanLen*svTableStdevLen];
 
   //Precompute normal PDF
@@ -189,7 +159,7 @@ void ScoreValue::initTables() {
 }
 
 double ScoreValue::expectedWhiteScoreValue(double whiteScoreMean, double whiteScoreStdev, double center, double scale, double sqrtBoardArea) {
-  assert(scoreValueTablesInitialized);
+  testAssert(scoreValueTablesInitialized);
 
   double scaleFactor = (double)svTableAssumedBSize / (scale * sqrtBoardArea);
 
@@ -205,7 +175,7 @@ double ScoreValue::expectedWhiteScoreValue(double whiteScoreMean, double whiteSc
 
   if(meanIdx0 < 0) { meanIdx0 = 0; meanIdx1 = 0; }
   if(meanIdx1 >= svTableMeanLen) { meanIdx0 = svTableMeanLen-1; meanIdx1 = svTableMeanLen-1; }
-  assert(stdevIdx0 >= 0);
+  testAssert(stdevIdx0 >= 0);
   if(stdevIdx1 >= svTableStdevLen) { stdevIdx0 = svTableStdevLen-1; stdevIdx1 = svTableStdevLen-1; }
 
   double lambdaMean = meanScaled - meanRounded + 0.5;
@@ -358,12 +328,12 @@ NNOutput::NNOutput(const NNOutput& other) {
 }
 
 NNOutput::NNOutput(const vector<shared_ptr<NNOutput>>& others) {
-  assert(others.size() < 1000000);
+  testAssert(others.size() < 1000000);
   int len = (int)others.size();
   float floatLen = (float)len;
-  assert(len > 0);
+  testAssert(len > 0);
   for(int i = 1; i<len; i++) {
-    assert(others[i]->nnHash == others[0]->nnHash);
+    testAssert(others[i]->nnHash == others[0]->nnHash);
   }
   nnHash = others[0]->nnHash;
 
@@ -417,7 +387,7 @@ NNOutput::NNOutput(const vector<shared_ptr<NNOutput>>& others) {
       }
     }
     if(whiteOwnerMap != NULL) {
-      assert(whiteOwnerMapCount > 0);
+      testAssert(whiteOwnerMapCount > 0);
       for(int pos = 0; pos<nnXLen*nnYLen; pos++)
         whiteOwnerMap[pos] /= whiteOwnerMapCount;
     }
@@ -521,7 +491,7 @@ NNOutput::~NNOutput() {
 }
 
 
-void NNOutput::debugPrint(ostream& out, const Board& board) {
+void NNOutput::debugPrint(ostream& out, const Board& board) const {
   out << "Win " << Global::strprintf("%.2fc",whiteWinProb*100) << endl;
   out << "Loss " << Global::strprintf("%.2fc",whiteLossProb*100) << endl;
   out << "NoResult " << Global::strprintf("%.2fc",whiteNoResultProb*100) << endl;
@@ -721,8 +691,7 @@ Board SymmetryHelpers::getSymBoard(const Board& board, int symmetry) {
       const Loc loc = Location::getLoc(x,y,board.x_size);
       if (!board.isDots()) {
         const bool suc = symBoard.setStoneFailIfNoLibs(symLoc, board.getColor(loc));
-        assert(suc);
-        (void)suc;
+        testAssert(suc);
         if(loc == board.ko_loc)
           symKoLoc = symLoc;
       } else {
@@ -730,10 +699,10 @@ Board SymmetryHelpers::getSymBoard(const Board& board, int symmetry) {
           if (getActiveColor(s) != C_EMPTY) {
             if (!isTerritory(s)) {
               const Color placedColor = getPlacedDotColor(s);
-              assert(C_EMPTY != placedColor && "Non territory locs should have placed status");
+              testAssert(C_EMPTY != placedColor && "Non territory locs should have placed status");
               symBoard.pos_hash ^= Board::ZOBRIST_BOARD_HASH[symLoc][placedColor];
             } else {
-              assert(Board::UNINITIALIZED_CAPTURES_DIFF_DATA != old_captures_diff_data && "territory is expected to be initialized");
+              testAssert(Board::UNINITIALIZED_CAPTURES_DIFF_DATA != old_captures_diff_data && "territory is expected to be initialized");
               symBoard.pos_hash ^= Board::ZOBRIST_DOTS_CAPTURES_DIFF_HASH[symLoc][old_captures_diff_data];
               symBoard.captures_diff_data[symLoc] = new_captures_diff_data;
             }
@@ -925,7 +894,7 @@ void setRowBin(float* rowBin, const int pos, const int feature, const float valu
 }
 
 //Calls f on each location that is part of an inescapable atari, or a group that can be put into inescapable atari
-static void iterLadders(const Board& board, int nnXLen, std::function<void(Loc,int,const vector<Loc>&)> f) {
+static void iterLadders(const Board& board, int nnXLen, const std::function<void(Loc,int,const vector<Loc>&)>& f) {
   int xSize = board.x_size;
   int ySize = board.y_size;
 
@@ -938,13 +907,13 @@ static void iterLadders(const Board& board, int nnXLen, std::function<void(Loc,i
 
   for(int y = 0; y<ySize; y++) {
     for(int x = 0; x<xSize; x++) {
-      int pos = NNPos::xyToPos(x,y,nnXLen);
       Loc loc = Location::getLoc(x,y,xSize);
       Color stone = board.colors[loc];
       if(stone == P_BLACK || stone == P_WHITE) {
         int libs = board.getNumLiberties(loc);
         if(libs == 1 || libs == 2) {
           bool alreadySolved = false;
+          int pos = NNPos::xyToPos(x,y,nnXLen);
           Loc head = board.chain_head[loc];
           for(int i = 0; i<numChainHeadsSolved; i++) {
             if(chainHeadsSolved[i] == head) {

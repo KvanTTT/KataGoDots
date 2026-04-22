@@ -2374,7 +2374,7 @@ Caps 4420 4335
         Loc loc = Location::getLoc(rand.nextUInt(board.x_size),rand.nextUInt(board.y_size),board.x_size);
         Player pla = rand.nextBool(0.5) ? P_BLACK : P_WHITE;
         if(board.isLegal(loc, pla, true, false)) {
-          placements.push_back(Move(loc,pla));
+          placements.emplace_back(loc,pla);
           bool anyCaps = board.wouldBeCapture(loc,pla) || board.isSuicide(loc,pla);
           board.playMoveAssumeLegal(loc,pla);
           Board copy(board.x_size,board.y_size,board.rules);
@@ -2405,7 +2405,7 @@ Caps 4420 4335
         Loc loc = Location::getLoc(rand.nextUInt(board.x_size),rand.nextUInt(board.y_size),board.x_size);
         Color color = rand.nextBool(0.25) ? C_EMPTY : rand.nextBool(0.5) ? P_BLACK : P_WHITE;
 
-        placements.push_back(Move(loc,color));
+        placements.emplace_back(loc,color);
         if(prevPlacedLocs.find(loc) != prevPlacedLocs.end()) {
           Board copy(board.x_size,board.y_size,board.rules);
           bool suc = copy.setStonesFailIfNoLibs(placements);

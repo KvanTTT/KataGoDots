@@ -572,7 +572,7 @@ InputBuffers::InputBuffers(const LoadedModel* loadedModel, int maxBatchSz, int n
   maxBatchSize = maxBatchSz;
   policyResultChannels = m.policyHead.p2Conv.outChannels;
 
-  assert(((m.modelVersion < 16) || (policyResultChannels == 4)) &&
+  testAssert(((m.modelVersion < 16) || (policyResultChannels == 4)) &&
          ((m.modelVersion >= 16) || (m.modelVersion < 12) || (policyResultChannels == 2)) &&
          ((m.modelVersion >= 12) || (policyResultChannels == 1)));
 
@@ -589,9 +589,9 @@ InputBuffers::InputBuffers(const LoadedModel* loadedModel, int maxBatchSz, int n
   singleScoreValuesResultElts = (size_t)m.numScoreValueChannels;
 
   const bool isDotsGame = loadedModel->modelDesc.isDotsGame;
-  assert(NNModelVersion::getNumSpatialFeatures(m.modelVersion, isDotsGame) == m.numInputChannels);
-  assert(NNModelVersion::getNumGlobalFeatures(m.modelVersion, isDotsGame) == m.numInputGlobalChannels);
-  assert(singleValueResultElts == 3);
+  testAssert(NNModelVersion::getNumSpatialFeatures(m.modelVersion, isDotsGame) == m.numInputChannels);
+  testAssert(NNModelVersion::getNumGlobalFeatures(m.modelVersion, isDotsGame) == m.numInputGlobalChannels);
+  testAssert(singleValueResultElts == 3);
 
   rowSpatialBufferElts = (size_t)maxBatchSz * singleSpatialElts;
   userInputBufferElts = (size_t)maxBatchSize * singleInputElts;

@@ -12,6 +12,7 @@
 #include "../program/play.h"
 #include "../program/selfplaymanager.h"
 #include "../command/commandline.h"
+#include "../core/test.h"
 #include "../main.h"
 #include "../core/TimeStampHandler.h"
 
@@ -256,7 +257,7 @@ int MainCmds::selfplay(const vector<string>& args) {
       if(Signals::shouldStop.load())
         break;
       NNEvaluator* nnEval = manager->acquireLatest();
-      assert(nnEval != NULL);
+      testAssert(nnEval != NULL);
 
       if(prevModelName != nnEval->getModelName()) {
         prevModelName = nnEval->getModelName();
@@ -266,7 +267,7 @@ int MainCmds::selfplay(const vector<string>& args) {
       //Callback that runGame will call periodically to ask us if we have a new neural net
       std::function<NNEvaluator*()> checkForNewNNEval = [&manager,&nnEval,&prevModelName,&logger,&threadIdx]() -> NNEvaluator* {
         NNEvaluator* newNNEval = manager->acquireLatest();
-        assert(newNNEval != NULL);
+        testAssert(newNNEval != NULL);
         if(newNNEval == nnEval) {
           manager->release(newNNEval);
           return NULL;
@@ -349,8 +350,9 @@ int MainCmds::selfplay(const vector<string>& args) {
   };
 
   vector<std::thread> threads;
+  threads.reserve(numGameThreads);
   for(int i = 0; i<numGameThreads; i++) {
-    threads.push_back(std::thread(gameLoopProtected,i));
+    threads.emplace_back(gameLoopProtected,i);
   }
   std::thread modelLoadLoopThread(modelLoadLoopProtected);
 

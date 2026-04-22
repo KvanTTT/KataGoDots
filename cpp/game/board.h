@@ -64,9 +64,9 @@ namespace PlayerIO {
 
 namespace Location
 {
-  Loc getLoc(int x, int y, int x_size);
-  int getX(Loc loc, int x_size);
-  int getY(Loc loc, int x_size);
+  inline Loc getLoc(int x, int y, int x_size) { return (Loc)((x+1) + (y+1)*(x_size+1)); }
+  inline int getX(Loc loc, int x_size) { return (loc % (x_size+1)) - 1; }
+  inline int getY(Loc loc, int x_size) { return (loc / (x_size+1)) - 1; }
 
   void getAdjacentOffsets(short adj_offsets[8], int x_size, bool isDots);
   bool isAdjacent(Loc loc0, Loc loc1, int x_size);
@@ -334,7 +334,7 @@ struct Board
   //Check if this location is adjacent a given chain.
   bool isAdjacentToChain(Loc loc, Loc chain) const;
   //Does this connect two pla distinct groups that are not both pass-alive and not within opponent pass-alive area either?
-  bool isNonPassAliveSelfConnection(Loc loc, Player pla, Color* passAliveArea) const;
+  bool isNonPassAliveSelfConnection(Loc loc, Player pla, const Color* passAliveArea) const;
   // Is this board empty?
   bool isStartPos() const;
   //Count the number of stones on the board
@@ -501,8 +501,8 @@ struct Board
   bool isEqualForTesting(const Board& other, bool checkNumCaptures = true, bool checkSimpleKo = true, bool checkRules = true) const;
 
   static Board parseBoard(int xSize, int ySize, const std::string& s, const Rules& rules = Rules::DEFAULT_GO, char lineDelimiter = '\n');
-  std::string toString() const;
   static void printBoard(std::ostream& out, const Board& board, Loc markLoc, const std::vector<Move>* hist, bool printHash = true);
+  std::string toString() const;
   static std::string toStringSimple(const Board& board, char lineDelimiter = '\n');
   static nlohmann::json toJson(const Board& board);
   static Board ofJson(const nlohmann::json& data);

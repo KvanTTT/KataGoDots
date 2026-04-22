@@ -1,5 +1,6 @@
 #include "../search/asyncbot.h"
 
+#include "../core/test.h"
 #include "../core/timer.h"
 
 using namespace std;
@@ -20,7 +21,7 @@ static void searchThreadLoop(AsyncBot* asyncBot, Logger* logger) {
 }
 
 AsyncBot::AsyncBot(
-  SearchParams params,
+  const SearchParams& params,
   NNEvaluator* nnEval,
   Logger* l,
   const string& randSeed
@@ -39,7 +40,7 @@ AsyncBot::AsyncBot(
 }
 
 AsyncBot::AsyncBot(
-  SearchParams params,
+  const SearchParams& params,
   NNEvaluator* nnEval,
   NNEvaluator* humanEval,
   Logger* l,
@@ -61,7 +62,7 @@ AsyncBot::AsyncBot(
 
 AsyncBot::~AsyncBot() {
   stopAndWait();
-  assert(!isRunning);
+  testAssert(!isRunning);
   {
     lock_guard<std::mutex> lock(controlMutex);
     isKilled = true;
@@ -128,11 +129,11 @@ void AsyncBot::setAlwaysIncludeOwnerMap(bool b) {
   stopAndWait();
   search->setAlwaysIncludeOwnerMap(b);
 }
-void AsyncBot::setParams(SearchParams params) {
+void AsyncBot::setParams(const SearchParams& params) {
   stopAndWait();
   search->setParams(params);
 }
-void AsyncBot::setParamsNoClearing(SearchParams params) {
+void AsyncBot::setParamsNoClearing(const SearchParams& params) {
   stopAndWait();
   search->setParamsNoClearing(params);
 }
@@ -144,7 +145,7 @@ void AsyncBot::setCopyOfExternalPatternBonusTable(const std::unique_ptr<PatternB
   stopAndWait();
   search->setCopyOfExternalPatternBonusTable(table);
 }
-void AsyncBot::setExternalEvalCache(std::shared_ptr<EvalCacheTable> cache) {
+void AsyncBot::setExternalEvalCache(const std::shared_ptr<EvalCacheTable>& cache) {
   stopAndWait();
   search->setExternalEvalCache(cache);
 }
@@ -185,7 +186,7 @@ void AsyncBot::genMoveAsync(Player movePla, int searchId, const TimeControls& tc
 void AsyncBot::genMoveAsync(Player movePla, int searchId, const TimeControls& tc, double sf, const std::function<void(Loc,int,Search*)>& onMove, const std::function<void()>& onSearchBegun) {
   std::unique_lock<std::mutex> lock(controlMutex);
   stopAndWaitAlreadyLocked(lock);
-  assert(!isRunning);
+  testAssert(!isRunning);
   if(isKilled)
     return;
 
@@ -218,8 +219,7 @@ Loc AsyncBot::genMoveSynchronous(Player movePla, const TimeControls& tc, double 
 Loc AsyncBot::genMoveSynchronous(Player movePla, const TimeControls& tc, double sf, const std::function<void()>& onSearchBegun) {
   Loc moveLoc = Board::NULL_LOC;
   std::function<void(Loc,int,Search*)> onMove = [&moveLoc](Loc loc, int searchId, Search* s) noexcept {
-    assert(searchId == 0);
-    (void)searchId; //avoid warning when asserts disabled
+    testAssert(searchId == 0);
     (void)s;
     moveLoc = loc;
   };
@@ -262,7 +262,7 @@ void AsyncBot::analyzeAsync(
 ) {
   std::unique_lock<std::mutex> lock(controlMutex);
   stopAndWaitAlreadyLocked(lock);
-  assert(!isRunning);
+  testAssert(!isRunning);
   if(isKilled)
     return;
 
@@ -310,7 +310,7 @@ void AsyncBot::genMoveAsyncAnalyze(
 ) {
   std::unique_lock<std::mutex> lock(controlMutex);
   stopAndWaitAlreadyLocked(lock);
-  assert(!isRunning);
+  testAssert(!isRunning);
   if(isKilled)
     return;
 
@@ -354,8 +354,7 @@ Loc AsyncBot::genMoveSynchronousAnalyze(
 ) {
   Loc moveLoc = Board::NULL_LOC;
   std::function<void(Loc,int,Search*)> onMove = [&moveLoc](Loc loc, int searchId, Search* s) noexcept {
-    assert(searchId == 0);
-    (void)searchId; //avoid warning when asserts disabled
+    testAssert(searchId == 0);
     (void)s;
     moveLoc = loc;
   };

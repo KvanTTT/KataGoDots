@@ -8,6 +8,7 @@
 #include "../program/setup.h"
 #include "../program/play.h"
 #include "../command/commandline.h"
+#include "../core/test.h"
 #include "../main.h"
 
 #include <csignal>
@@ -81,7 +82,8 @@ int MainCmds::match(const vector<string>& args) {
     cfg.tryGetInts("secondaryBots", secondaryBotIdxs, 0,Setup::MAX_BOT_PARAMS_FROM_CFG);
 
     for(int secondaryBotIdx : secondaryBotIdxs)
-      assert(secondaryBotIdx >= 0 && secondaryBotIdx < numBots);
+      if(secondaryBotIdx < 0 || secondaryBotIdx >= numBots)
+        throw StringError("secondaryBots value " + Global::intToString(secondaryBotIdx) + " is out of range, numBots is " + Global::intToString(numBots));
 
     for(int i = 0; i<numBots; i++) {
       if(!includeBot[i])
@@ -205,7 +207,7 @@ int MainCmds::match(const vector<string>& args) {
   }
 
   std::vector<std::unique_ptr<PatternBonusTable>> patternBonusTables = Setup::loadAvoidSgfPatternBonusTables(cfg,logger);
-  assert(patternBonusTables.size() == numBots);
+  testAssert(patternBonusTables.size() == numBots);
 
   //Initialize object for randomly pairing bots
   int64_t numGamesTotal = cfg.getInt64("numGamesTotal",1, static_cast<int64_t>(1) << 62);

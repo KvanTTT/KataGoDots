@@ -13,6 +13,9 @@
 #include <sstream>
 #include <vector>
 
+#include "../core/rand.h"
+#include "../core/test.h"
+
 using namespace std;
 
 //STATIC VARS-----------------------------------------------------------------------------
@@ -33,18 +36,6 @@ const Hash128 Board::ZOBRIST_GAME_IS_OVER = //Based on sha256 hash of Board::ZOB
   Hash128(0xb6f9e465597a77eeULL, 0xf1d583d960a4ce7fULL);
 
 //LOCATION--------------------------------------------------------------------------------
-Loc Location::getLoc(int x, int y, int x_size)
-{
-  return (x+1) + (y+1)*(x_size+1);
-}
-int Location::getX(Loc loc, int x_size)
-{
-  return (loc % (x_size+1)) - 1;
-}
-int Location::getY(Loc loc, int x_size)
-{
-  return (loc / (x_size+1)) - 1;
-}
 void Location::getAdjacentOffsets(short adj_offsets[8], int x_size, bool isDots) {
   int stride = x_size + 1;
   if (isDots) {
@@ -145,7 +136,7 @@ Board::Board(const Board& other) {
 
 void Board::init(const int xS, const int yS, const Rules& initRules)
 {
-  assert(IS_ZOBRIST_INITALIZED);
+  testAssert(IS_ZOBRIST_INITALIZED);
   if(xS < 0 || yS < 0 || xS > MAX_LEN_X || yS > MAX_LEN_Y)
     throw StringError("Board::init - invalid board size");
 
@@ -684,7 +675,7 @@ bool Board::isAdjacentToChain(Loc loc, Loc chain) const {
 
 
 //Does this connect two pla distinct groups that are not both pass-alive and not within opponent pass-alive area either?
-bool Board::isNonPassAliveSelfConnection(Loc loc, Player pla, Color* passAliveArea) const {
+bool Board::isNonPassAliveSelfConnection(Loc loc, Player pla, const Color* passAliveArea) const {
   if(colors[loc] != C_EMPTY || passAliveArea[loc] == pla)
     return false;
 
@@ -2901,8 +2892,7 @@ string Board::toStringSimple(const Board& board, char lineDelimiter) {
   return s;
 }
 
-Board Board::parseBoard(const int xSize,
-  const int ySize, const string& s, const Rules& rules, const char lineDelimiter) {
+Board Board::parseBoard(const int xSize, const int ySize, const string& s, const Rules& rules, const char lineDelimiter) {
   Board board(xSize,ySize,rules);
   vector<string> lines = Global::split(Global::trim(s),lineDelimiter);
 

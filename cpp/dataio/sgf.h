@@ -96,8 +96,8 @@ struct Sgf {
   template<typename T>
   T traverse(
     T initialValue,
-    std::function<T(T, T)> reduce,
-    std::function<T(const Sgf*, T)> transform
+    const std::function<T(T, T)>& reduce,
+    const std::function<T(const Sgf*, T)>& transform
   ) const;
 
   //Maximum depth of sgf tree in nodes
@@ -168,7 +168,7 @@ struct Sgf {
     bool flipIfPassOrWFirst,
     bool allowGameOver,
     Rand* rand,
-    std::function<void(PositionSample&,const BoardHistory&,const std::string&)> f
+    const std::function<void(PositionSample&,const BoardHistory&,const std::string&)>& f
   ) const;
 
   //Same as iterAllUniquePositions, but without the uniqueness. Will re-traverse same positions if they
@@ -178,7 +178,7 @@ struct Sgf {
     bool flipIfPassOrWFirst,
     bool allowGameOver,
     Rand* rand,
-    std::function<void(PositionSample&,const BoardHistory&,const std::string&)> f
+    const std::function<void(PositionSample&,const BoardHistory&,const std::string&)>& f
   ) const;
 
   static std::set<Hash128> readExcludes(const std::vector<std::string>& files);
@@ -200,10 +200,10 @@ struct Sgf {
     bool isRoot,
     Rand* rand,
     std::vector<std::pair<int64_t,int64_t>>& variationTraceNodesBranch,
-    std::function<void(PositionSample&,const BoardHistory&,const std::string&)> f
+    const std::function<void(PositionSample&,const BoardHistory&,const std::string&)>& f
   ) const;
   void samplePositionHelper(
-    Board& board, BoardHistory& hist, Player nextPla,
+    const Board& board, const BoardHistory& hist, Player nextPla,
     PositionSample& sampleBuf,
     std::set<Hash128>& uniqueHashes,
     bool requireUnique,
@@ -212,7 +212,7 @@ struct Sgf {
     bool flipIfPassOrWFirst,
     bool allowGameOver,
     const std::string& comments,
-    std::function<void(PositionSample&,const BoardHistory&,const std::string&)> f
+    const std::function<void(PositionSample&,const BoardHistory&,const std::string&)>& f
   ) const;
 };
 
@@ -242,7 +242,7 @@ struct CompactSgf {
   bool hasRules() const;
   Rules getRulesOrFail() const;
   Rules getRulesOrFailAllowUnspecified(const Rules& defaultRules) const;
-  Rules getRulesOrWarn(const Rules& defaultRules, std::function<void(const std::string& msg)> f) const;
+  Rules getRulesOrWarn(const Rules& defaultRules, const std::function<void(const std::string& msg)>& f) const;
 
   BoardHistory setupInitialBoardAndHist(const Rules& initialRules, Player& nextPla) const;
   void playMovesAssumeLegal(Board& board, Player& nextPla, BoardHistory& hist, int64_t turnIdx) const;

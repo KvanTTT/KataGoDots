@@ -1,6 +1,7 @@
 #ifndef CORE_CONFIG_PARSER_H_
 #define CORE_CONFIG_PARSER_H_
 
+#include <limits>
 #include <mutex>
 #include <optional>
 
@@ -65,11 +66,11 @@ class ConfigParser {
 
   enabled_t getEnabled(const std::string& key);
   bool getBool(const std::string& key);
-  int getInt(const std::string& key, int min = std::numeric_limits<int>::min(), int max = std::numeric_limits<int>::max());
-  int64_t getInt64(const std::string& key, int64_t min = std::numeric_limits<int64_t>::min(), int64_t max = std::numeric_limits<int64_t>::max());
-  uint64_t getUInt64(const std::string& key, uint64_t min = std::numeric_limits<uint64_t>::min(), uint64_t max = std::numeric_limits<uint64_t>::max());
-  float getFloat(const std::string& key, float min = std::numeric_limits<float>::min(), float max = std::numeric_limits<float>::max());
-  double getDouble(const std::string& key, double min = std::numeric_limits<double>::min(), double max = std::numeric_limits<double>::max());
+  int getInt(const std::string& key, int min = std::numeric_limits<int>::lowest(), int max = std::numeric_limits<int>::max());
+  int64_t getInt64(const std::string& key, int64_t min = std::numeric_limits<int64_t>::lowest(), int64_t max = std::numeric_limits<int64_t>::max());
+  uint64_t getUInt64(const std::string& key, uint64_t min = std::numeric_limits<uint64_t>::lowest(), uint64_t max = std::numeric_limits<uint64_t>::max());
+  float getFloat(const std::string& key, float min = std::numeric_limits<float>::lowest(), float max = std::numeric_limits<float>::max());
+  double getDouble(const std::string& key, double min = std::numeric_limits<double>::lowest(), double max = std::numeric_limits<double>::max());
 
   enabled_t getOrDefaultEnabled(const std::string& key, enabled_t defaultValue);
   bool getOrDefaultBool(const std::string& key, bool defaultValue);
@@ -79,27 +80,27 @@ class ConfigParser {
   float getOrDefaultFloat(const std::string& key, float min, float max, float defaultValue);
   double getOrDefaultDouble(const std::string& key, double min, double max, double defaultValue);
 
-  bool tryGetInt(const std::string& key, int& value, int min = std::numeric_limits<int>::min(), int max = std::numeric_limits<int>::max());
+  bool tryGetInt(const std::string& key, int& value, int min = std::numeric_limits<int>::lowest(), int max = std::numeric_limits<int>::max());
   bool tryGetEnabled(const std::string& key, enabled_t& value);
   bool tryGetBool(const std::string& key, bool& value);
-  bool tryGetInt64(const std::string& key, int64_t& value, int64_t min = std::numeric_limits<int64_t>::min(), int64_t max = std::numeric_limits<int64_t>::max());
-  bool tryGetUInt64(const std::string& key, uint64_t& value, uint64_t min = std::numeric_limits<uint64_t>::min(), uint64_t max = std::numeric_limits<uint64_t>::max());
-  bool tryGetFloat(const std::string& key, float& value, float min = std::numeric_limits<float>::min(), float max = std::numeric_limits<float>::max());
-  bool tryGetDouble(const std::string& key, double& value, double min = std::numeric_limits<double>::min(), double max = std::numeric_limits<double>::max());
+  bool tryGetInt64(const std::string& key, int64_t& value, int64_t min = std::numeric_limits<int64_t>::lowest(), int64_t max = std::numeric_limits<int64_t>::max());
+  bool tryGetUInt64(const std::string& key, uint64_t& value, uint64_t min = std::numeric_limits<uint64_t>::lowest(), uint64_t max = std::numeric_limits<uint64_t>::max());
+  bool tryGetFloat(const std::string& key, float& value, float min = std::numeric_limits<float>::lowest(), float max = std::numeric_limits<float>::max());
+  bool tryGetDouble(const std::string& key, double& value, double min = std::numeric_limits<double>::lowest(), double max = std::numeric_limits<double>::max());
 
   std::vector<bool> getBools(const std::string& key);
-  std::vector<int> getInts(const std::string& key, int min = std::numeric_limits<int>::min(), int max = std::numeric_limits<int>::max());
-  std::vector<int64_t> getInt64s(const std::string& key, int64_t min = std::numeric_limits<int64_t>::min(), int64_t max = std::numeric_limits<int64_t>::max());
-  std::vector<uint64_t> getUInt64s(const std::string& key, uint64_t min = std::numeric_limits<uint64_t>::min(), uint64_t max = std::numeric_limits<uint64_t>::max());
-  std::vector<float> getFloats(const std::string& key, float min = std::numeric_limits<float>::min(), float max = std::numeric_limits<float>::max());
-  std::vector<double> getDoubles(const std::string& key, double min = std::numeric_limits<double>::min(), double max = std::numeric_limits<double>::max());
+  std::vector<int> getInts(const std::string& key, int min = std::numeric_limits<int>::lowest(), int max = std::numeric_limits<int>::max());
+  std::vector<int64_t> getInt64s(const std::string& key, int64_t min = std::numeric_limits<int64_t>::lowest(), int64_t max = std::numeric_limits<int64_t>::max());
+  std::vector<uint64_t> getUInt64s(const std::string& key, uint64_t min = std::numeric_limits<uint64_t>::lowest(), uint64_t max = std::numeric_limits<uint64_t>::max());
+  std::vector<float> getFloats(const std::string& key, float min = std::numeric_limits<float>::lowest(), float max = std::numeric_limits<float>::max());
+  std::vector<double> getDoubles(const std::string& key, double min = std::numeric_limits<double>::lowest(), double max = std::numeric_limits<double>::max());
 
   bool tryGetBools(const std::string& key, std::vector<bool>& values);
-  bool tryGetInts(const std::string& key, std::vector<int>& values, int min = std::numeric_limits<int>::min(), int max = std::numeric_limits<int>::max());
-  bool tryGetInt64s(const std::string& key, std::vector<int64_t>& values, int64_t min = std::numeric_limits<int64_t>::min(), int64_t max = std::numeric_limits<int64_t>::max());
-  bool tryGetUInt64s(const std::string& key, std::vector<uint64_t>& values, uint64_t min = std::numeric_limits<uint64_t>::min(), uint64_t max = std::numeric_limits<uint64_t>::max());
-  bool tryGetFloats(const std::string& key, std::vector<float>& values, float min = std::numeric_limits<float>::min(), float max = std::numeric_limits<float>::max());
-  bool tryGetDoubles(const std::string& key, std::vector<double>& values, double min = std::numeric_limits<double>::min(), double max = std::numeric_limits<double>::max());
+  bool tryGetInts(const std::string& key, std::vector<int>& values, int min = std::numeric_limits<int>::lowest(), int max = std::numeric_limits<int>::max());
+  bool tryGetInt64s(const std::string& key, std::vector<int64_t>& values, int64_t min = std::numeric_limits<int64_t>::lowest(), int64_t max = std::numeric_limits<int64_t>::max());
+  bool tryGetUInt64s(const std::string& key, std::vector<uint64_t>& values, uint64_t min = std::numeric_limits<uint64_t>::lowest(), uint64_t max = std::numeric_limits<uint64_t>::max());
+  bool tryGetFloats(const std::string& key, std::vector<float>& values, float min = std::numeric_limits<float>::lowest(), float max = std::numeric_limits<float>::max());
+  bool tryGetDoubles(const std::string& key, std::vector<double>& values, double min = std::numeric_limits<double>::lowest(), double max = std::numeric_limits<double>::max());
 
   bool tryGetNonNegativeIntDashedPairs(const std::string& key, std::vector<std::pair<int,int>>& pairs, int min1, int min2, int max1, int max2);
 
@@ -137,7 +138,7 @@ private:
   std::string lineAndFileInfo() const;
   std::string extractBaseDir(const std::string &fname);
 
-  bool parseKeyValue(const std::string& trimmedLine, std::string& key, std::string& value);
+  bool parseKeyValue(const std::string& trimmedLine, std::string& key, std::string& value) const;
 
   void validateValues(const std::string& key, const std::set<std::string>& possibles,
     const std::vector<std::string>& values) const;

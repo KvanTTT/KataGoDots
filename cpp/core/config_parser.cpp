@@ -1,6 +1,7 @@
 #include "../core/config_parser.h"
 
 #include "../core/fileutils.h"
+#include "../core/test.h"
 
 #include <fstream>
 #include <optional>
@@ -113,7 +114,7 @@ void ConfigParser::processIncludedFile(const std::string &fname) {
     baseDirs.pop_back();
 }
 
-bool ConfigParser::parseKeyValue(const std::string& trimmedLine, std::string& key, std::string& value) {
+bool ConfigParser::parseKeyValue(const std::string& trimmedLine, std::string& key, std::string& value) const {
   // Parse trimmed line, taking into account comments and quoting.
   key.clear();
   value.clear();
@@ -157,7 +158,7 @@ bool ConfigParser::parseKeyValue(const std::string& trimmedLine, std::string& ke
   // Skip equals sign
   bool foundEquals = false;
   if(i < trimmedLine.size()) {
-    assert(trimmedLine[i] == '=');
+    testAssert(trimmedLine[i] == '=');
     foundEquals = true;
     i++;
   }
@@ -459,14 +460,14 @@ void ConfigParser::warnUnusedKeys(ostream& out, Logger* logger) const {
   vector<string> unused = unusedKeys();
   vector<string> messages;
   if(unused.size() > 0) {
-    messages.push_back("--------------");
+    messages.emplace_back("--------------");
     messages.push_back("WARNING: Config had unused keys! You may have a typo, an option you specified is being unused from " + fileName);
   }
   for(size_t i = 0; i<unused.size(); i++) {
     messages.push_back("WARNING: Unused key '" + unused[i] + "' in " + fileName);
   }
   if(unused.size() > 0) {
-    messages.push_back("--------------");
+    messages.emplace_back("--------------");
   }
 
   if(logger) {
@@ -809,7 +810,7 @@ T ConfigParser::getOrError(const string& key, const T min, const T max, const st
     if (defaultValue.has_value()) {
       const auto value = defaultValue.value();
       if constexpr (std::is_arithmetic_v<T>) {
-        assert(min <= max && value >= min && value <= max);
+        testAssert(min <= max && value >= min && value <= max);
       }
       return value;
     }
@@ -835,7 +836,7 @@ T ConfigParser::parseOrError(const string& key, const string& str, const T min, 
     throw IOError("Could not parse '" + str + "' for key '" + key + "' in config file " + fileName);
 
   if constexpr (std::is_arithmetic_v<T>) {
-    assert(min <= max);
+    testAssert(min <= max);
 
     if constexpr (std::is_floating_point_v<T>) {
       if(std::isnan(x))
