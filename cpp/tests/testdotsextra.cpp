@@ -957,7 +957,7 @@ XO .  .  .  .  .  XO
     "No any captures and territory after grounding",
     R"(
 .  x  .  .
-x  .  O  .
+x  .  o  .
 x  .  x  .
 x  .  .  x
 .  x  x  .

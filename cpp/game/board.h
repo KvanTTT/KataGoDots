@@ -79,6 +79,7 @@ namespace Location
   int euclideanDistanceSquared(Loc loc0, Loc loc1, int x_size);
   int getGetBigJumpInitialIndex(Loc loc0, Loc loc1, int x_size);
   Loc getNextLocCW(Loc loc0, Loc loc1, int x_size);
+  int getNextLocCWIndex(Loc loc0, Loc loc1, int x_size);
 
   std::string toString(Loc loc, int x_size, int y_size, bool isDots);
   std::string toString(Loc loc, const Board& b);
@@ -305,6 +306,18 @@ struct Board
     f(loc + stride);
   }
 
+  template<typename Func> void forEachDiagAdjacent(const Loc loc, Func&& f) const {
+    const int stride = x_size + 1;
+    f(loc - stride - 1);
+    f(loc - stride);
+    f(loc - stride + 1);
+    f(loc - 1);
+    f(loc + 1);
+    f(loc + stride - 1);
+    f(loc + stride);
+    f(loc + stride + 1);
+  }
+
   double sqrtBoardArea() const;
 
   //Gets the number of stones of the chain at loc. Precondition: location must be black or white.
@@ -394,7 +407,7 @@ struct Board
   //Undo the move given by record. Moves MUST be undone in the order they were made.
   //Undos will NOT typically restore the precise representation in the board to the way it was. The heads of chains
   //might change, the order of the circular lists might change, etc.
-  void undo(MoveRecord& record);
+  void undo(const MoveRecord& record);
 
   //Get what the position hash would be if we were to play this move and resolve captures and suicides.
   //Assumes the move is on an empty location.
@@ -501,18 +514,187 @@ struct Board
 
   CapturesAndTerritoriesInfos* calculateCapturesAndTerritoriesColorsForDots() const;
 
-  //Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
+  struct LadderMoveInfo {
+    enum LadderMoveInfoType : uint8_t {
+      EMPTY,
+      LADDER,
+      CAPTURE,
+    };
+
+    static LadderMoveInfo createEmpty(const Player pla) {
+      return LadderMoveInfo(NULL_LOC, std::vector<Base>(), pla);
+    }
+
+    static LadderMoveInfo createLadder(const Loc workingMove, const std::vector<Base>& bases) {
+      assert(workingMove != Board::NULL_LOC);
+      return LadderMoveInfo(workingMove, bases, bases.back().pla);
+    }
+
+    static LadderMoveInfo createLadder(const Loc newWorkingMove, const LadderMoveInfo& oldLadderMoveInfo) {
+      return LadderMoveInfo(newWorkingMove, oldLadderMoveInfo);
+    }
+
+    static LadderMoveInfo createCapture(const std::vector<Base>& bases) {
+      return LadderMoveInfo(NULL_LOC, bases, bases.back().pla);
+    }
+    
+    void mergeWith(const Loc newWorkingMove, const std::vector<Base>& bases) {
+      assert(type == LADDER && workingMove == newWorkingMove);
+      handleBases(bases);
+    }
+
+    [[nodiscard]] bool isLadder(const Player pla) const {
+      return type == LADDER && player == pla;
+    }
+
+    [[nodiscard]] bool isLadderOrCapture(const Player pla) const {
+      return (type == LADDER || type == CAPTURE) && player == pla;
+    }
+
+    [[nodiscard]] bool containsCapturedLoc(const Loc loc) const {
+      return territoryLocs.find(loc) != territoryLocs.end();
+    }
+
+    [[nodiscard]] bool isWorseThan(const LadderMoveInfo* other) const {
+      if (other == nullptr) return true;
+
+      if (territoryLocs.size() < other->territoryLocs.size()) return true;
+
+      return false;
+    }
+
+    LadderMoveInfoType type;
+    Color player;
+    Loc workingMove;
+    std::unordered_set<Loc> territoryLocs;
+
+  private:
+    explicit LadderMoveInfo(const Loc newWorkingMove, const LadderMoveInfo& oldLadderMoveInfo) {
+      assert(oldLadderMoveInfo.type == LADDER || oldLadderMoveInfo.type == CAPTURE);
+      type = LADDER;
+      player = oldLadderMoveInfo.player;
+      workingMove = newWorkingMove;
+      territoryLocs = oldLadderMoveInfo.territoryLocs;
+    }
+
+    explicit LadderMoveInfo(const Loc newWorkingMove, const std::vector<Base>& newBases, const Player newPlayer) {
+      workingMove = newWorkingMove;
+
+      if (newBases.empty()) {
+        type = EMPTY;
+        assert(newWorkingMove == NULL_LOC);
+      } else {
+        type = newWorkingMove != NULL_LOC ? LADDER : CAPTURE;
+        assert(newPlayer == newBases.back().pla);
+      }
+      player = newPlayer;
+
+      handleBases(newBases);
+    }
+
+    void handleBases(const std::vector<Base>& newBases) {
+      for (const Base& base : newBases) {
+        assert(player == base.pla);
+
+        for (const auto& rollbackLocStateCapture : base.rollback_locs_states_captures) {
+          /*auto [it, inserted] =*/ territoryLocs.insert(rollbackLocStateCapture.getLoc());
+          //assert(inserted);
+        }
+      }
+    }
+  };
+
+  class LaddersCache {
+  public:
+    const LadderMoveInfo* put(const Hash128& field_hash, const LadderMoveInfo& value) {
+      const Hash128 field_with_player_hash = field_hash ^ ZOBRIST_PLAYER_HASH[value.player];
+      auto [it, inserted] = data_.insert_or_assign(field_with_player_hash, value);
+      //assert(inserted);
+      return &it->second;
+    }
+
+    [[nodiscard]] const LadderMoveInfo* get(const Hash128& field_hash, const Player pla) {
+      const Hash128 field_with_player_hash = field_hash ^ ZOBRIST_PLAYER_HASH[pla];
+      const auto it = data_.find(field_with_player_hash);
+      if (it == data_.end()) {
+        return nullptr;
+      }
+      cacheHits++;
+      return &it->second;
+    }
+
+    uint16_t incMovesCount() { return ++movesCounter; }
+    [[nodiscard]] uint16_t getMovesCount() const { return movesCounter; }
+    [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
+    void clearMaxDepth() { maxDepth = 0; }
+    void recalcMaxDepth(const int currentDepth) {
+      if (currentDepth > maxDepth) {
+        maxDepth = currentDepth;
+      }
+    }
+    [[nodiscard]] uint16_t getCacheHits() const { return cacheHits; }
+    [[nodiscard]] size_t getCacheSize() const { return data_.size(); }
+
+    void clear() { data_.clear(); }
+
+  private:
+    std::unordered_map<Hash128, LadderMoveInfo, Hash128Hash> data_;
+    uint16_t movesCounter = 0;
+    uint16_t maxDepth = 0;
+    uint16_t cacheHits = 0;
+  };
+
+  std::vector<const LadderMoveInfo*> iterDotsLadders(LaddersCache &cachedLadderMoveInfos);
+
+  const LadderMoveInfo* ladderStart(Loc initLoc, Player pla, LaddersCache& cache);
+
+  static void cleanUpChainAndAdjLocs(std::unordered_set<short>& chainLocs, std::unordered_set<short>& chainAdjLocs,
+                              const std::vector<short>& chainNewLocs, const std::vector<short>& chainAdjNewLocs);
+
+  static bool ladderIsRelevantCapturing(const MoveRecord& moveRecord, Loc initLoc, Player pla, int depth, std::unordered_set<Loc>& oppInitCaptures);
+
+  bool ladderIsRelevantLadderLoc(Loc loc, Player pla, bool oneMoveCapturing,
+                                 std::unordered_set<Loc>& chainLocs) const;
+
+  const LadderMoveInfo* ladderIterPla(Loc initLoc, Loc loc, Loc prevLoc, Player pla,
+                                      uint16_t depth, std::unordered_set<Loc> &plaChainLocs, std::unordered_set<short>& plaChainAdjLocs, std::unordered_set<
+                                      short>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersCache &cache);
+
+  const LadderMoveInfo* ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Loc prevPrevLoc, Player pla,
+                                          uint16_t depth, std::unordered_set<Loc>& plaChainLocs, std::unordered_set<short>& plaChainAdjLocs, std::unordered_set<
+                                          short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersCache& cache);
+
+  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Loc prevPrevLoc, Player pla, uint16_t depth, std::unordered_set<Loc> &plaChainLocs, std::unordered_set<short>&
+                                      plaChainAdjLocs, std::unordered_set<short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersCache& cache);
+
+  void appendAllDiagonallyConnectedDots(Loc loc, Player pla, std::unordered_set<Loc> &chain, std::unordered_set<short>& chainAdjLocs, std::vector<Loc>& newChainLocs, std
+                                        ::vector<short>& newAdjLocs);
+
+  // Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
   //For the moment, only used in testing since it does extra consistency checks.
   //If we need a version to be used in "prod", we could make an efficient version maybe as operator==.
   bool isEqualForTesting(const Board& other, bool checkNumCaptures = true, bool checkSimpleKo = true, bool checkRules = true) const;
 
   static Board parseBoard(int xSize, int ySize, const std::string& s, const Rules& rules = Rules::DEFAULT_GO, char lineDelimiter = '\n');
-  std::string toString() const;
-  static void printBoard(std::ostream& out, const Board& board, Loc markLoc, const std::vector<Move>* hist, bool printHash = true);
+  std::string toString(bool startFromLeftTopZero = false) const;
+  static void printBoard(std::ostream& out, const Board& board, Loc markLoc, const std::vector<Move>* hist, bool printHash = true, bool
+                         startFromLeftTopZero = false);
   static std::string toStringSimple(const Board& board, char lineDelimiter = '\n');
   static nlohmann::json toJson(const Board& board);
   static Board ofJson(const nlohmann::json& data);
+
+  // Method to make debugging more convenient
+  std::string debugLoc(Loc loc) const;
+
+  std::string debugLocsVector(const std::vector<short> &locs) const;
+
+  std::string debugLocsSet(const std::unordered_set<short> &locs) const;
+
+  std::string debugBaseLocs(const Base& base) const;
+
+  template<class Container>
+  std::string debugLocs(const Container &locs) const;
 
   //Data--------------------------------------------
 
@@ -563,7 +745,7 @@ struct Board
   void playMoveAssumeLegalDots(Loc loc, Player pla);
   MoveRecord playMoveRecordedDots(Loc loc, Player pla);
   MoveRecord tryPlayMoveRecordedDots(Loc loc, Player pla, bool isSuicideLegal);
-  void undoDots(MoveRecord& moveRecord);
+  void undoDots(const MoveRecord& moveRecord);
   std::vector<short> fillGrounding(Loc loc);
   // We need to finish marking grounded locations
   // Because in rare cases a grounding wave doesn't traverse all necessary locs:
@@ -596,7 +778,7 @@ struct Board
     Player currentPla,
     Loc addLoc1,
     Loc addLoc2) const;
-  Color getColorsOfPotentialCapturing(Loc loc) const;
+  Color getColorsOfPotentialCapturing(Loc loc, int minNumberOfConnections = 2) const;
   void tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
   void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, int &numCapturedDots, int &numFreedDots) const;
   void updateStatesAndAppendBase(
