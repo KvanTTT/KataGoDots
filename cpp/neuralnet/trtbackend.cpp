@@ -314,12 +314,12 @@ struct ModelParser {
         ));
     }
 
-    if(nnXLen > NNPos::MAX_BOARD_LEN)
+    if(nnXLen > NNPos::MAX_BOARD_LEN_X)
       throw StringError(
-        Global::strprintf("nnXLen (%d) is greater than NNPos::MAX_BOARD_LEN (%d)", nnXLen, NNPos::MAX_BOARD_LEN));
-    if(nnYLen > NNPos::MAX_BOARD_LEN)
+        Global::strprintf("nnXLen (%d) is greater than NNPos::MAX_BOARD_LEN_X (%d)", nnXLen, NNPos::MAX_BOARD_LEN_X));
+    if(nnYLen > NNPos::MAX_BOARD_LEN_Y)
       throw StringError(
-        Global::strprintf("nnYLen (%d) is greater than NNPos::MAX_BOARD_LEN (%d)", nnYLen, NNPos::MAX_BOARD_LEN));
+        Global::strprintf("nnYLen (%d) is greater than NNPos::MAX_BOARD_LEN_Y (%d)", nnYLen, NNPos::MAX_BOARD_LEN_Y));
 
     inputMask = network->addInput("InputMask", DataType::kFLOAT, {4, {-1, 1, nnYLen, nnXLen}});
     inputMask->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
@@ -1824,12 +1824,12 @@ struct InputBuffers {
   InputBuffers(const LoadedModel* loadedModel, int maxBatchSz, int nnXLen, int nnYLen) {
     const ModelDesc& m = loadedModel->modelDesc;
 
-    if(nnXLen > NNPos::MAX_BOARD_LEN)
+    if(nnXLen > NNPos::MAX_BOARD_LEN_X)
       throw StringError(
-        Global::strprintf("nnXLen (%d) is greater than NNPos::MAX_BOARD_LEN (%d)", nnXLen, NNPos::MAX_BOARD_LEN));
-    if(nnYLen > NNPos::MAX_BOARD_LEN)
+        Global::strprintf("nnXLen (%d) is greater than NNPos::MAX_BOARD_LEN_X (%d)", nnXLen, NNPos::MAX_BOARD_LEN_X));
+    if(nnYLen > NNPos::MAX_BOARD_LEN_Y)
       throw StringError(
-        Global::strprintf("nnYLen (%d) is greater than NNPos::MAX_BOARD_LEN (%d)", nnYLen, NNPos::MAX_BOARD_LEN));
+        Global::strprintf("nnYLen (%d) is greater than NNPos::MAX_BOARD_LEN_Y (%d)", nnYLen, NNPos::MAX_BOARD_LEN_Y));
 
     maxBatchSize = maxBatchSz;
     singleMaskElts = nnXLen * nnYLen;

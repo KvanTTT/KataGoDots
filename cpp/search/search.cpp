@@ -287,8 +287,8 @@ void Search::setNNEval(NNEvaluator* nnEval) {
   nnEvaluator = nnEval;
   nnXLen = nnEval->getNNXLen();
   nnYLen = nnEval->getNNYLen();
-  testAssert(nnXLen > 0 && nnXLen <= NNPos::MAX_BOARD_LEN);
-  testAssert(nnYLen > 0 && nnYLen <= NNPos::MAX_BOARD_LEN);
+  testAssert(nnXLen > 0 && nnXLen <= NNPos::MAX_BOARD_LEN_X);
+  testAssert(nnYLen > 0 && nnYLen <= NNPos::MAX_BOARD_LEN_Y);
   policySize = NNPos::getPolicySize(nnXLen,nnYLen);
 
   if(humanEvaluator != NULL) {

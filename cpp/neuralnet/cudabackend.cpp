@@ -2975,13 +2975,13 @@ struct Model {
     usingNHWC(useNHWC),
     inputsUsingNHWC(inputsUseNHWC)
   {
-    if(nnXLen > NNPos::MAX_BOARD_LEN)
-      throw StringError(Global::strprintf("nnXLen (%d) is greater than NNPos::MAX_BOARD_LEN (%d)",
-        nnXLen, NNPos::MAX_BOARD_LEN
+    if(nnXLen > NNPos::MAX_BOARD_LEN_X)
+      throw StringError(Global::strprintf("nnXLen (%d) is greater than NNPos::MAX_BOARD_LEN_X (%d)",
+        nnXLen, NNPos::MAX_BOARD_LEN_X
       ));
-    if(nnYLen > NNPos::MAX_BOARD_LEN)
-      throw StringError(Global::strprintf("nnYLen (%d) is greater than NNPos::MAX_BOARD_LEN (%d)",
-        nnYLen, NNPos::MAX_BOARD_LEN
+    if(nnYLen > NNPos::MAX_BOARD_LEN_Y)
+      throw StringError(Global::strprintf("nnYLen (%d) is greater than NNPos::MAX_BOARD_LEN_Y (%d)",
+        nnYLen, NNPos::MAX_BOARD_LEN_Y
       ));
 
     int numFeatures = NNModelVersion::getNumSpatialFeatures(modelVersion, desc->isDotsGame);
