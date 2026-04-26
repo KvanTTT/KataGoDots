@@ -672,6 +672,7 @@ enable_testing()
 
 add_executable(katago_tests
   # Test sources
+  tests/testdotsladders.cpp
   tests/testdotsutils.cpp
 
   # Project sources needed by the tests
