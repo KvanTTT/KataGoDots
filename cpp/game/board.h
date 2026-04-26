@@ -650,19 +650,27 @@ struct Board
   bool ladderIsRelevantLadderLoc(Loc loc, Player pla, bool oneMoveCapturing,
                                  std::unordered_set<Loc>& chainLocs) const;
 
-  const LadderMoveInfo* ladderIterPla(Loc initLoc, Loc loc, Loc prevLoc, Player pla,
-                                      uint16_t depth, std::unordered_set<Loc> &plaChainLocs, std::unordered_set<short>& plaChainAdjLocs, std::unordered_set<
-                                      short>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersCache &cache);
+  const LadderMoveInfo* ladderIterPla(Loc initLoc, Player pla, std::vector<Loc>& movesSequence,
+                                      std::unordered_set<Loc>& plaChainLocs,
+                                      std::unordered_set<Loc>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures,
+                                      LaddersCache &cache);
 
-  const LadderMoveInfo* ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Loc prevPrevLoc, Player pla,
-                                          uint16_t depth, std::unordered_set<Loc>& plaChainLocs, std::unordered_set<short>& plaChainAdjLocs, std::unordered_set<
-                                          short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersCache& cache);
+  const LadderMoveInfo* ladderIterAdjLocs(Loc initLoc, Loc loc, Player pla,
+                                          std::vector<short>& movesSequence, std::unordered_set<Loc>& plaChainLocs,
+                                          std::unordered_set<Loc>& plaChainAdjLocs, std::unordered_set<Loc>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs,
+                                          std::unordered_set<Loc>& oppInitCaptures, LaddersCache& cache);
 
-  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Loc prevPrevLoc, Player pla, uint16_t depth, std::unordered_set<Loc> &plaChainLocs, std::unordered_set<short>&
-                                      plaChainAdjLocs, std::unordered_set<short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersCache& cache);
+  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Player pla, Loc potentiallyDefendingLoc, std::vector<Loc>& movesSequence,
+                                      std::unordered_set<Loc> &plaChainLocs, std::unordered_set<Loc>& plaChainAdjLocs,
+                                      std::unordered_set<Loc>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures,
+                                      LaddersCache& cache);
 
-  void appendAllDiagonallyConnectedDots(Loc loc, Player pla, std::unordered_set<Loc> &chain, std::unordered_set<short>& chainAdjLocs, std::vector<Loc>& newChainLocs, std
-                                        ::vector<short>& newAdjLocs);
+  void appendAllDiagonallyConnectedDots(Loc loc, Player pla,
+    std::unordered_set<Loc> &chain, std::unordered_set<short>& chainAdjLocs,
+    std::vector<Loc>& newChainLocs, std::vector<short>& newAdjLocs);
+
+  std::unordered_set<short> getAdjLocsForAllDiagonallyConnected(Loc loc, Player pla, std::unordered_set<short>& chain,
+                                                                std::vector<short>& newChainLocs);
 
   // Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;

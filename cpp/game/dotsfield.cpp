@@ -1415,29 +1415,41 @@ vector<const Board::LadderMoveInfo*> Board::iterDotsLadders(LaddersCache& cached
 
 const Board::LadderMoveInfo* Board::ladderStart(const Loc initLoc, const Player pla, LaddersCache& cache) {
   unordered_set<Loc> plaChainLocs;
-  unordered_set<Loc> plaChainAdjLocs;
   unordered_set<Loc> oppChainLocs;
   unordered_set<Loc> oppChainAdjLocs;
   unordered_set<Loc> oppInitCaptures;
+  vector<Loc> movesSequence;
   Loc oppInitCapture = NULL_LOC;
 
-  return ladderIterPla(initLoc, initLoc, NULL_LOC, pla, 1,
-                       plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
+  return ladderIterPla(initLoc, pla, movesSequence, plaChainLocs, oppChainLocs,
+                       oppChainAdjLocs, oppInitCaptures, cache);
 }
 
-const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc loc, const Loc prevLoc,
-                                                  const Player pla, const uint16_t depth,
-                                                  unordered_set<Loc>& plaChainLocs, unordered_set<Loc>& plaChainAdjLocs,
+const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Player pla, vector<Loc>& movesSequence,
+                                                  unordered_set<Loc>& plaChainLocs,
                                                   unordered_set<Loc>& oppChainLocs, unordered_set<Loc>& oppChainAdjLocs,
                                                   unordered_set<Loc>& oppInitCaptures,
                                                   LaddersCache& cache) {
-  const MoveRecord moveRecordForLoc = playMoveRecordedDots(loc, pla);
+  vector<Loc> plaChainAdjNewLocs;
+  unordered_set<Loc> movesToCheck;
+
+  if (movesSequence.empty()) {
+    movesToCheck = getAdjLocsForAllDiagonallyConnected(initLoc, pla, plaChainLocs, plaChainAdjNewLocs);
+  } else {
+
+  }
+
+  for (Loc movesToCheck : movesToCheck) {
+
+  }
+
+  const MoveRecord moveRecordForLoc = playMoveRecordedDots(movesSequence, pla);
   cache.recalcMaxDepth(depth);
   cache.incMovesCount();
 
   if (const LadderMoveInfo* calculatedResult = cache.get(pos_hash, pla); calculatedResult != nullptr) {
-    auto* result = calculatedResult->type == LadderMoveInfo::LADDER && calculatedResult->workingMove != loc
-      ? cache.put(pos_hash, LadderMoveInfo::createLadder(loc, *calculatedResult))
+    auto* result = calculatedResult->type == LadderMoveInfo::LADDER && calculatedResult->workingMove != movesSequence
+      ? cache.put(pos_hash, LadderMoveInfo::createLadder(movesSequence, *calculatedResult))
       : calculatedResult;
     undoDots(moveRecordForLoc);
     return result;
@@ -1449,10 +1461,6 @@ const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc l
     return result;
   }
 
-  vector<Loc> plaChainNewLocs;
-  vector<Loc> plaChainAdjNewLocs;
-  appendAllDiagonallyConnectedDots(loc, pla, plaChainLocs, plaChainAdjLocs, plaChainNewLocs, plaChainAdjNewLocs);
-
   auto worstResult = LadderMoveInfo::createEmpty(pla);
 
   for (const Loc plaChainAdjLoc : plaChainAdjLocs) {
@@ -1463,11 +1471,11 @@ const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc l
     const MoveRecord secondMoveRecord = playMoveRecordedDots(plaChainAdjLoc, pla);
     cache.incMovesCount();
 
-    bool potentialCapturingIsFound = ladderIsRelevantCapturing(secondMoveRecord, initLoc, pla, depth + 1, oppInitCaptures);
+    bool potentialCapturingIsFound = ladderIsRelevantCapturing(secondMoveRecord, initLoc, pla, movesSequence.size() + 1, oppInitCaptures);
     undoDots(secondMoveRecord);
 
     if (potentialCapturingIsFound) {
-      if (const LadderMoveInfo* adjLocLadderMoveInfo = ladderIterOpp(initLoc, plaChainAdjLoc, loc, prevLoc, pla, depth + 1,
+      if (const LadderMoveInfo* adjLocLadderMoveInfo = ladderIterOpp(initLoc, plaChainAdjLoc, movesSequence, prevLoc, pla, movesSequence.size() + 1,
         plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
           adjLocLadderMoveInfo != nullptr &&
           adjLocLadderMoveInfo->isLadderOrCapture(pla)
@@ -1475,9 +1483,9 @@ const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc l
         // TODO: implement more robust comparison
         if (worstResult.type == LadderMoveInfo::EMPTY || adjLocLadderMoveInfo->territoryLocs.size() < worstResult.territoryLocs.size()) {
           if (adjLocLadderMoveInfo->isLadder(pla)) {
-            worstResult = LadderMoveInfo::createLadder(loc, secondMoveRecord.bases);
+            worstResult = LadderMoveInfo::createLadder(movesSequence, secondMoveRecord.bases);
           } else {
-            worstResult = LadderMoveInfo::createLadder(loc, *adjLocLadderMoveInfo);
+            worstResult = LadderMoveInfo::createLadder(movesSequence, *adjLocLadderMoveInfo);
           }
         }
       }
@@ -1491,8 +1499,8 @@ const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc l
   return result;
 }
 
-const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc loc, Loc prevLoc, Loc prevPrevLoc,
-                                                  const Player pla, const uint16_t depth, unordered_set<Loc>& plaChainLocs, unordered_set<Loc>& plaChainAdjLocs,
+const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Player pla, const Loc potentiallyDefendingLoc,
+                                                  vector<Loc>& movesSequence, unordered_set<Loc>& plaChainLocs, unordered_set<Loc>& plaChainAdjLocs,
                                                   unordered_set<Loc>& oppChainLocs, unordered_set<Loc>& oppChainAdjLocs, unordered_set<Loc>& oppInitCaptures, LaddersCache& cache
 ) {
   const Player opp = getOpp(pla);
@@ -1501,7 +1509,7 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
 
   // Try capturing part of pla surrounding at first.
   assert(!oppInitCaptures.empty());
-  if (depth == 2) {
+  if (movesSequence.size() == 2) {
     oppChainLocs.clear();
     oppChainAdjLocs.clear();
     vector<Loc> oppChainNewLocs;
@@ -1518,9 +1526,7 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
     cache.incMovesCount();
 
     for (const Base& base : potentialDefendCapturingMoveRecord.bases) {
-      assert(base.pla == opp);
-      if (base.type == Base::Type::EMPTY) continue;
-      assert(base.type == Base::Type::NORMAL);
+      if (base.type != Base::Type::NORMAL) continue;
 
       bool potentialDefendCaptureMoveIsFound = false;
       for (const auto& rollback_locs_states_capture: base.rollback_locs_states_captures) {
@@ -1537,7 +1543,7 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
 
         // Try to continue the ladder
         const LadderMoveInfo* foundLadderFromOppCaptureMoveOrNull =
-          ladderIterAdjLocs(initLoc, oppChainAdjLoc, loc, prevLoc, pla, depth, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
+          ladderIterAdjLocs(initLoc, oppChainAdjLoc, potentiallyDefendingLoc, movesSequence, pla, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
 
         if (foundLadderFromOppCaptureMoveOrNull != nullptr && foundLadderFromOppCaptureMoveOrNull->isLadderOrCapture(pla)) {
           if (foundLadderFromOppCaptureMoveOrNull->isWorseThan(worstFoundLadderOrCaptureOrNull)) {
@@ -1557,17 +1563,17 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
   }
 
   // Try defending at second
-  const MoveRecord& defendMove = playMoveRecordedDots(loc, opp);
+  const MoveRecord& defendMove = playMoveRecordedDots(potentiallyDefendingLoc, opp);
 
   vector<Loc> oppChainNewLocs;
   vector<Loc> oppChainNewAdjLocs;
-  appendAllDiagonallyConnectedDots(loc, opp, oppChainLocs, oppChainAdjLocs, oppChainNewLocs, oppChainNewAdjLocs);
+  appendAllDiagonallyConnectedDots(potentiallyDefendingLoc, opp, oppChainLocs, oppChainAdjLocs, oppChainNewLocs, oppChainNewAdjLocs);
 
   cache.recalcMaxDepth(depth);
   cache.incMovesCount();
 
   if (const LadderMoveInfo* foundLadderFromDefendMoveOrNull =
-    ladderIterAdjLocs(initLoc, loc, prevLoc, prevPrevLoc, pla, depth, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
+    ladderIterAdjLocs(initLoc, potentiallyDefendingLoc, movesSequence, pla, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
     foundLadderFromDefendMoveOrNull != nullptr && foundLadderFromDefendMoveOrNull->isLadderOrCapture(pla)
   ) {
     if (foundLadderFromDefendMoveOrNull->isWorseThan(worstFoundLadderOrCaptureOrNull)) {
@@ -1587,15 +1593,10 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
 const Board::LadderMoveInfo* Board::ladderIterAdjLocs(
   const Loc initLoc,
   const Loc loc,
-  const Loc prevLoc,
-  const Loc prevPrevLoc,
   const Player pla,
-  const uint16_t depth,
-  unordered_set<Loc>& plaChainLocs,
-  unordered_set<Loc>& plaChainAdjLocs,
-  unordered_set<Loc>& oppChainLocs,
-  unordered_set<Loc>& oppChainAdjLocs,
-  unordered_set<Loc>& oppInitCaptures,
+  vector<Loc>& movesSequence,
+  unordered_set<Loc>& plaChainLocs, unordered_set<Loc>& plaChainAdjLocs,
+  unordered_set<Loc>& oppChainLocs, unordered_set<Loc>& oppChainAdjLocs, unordered_set<Loc>& oppInitCaptures,
   LaddersCache& cache
 ) {
   array<Loc, 16> actualLocs{};
@@ -1625,10 +1626,39 @@ const Board::LadderMoveInfo* Board::ladderIterAdjLocs(
     const Loc actualLoc = actualLocs[i];
 
     if (const LadderMoveInfo* ladderMoveInfoAtAdjLoc =
-          ladderIterPla(initLoc, actualLoc, prevLoc, pla, depth + 1, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
+          ladderIterPla(initLoc, actualLoc, pla, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
       ladderMoveInfoAtAdjLoc->isLadderOrCapture(pla)
     ) {
       return ladderMoveInfoAtAdjLoc;
+    }
+  }
+
+  return nullptr;
+}
+
+const unordered_set<Loc> Board::getRelevantLocsToCheck(
+  const Player pla, vector<Loc>& movesSequence
+) {
+  array<Loc, 16> actualLocs{};
+  int actualLocsSize = 0;
+
+  for (const int adj_offset : adj_offsets) {
+    const Loc adjLoc = static_cast<Loc>(loc + adj_offset);
+    if (ladderIsRelevantLadderLoc(adjLoc, pla, false, plaChainLocs)) {
+      actualLocs[actualLocsSize++] = adjLoc;
+    }
+  }
+
+  for (const int adj_offset : adj_offsets) {
+    const Loc adjPrevLoc = static_cast<Loc>(prevLoc + adj_offset);
+
+    if (const auto end = actualLocs.begin() + actualLocsSize;
+      std::find(actualLocs.begin(), end, adjPrevLoc) != end) {
+      continue;
+      }
+
+    if (ladderIsRelevantLadderLoc(adjPrevLoc, pla, false, plaChainLocs)) {
+      actualLocs[actualLocsSize++] = adjPrevLoc;
     }
   }
 
@@ -1643,9 +1673,7 @@ bool Board::ladderIsRelevantCapturing(const MoveRecord& moveRecord, const Loc in
   }
 
   for (const Base& base : moveRecord.bases) {
-    assert(base.pla == pla);
-    if (base.type == Base::Type::EMPTY) continue;
-    assert(base.type == Base::Type::NORMAL);
+    if (base.type != Base::Type::NORMAL) continue;
 
     if (!contains(base.surrounding_locs, initLoc)) continue; // Init loc is expected to be contained
 
@@ -1671,13 +1699,7 @@ bool Board::ladderIsRelevantCapturing(const MoveRecord& moveRecord, const Loc in
 }
 
 bool Board::ladderIsRelevantLadderLoc(const Loc loc, const Player pla, const bool oneMoveCapturing, unordered_set<Loc>& chainLocs) const {
-  const State state = getState(loc);
-  if (getActiveColor(state) != C_EMPTY) {
-    return false;
-  }
-  if (const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
-    emptyTerritoryColor == pla || (emptyTerritoryColor != C_EMPTY && !wouldBeCaptureDots(loc, pla))
-  ) {
+  if (getColor(loc) != C_EMPTY) {
     return false;
   }
 
@@ -1746,6 +1768,40 @@ void Board::appendAllDiagonallyConnectedDots(const Loc loc, const Player pla,
       }
     }
   }
+}
+
+unordered_set<Loc> Board::getAdjLocsForAllDiagonallyConnected(const Loc loc, const Player pla,
+                                                              unordered_set<Loc>& chain, vector<Loc>& newChainLocs
+) {
+  walkStack.clear();
+  walkStack.push_back(loc);
+
+  unordered_set<Loc> newAdjLocs;
+
+  while (!walkStack.empty()) {
+    const Loc currentLoc = walkStack.back();
+    walkStack.pop_back();
+
+    if (const State adjState = getState(currentLoc); getActiveColor(adjState) == pla && !isTerritory(adjState) && chain.find(currentLoc) == chain.end()) {
+      chain.insert(currentLoc);
+      newChainLocs.push_back(currentLoc);
+
+      for (const short adj_offset_for_adj_loc : adj_offsets) {
+        if (const Loc adjLocForChainLoc = static_cast<Loc>(currentLoc + adj_offset_for_adj_loc);
+          newAdjLocs.find(adjLocForChainLoc) == newAdjLocs.end() &&
+          ladderIsRelevantLadderLoc(adjLocForChainLoc, pla, true, chain)
+        ) {
+          newAdjLocs.insert(adjLocForChainLoc);
+        }
+      }
+
+      for (const short adj_offset : adj_offsets) {
+        walkStack.push_back(static_cast<Loc>(currentLoc + adj_offset));
+      }
+    }
+  }
+
+  return newAdjLocs;
 }
 
 void Board::cleanUpChainAndAdjLocs(unordered_set<Loc>& chainLocs, unordered_set<Loc>& chainAdjLocs, const vector<Loc>& chainNewLocs, const vector<Loc>& chainAdjNewLocs) {
