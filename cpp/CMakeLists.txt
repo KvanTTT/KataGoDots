@@ -655,3 +655,46 @@ if(NOT "${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
     COMMENT "Copying executable to cpp directory"
   )
 endif()
+
+# --------------------------- GOOGLE TEST -----------------------------------------------------------------------
+
+include(FetchContent)
+FetchContent_Declare(
+googletest
+GIT_REPOSITORY https://github.com/google/googletest.git
+GIT_TAG v1.17.0
+)
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+
+add_executable(katago_tests
+  # Test sources
+  tests/testdotsutils.cpp
+
+  # Project sources needed by the tests
+  core/global.cpp
+  core/bsearch.cpp
+  core/hash.cpp
+  core/rand.cpp
+  core/md5.cpp
+  core/sha2.cpp
+  core/mainargs.cpp
+  core/timer.cpp
+  core/datetime.cpp
+
+  game/board.cpp
+  game/boardhistory.cpp
+  game/rules.cpp
+  game/dotsfield.cpp
+  game/dotsboardhistory.cpp
+)
+
+target_include_directories(katago_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(katago_tests PRIVATE GTest::gtest_main)
+
+include(GoogleTest)
+gtest_discover_tests(katago_tests)
+
