@@ -394,7 +394,7 @@ struct Board
   //Undo the move given by record. Moves MUST be undone in the order they were made.
   //Undos will NOT typically restore the precise representation in the board to the way it was. The heads of chains
   //might change, the order of the circular lists might change, etc.
-  void undo(MoveRecord& record);
+  void undo(const MoveRecord& record);
 
   //Get what the position hash would be if we were to play this move and resolve captures and suicides.
   //Assumes the move is on an empty location.
@@ -501,18 +501,30 @@ struct Board
 
   CapturesAndTerritoriesInfos* calculateCapturesAndTerritoriesColorsForDots() const;
 
-  //Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
+  // Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
   //For the moment, only used in testing since it does extra consistency checks.
   //If we need a version to be used in "prod", we could make an efficient version maybe as operator==.
   bool isEqualForTesting(const Board& other, bool checkNumCaptures = true, bool checkSimpleKo = true, bool checkRules = true) const;
 
   static Board parseBoard(int xSize, int ySize, const std::string& s, const Rules& rules = Rules::DEFAULT_GO, char lineDelimiter = '\n');
-  static void printBoard(std::ostream& out, const Board& board, Loc markLoc, const std::vector<Move>* hist, bool printHash = true);
-  std::string toString() const;
+  static void printBoard(std::ostream& out, const Board& board, Loc markLoc, const std::vector<Move>* hist, bool printHash = true, bool startFromLeftTopZero = false);
+  std::string toString(bool startFromLeftTopZero = false) const;
   static std::string toStringSimple(const Board& board, char lineDelimiter = '\n');
   static nlohmann::json toJson(const Board& board);
   static Board ofJson(const nlohmann::json& data);
+
+  // Method to make debugging more convenient
+  std::string debugLoc(Loc loc) const;
+
+  std::string debugLocsVector(const std::vector<short> &locs) const;
+
+  std::string debugLocsSet(const std::unordered_set<short> &locs) const;
+
+  std::string debugBaseLocs(const Base& base) const;
+
+  template<class Container>
+  std::string debugLocs(const Container &locs) const;
 
   //Data--------------------------------------------
 
@@ -563,7 +575,7 @@ struct Board
   void playMoveAssumeLegalDots(Loc loc, Player pla);
   MoveRecord playMoveRecordedDots(Loc loc, Player pla);
   MoveRecord tryPlayMoveRecordedDots(Loc loc, Player pla, bool isSuicideLegal);
-  void undoDots(MoveRecord& moveRecord);
+  void undoDots(const MoveRecord& moveRecord);
   std::vector<short> fillGrounding(Loc loc);
   // We need to finish marking grounded locations
   // Because in rare cases a grounding wave doesn't traverse all necessary locs:

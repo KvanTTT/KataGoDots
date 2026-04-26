@@ -369,6 +369,23 @@ string Global::trim(const std::string &s, const char* delims)
   return s.substr(p1,(p2-p1)+1);
 }
 
+std::string Global::trimMultiline(const std::string& s, const char* delims) {
+  std::string result;
+  std::istringstream stream(s);
+  std::string line;
+  bool first = true;
+  while(std::getline(stream, line)) {
+    std::string trimmed = trim(line, delims);
+    if(trimmed.empty())
+      continue;
+    if(!first)
+      result += '\n';
+    result += trimmed;
+    first = false;
+  }
+  return result;
+}
+
 vector<string> Global::split(const string& s)
 {
   istringstream in(s);

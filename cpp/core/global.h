@@ -96,6 +96,7 @@ namespace Global
 
   //Trim whitespace off both ends of string
   std::string trim(const std::string& s, const char* delims = " \t\r\n\v\f");
+  std::string trimMultiline(const std::string& s, const char* delims = " \t\r\n\v\f");
 
   //Join strings with a delimiter between each one, from [start,end)
   std::string concat(const char* const* strs, size_t len, const char* delim);

@@ -910,7 +910,7 @@ Board::MoveRecord Board::playMoveRecorded(const Loc loc, const Player pla) {
 //Undo the move given by record. Moves MUST be undone in the order they were made.
 //Undos will NOT typically restore the precise representation in the board to the way it was. The heads of chains
 //might change, the order of the circular lists might change, etc.
-void Board::undo(MoveRecord& record)
+void Board::undo(const MoveRecord& record)
 {
   if (rules.isDots) {
     undoDots(record);
@@ -2658,7 +2658,7 @@ string Location::toStringMach(const Loc loc, const int x_size, const bool isDots
   if (loc == Board::RESIGN_LOC)
     return RESIGN_STR;
   if(loc == Board::NULL_LOC)
-    return string("null");
+    return "null";
   char buf[128];
   sprintf(buf, "(%d,%d)", getX(loc, x_size), getY(loc, x_size));
   return string(buf);
@@ -2812,7 +2812,9 @@ void Board::printBoard(
   const Board& board,
   const Loc markLoc,
   const vector<Move>* hist,
-  const bool printHash) {
+  const bool printHash,
+  const bool startFromLeftTopZero
+  ) {
   if(hist != nullptr)
     out << "MoveNum: " << hist->size() << " ";
   if(printHash) {
@@ -2826,7 +2828,8 @@ void Board::printBoard(
     if(board.isDots()) {
       out << "   ";
       for(int x = 0; x < board.x_size; x++) {
-        out << std::left << std::setw(2) << std::to_string(x + 1) << ' ';
+        const int xCoord = startFromLeftTopZero ? x : x + 1;
+        out << std::left << std::setw(2) << std::to_string(xCoord) << ' ';
       }
     } else {
       out << "  ";
@@ -2839,7 +2842,8 @@ void Board::printBoard(
 
   for(int y = 0; y < board.y_size; y++) {
     if(showCoords) {
-      out << std::right << std::setw(2) << board.y_size - y << ' ';
+      const int yCoord = startFromLeftTopZero ? y : board.y_size - y;
+      out << std::right << std::setw(2) << yCoord << ' ';
     }
     for(int x = 0; x < board.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, board.x_size);
@@ -2960,9 +2964,9 @@ Board Board::parseBoard(const int xSize, const int ySize, const string& s, const
   return board;
 }
 
-std::string Board::toString() const {
+std::string Board::toString(const bool startFromLeftTopZero) const {
   std::ostringstream oss;
-  printBoard(oss, *this, NULL_LOC, nullptr);
+  printBoard(oss, *this, NULL_LOC, nullptr, true, startFromLeftTopZero);
   return oss.str();
 }
 
@@ -3001,6 +3005,35 @@ Board Board::ofJson(const nlohmann::json& data) {
   return board;
 }
 
+std::string Board::debugLoc(const Loc loc) const {
+  return Location::toStringMach(loc, *this);
+}
+
+std::string Board::debugLocsVector(const vector<Loc>& locs) const {
+  return debugLocs(locs);
+}
+
+std::string Board::debugLocsSet(const unordered_set<Loc>& locs) const {
+  return debugLocs(locs);
+}
+
+std::string Board::debugBaseLocs(const Base& base) const {
+  vector<Loc> locs;
+  locs.reserve(base.rollback_locs_states_captures.size());
+  for (const auto& rollbackLocStateCapture : base.rollback_locs_states_captures) {
+    locs.push_back(rollbackLocStateCapture.getLoc());
+  }
+  return debugLocs(locs);
+}
+
+template <typename Container>
+std::string Board::debugLocs(const Container& locs) const {
+  std::vector<std::string> strs;
+  strs.reserve(locs.size());
+  for (const Loc loc : locs)
+    strs.push_back(debugLoc(loc));
+  return Global::concat(strs, ", ");
+}
 
 bool Board::isAdjacentToPlaHead(Player pla, Loc loc, Loc plaHead) const {
   FOREACHADJ(
