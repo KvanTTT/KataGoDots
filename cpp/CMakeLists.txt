@@ -306,6 +306,7 @@ add_executable(katago
   tests/testdotsstartposes.cpp
   tests/testdotsstress.cpp
   tests/testdotsextra.cpp
+  tests/testdotsladders.cpp
   tests/testbook.cpp
   tests/testcommon.cpp
   tests/testconfig.cpp
@@ -672,6 +673,7 @@ enable_testing()
 
 add_executable(katago_tests
   # Test sources
+  tests/testdotsladders.cpp
   tests/testdotsutils.cpp
 
   # Project sources needed by the tests

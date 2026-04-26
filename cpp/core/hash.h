@@ -133,5 +133,10 @@ inline Hash128& Hash128::operator&=(const Hash128 other) {
   return *this;
 }
 
+struct Hash128Hash {
+  size_t operator()(const Hash128& h) const noexcept {
+    return h.hash0 ^ h.hash1;
+  }
+};
 
 #endif  // CORE_HASH_H_
