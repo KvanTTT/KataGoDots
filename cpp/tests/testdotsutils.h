@@ -17,8 +17,28 @@ struct XYMove {
     return XYMove(0, -1, pla);
   }
 
+  static XYMove getNullMove() {
+    return XYMove(-1, -1, C_EMPTY);
+  }
+
   [[nodiscard]] std::string toString() const {
-    return "(" + to_string(x) + "," + to_string(y) + "," + PlayerIO::colorToChar(player) + ")";
+    string id;
+
+    if (y == -1) {
+      if (x == -1) {
+        return "()";
+      }
+
+      if (x == 0) {
+        id = Location::toStringMach(Board::PASS_LOC, 0, true);
+      } else {
+        ASSERT_UNREACHABLE;
+      }
+    } else {
+      id = to_string(x) + "-" + to_string(y);
+    }
+
+    return "(" + id + ", " + PlayerIO::colorToChar(player) + ")";
   }
 
   [[nodiscard]] Move toMove(int x_size) const;

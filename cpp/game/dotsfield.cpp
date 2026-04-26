@@ -389,7 +389,7 @@ Board::MoveRecord Board::tryPlayMoveRecordedDots(Loc loc, Player pla, const bool
   return {loc, pla, originalState, bases, initEmptyBaseInvalidateLocations, newGroundingLocations};
 }
 
-void Board::undoDots(MoveRecord& moveRecord) {
+void Board::undoDots(const MoveRecord& moveRecord) {
   if (moveRecord.loc == RESIGN_LOC) {
     assert(is_finished);
     is_finished = false;
