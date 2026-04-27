@@ -31,35 +31,138 @@ float BoardHistory::whiteScoreIfNotCapturingGroundingAlive(const Board& board, c
   return whiteScoreIfGroundingAlive(board, pla);
 }
 
-float BoardHistory::whiteScoreIfGroundingAlive(const Board& board, const Color groundColor) const {
+float BoardHistory::whiteScoreIfGroundingAlive(const Board& board, const Color groundColor, const Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos) const {
   if (!rules.isDots) return std::numeric_limits<float>::quiet_NaN();
 
   const auto completeWhiteBonus = getCompleteWhiteBonus();
 
   const int blackWhiteCapturesDiff = board.numBlackCaptures - board.numWhiteCaptures;
 
-  if (board.blackScoreIfWhiteGrounds == -board.whiteScoreIfBlackGrounds) {
+  int normBlackScoreIfWhiteGrounds = board.blackScoreIfWhiteGrounds;
+  int normWhiteScoreIfBlackGrounds = board.whiteScoreIfBlackGrounds;
+
+  if (capturesAndTerritoriesInfos != nullptr) {
+    handleEffectivelyGroundedEmptyBases(board, capturesAndTerritoriesInfos, normBlackScoreIfWhiteGrounds, normWhiteScoreIfBlackGrounds);
+  }
+
+  if (normBlackScoreIfWhiteGrounds == -normWhiteScoreIfBlackGrounds) {
     // All dots are grounded -> draw or win by extra bonus
-    assert(board.whiteScoreIfBlackGrounds == blackWhiteCapturesDiff);
+    assert(normWhiteScoreIfBlackGrounds == blackWhiteCapturesDiff);
     return static_cast<float>(blackWhiteCapturesDiff) + completeWhiteBonus;
   }
 
   // In case of non-capturing grounding, the winner still can ground if only all its dots are grounded (ungrounded opp dots don't matter)
-  if (const float fullWhiteScoreIfBlackGrounds = static_cast<float>(board.whiteScoreIfBlackGrounds) + completeWhiteBonus;
+  if (const float fullWhiteScoreIfBlackGrounds = static_cast<float>(normWhiteScoreIfBlackGrounds) + completeWhiteBonus;
      fullWhiteScoreIfBlackGrounds < 0.0F) {
     // Black already won the game by grounding considering white extra bonus
-    if (groundColor == C_EMPTY || (blackWhiteCapturesDiff == board.whiteScoreIfBlackGrounds && groundColor == P_BLACK)) {
+    if (groundColor == C_EMPTY || (blackWhiteCapturesDiff == normWhiteScoreIfBlackGrounds && groundColor == P_BLACK)) {
       return fullWhiteScoreIfBlackGrounds;
     }
-  } else if (const float fullBlackScoreIfWhiteGrounds = static_cast<float>(board.blackScoreIfWhiteGrounds) - completeWhiteBonus;
+  } else if (const float fullBlackScoreIfWhiteGrounds = static_cast<float>(normBlackScoreIfWhiteGrounds) - completeWhiteBonus;
      fullBlackScoreIfWhiteGrounds < 0.0F) {
     // White already won the game by grounding considering white extra bonus
-    if (groundColor == C_EMPTY || (-blackWhiteCapturesDiff == board.blackScoreIfWhiteGrounds && groundColor == P_WHITE)) {
+    if (groundColor == C_EMPTY || (-blackWhiteCapturesDiff == normBlackScoreIfWhiteGrounds && groundColor == P_WHITE)) {
       return -fullBlackScoreIfWhiteGrounds;
     }
   }
 
   return std::numeric_limits<float>::quiet_NaN();
+}
+
+void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos, int& normBlackScoreIfWhiteGrounds, int& normWhiteScoreIfBlackGrounds) {
+  const int x_size = board.x_size;
+  const int y_size = board.y_size;
+
+  vector<char> marked((x_size + 1) * (y_size + 1));
+
+  // Firstly, filter out empty bases that can be broken
+  // Store this info into marked vector (the `true` values prevent the wave from being propagated)
+  for (const auto* baseInfo : capturesAndTerritoriesInfos->getBaseInfos()) {
+    // Only normal bases can break empty territories
+    if (baseInfo->type != Board::Base::Type::NORMAL) {
+      continue;
+    }
+
+    const Loc captureLoc = baseInfo->captureLoc;
+    assert(captureLoc != Board::NULL_LOC);
+
+    // Make sure the capture location is inside an empty territory
+    const Color emptyTerritoryColorAtLoc = getEmptyTerritoryColor(board.getState(captureLoc));
+    if (emptyTerritoryColorAtLoc == C_EMPTY) {
+      continue;
+    }
+
+    // Find and handle empty territories adjacent to the capture location
+    marked[captureLoc] = true;
+    board.forEachAdjacent(captureLoc, [&](const Loc adjLoc) {
+      const auto* capturesAndTerritoriesInfoAtAdjLoc = capturesAndTerritoriesInfos->at(adjLoc);
+      if (capturesAndTerritoriesInfoAtAdjLoc == nullptr) {
+        return;
+      }
+
+      const auto* emptyBaseInfo = capturesAndTerritoriesInfoAtAdjLoc->getZeroMoveEmptyBaseInfo();
+      if (emptyBaseInfo == nullptr) {
+        return;
+      }
+
+      assert(emptyBaseInfo->player == emptyTerritoryColorAtLoc);
+
+      for (const Loc territoryLoc : emptyBaseInfo->territory) {
+        marked[territoryLoc] = true;
+      }
+    });
+  }
+
+  vector<Move> groundedViaEmptyBasesDots;
+  vector<Loc> walkStack;
+
+  // Secondly, collect dots that form empty bases and can't be surrounded (considering the bases that can be broken using marked vector)
+  for (int y = 0; y < y_size; y++) {
+    for (int x = 0; x < x_size; x++) {
+      const Loc loc = Location::getLoc(x, y, x_size);
+
+      if (const State state = board.getState(loc); isGrounded(state)) {
+        assert(!marked[loc]);
+        const Color activeColor = getActiveColor(state);
+        assert(activeColor == C_BLACK || activeColor == C_WHITE);
+
+        walkStack.clear();
+        walkStack.push_back(loc);
+        while (!walkStack.empty()) {
+          const Loc currentLoc = walkStack.back();
+          walkStack.pop_back();
+
+          board.forEachAdjacent(currentLoc, [&](const Loc adjLoc) {
+            if (const State adjState = board.getState(adjLoc);
+              !isGrounded(adjState) &&
+              // The wave can propagate both through empty territory and active dots
+              (getActiveColor(adjState) == activeColor || getEmptyTerritoryColor(adjState) == activeColor) &&
+              !marked[adjLoc]
+            ) {
+              walkStack.push_back(adjLoc);
+              marked[adjLoc] = true;
+              // The only placed dots can affect score
+              if (getPlacedDotColor(adjState) != C_EMPTY) {
+                groundedViaEmptyBasesDots.emplace_back(adjLoc, activeColor);
+              }
+            }
+          });
+        }
+      }
+    }
+  }
+
+  // Finally, normalize the score in case of grounding considering the dots collected above
+  for (const Move& move : groundedViaEmptyBasesDots) {
+    const auto* capturesAndTerritoriesInfo = capturesAndTerritoriesInfos->at(move.loc);
+    if (const Player player = move.pla; capturesAndTerritoriesInfo == nullptr || !capturesAndTerritoriesInfo->hasAnyTerritory(getOpp(player))) {
+      if (player == P_BLACK) {
+        normWhiteScoreIfBlackGrounds--;
+      } else {
+        normBlackScoreIfWhiteGrounds--;
+      }
+    }
+  }
 }
 
 bool BoardHistory::isReasonableForDots(const Loc loc, const Board& board, const Color currentPla) {

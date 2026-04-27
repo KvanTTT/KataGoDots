@@ -475,6 +475,8 @@ struct Board
     [[nodiscard]] Color getOneMoveTerritoryColor(Color activeColorAtLoc) const;
     [[nodiscard]] Player getOneMoveEmptyTerritoryPlayer(Color activeColorAtLoc) const;
     [[nodiscard]] Player getZeroMoveEmptyTerritoryPlayer(Color activeColorAtLoc) const;
+    [[nodiscard]] BaseInfo* getZeroMoveEmptyBaseInfo() const;
+
     [[nodiscard]] bool isReasonableMove(Player currentPla) const;
     [[nodiscard]] bool hasAnyTerritory(Player pla) const;
 
@@ -491,6 +493,7 @@ struct Board
     CapturesAndTerritoriesInfos& operator=(const CapturesAndTerritoriesInfos&) = delete;
 
     BaseInfo* addBaseInfo(const Base& base, Loc captureLoc);
+    [[nodiscard]] const std::vector<BaseInfo*>& getBaseInfos() const;
 
     ~CapturesAndTerritoriesInfos();
 

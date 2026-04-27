@@ -202,6 +202,27 @@ struct BoardHistory {
   float whiteScoreIfAllDotsAreGrounded(const Board &board) const;
   float whiteScoreIfNotCapturingGroundingAlive(const Board &board, Player pla) const;
 
+  // Returns (considering bonus):
+  //   * > 0 if white wins by grounding
+  //   * < 0 if black wins by grounding
+  //   * 0 if all dots are grounded
+  //   * NaN if there are some ungrounded dots that can affect result and game is not yet finished
+
+  // The method returns a not NaN result if groundColor is:
+  //   * C_EMPTY: all dots are grounded or a player can win by grounding with or without its opp extra captures
+  //   * C_BLACK: all dots are grounded or BLACK can win by grounding without extra ungrounded captures by WHITE
+  //   * C_WHITE: all dots are grounded or WHITE can win by grounding without extra ungrounded captures by BLACK
+  //   * C_WALL: all dots are grounded
+
+  // If capturesAndTerritoriesInfos is not null, the method considers dots that are grounded via empty territories
+  // They are considered effectively grounded because there is no reasonable way to surround them,
+  // considering the best play from both sides, that's actually trivial.
+  // The only dots under immediate atari aren't considered as empty territory grounded.
+  float whiteScoreIfGroundingAlive(const Board& board, Color groundColor, const Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos = nullptr) const;
+
+  static void handleEffectivelyGroundedEmptyBases(const Board& board, const Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos,
+                                                  int& normBlackScoreIfWhiteGrounds, int& normWhiteScoreIfBlackGrounds);
+
   void endAndScoreGameNow(const Board& board, Color area[Board::MAX_ARR_SIZE]);
 
   void printBasicInfo(std::ostream& out, const Board& board) const;
@@ -243,18 +264,6 @@ private:
   int newConsecutiveEndingPassesAfterPass() const;
   bool phaseHasSpightlikeEndingAndPassHistoryClearing() const;
   bool wouldBeSpightlikeEndingPass(Player movePla, Hash128 koHashBeforeMove) const;
-  // Returns (considering bonus):
-  //   * > 0 if white wins by grounding
-  //   * < 0 if black wins by grounding
-  //   * 0 if all dots are grounded
-  //   * NaN if there are some ungrounded dots that can affect result and game is not yet finished
-
-  // The method returns a not NaN result if groundColor is:
-  //   * C_EMPTY: all dots are grounded or any player can win by grounding with or without its opp extra captures
-  //   * C_BLACK: all dots are grounded or BLACK can win by grounding without extra WHITE captures
-  //   * C_WHITE: all dots are grounded or WHITE can win by grounding without extra BLACK captures
-  //   * C_WALL: all dots are grounded
-  float whiteScoreIfGroundingAlive(const Board& board, Color groundColor) const;
 };
 
 struct KoHashTable {

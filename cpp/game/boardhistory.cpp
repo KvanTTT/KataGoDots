@@ -773,13 +773,17 @@ bool BoardHistory::endGameIfReasonable(const Board& board, const bool checkAllPa
   if (rules.isDots) {
     float finalWhiteScore = std::numeric_limits<float>::quiet_NaN();
 
+    const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+
     if (checkAllPassAlive) {
-      finalWhiteScore = whiteScoreIfAllDotsAreGrounded(board);
+      finalWhiteScore = whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfos);
     }
 
-    if (std::isnan(finalWhiteScore) && getReasonableMoves(board, pla, Board::PASS_LOC, true).empty()) {
+    if (std::isnan(finalWhiteScore) && getReasonableMoves(board, pla, Board::PASS_LOC, true, capturesAndTerritoriesInfos).empty()) {
       finalWhiteScore = static_cast<float>(board.numBlackCaptures - board.numWhiteCaptures) + getCompleteWhiteBonus();
     }
+
+    delete capturesAndTerritoriesInfos;
 
     if (!std::isnan(finalWhiteScore)) {
       setFinalScoreAndWinner(finalWhiteScore);
