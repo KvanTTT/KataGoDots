@@ -278,11 +278,11 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
   nextMoveTypeStreams.emplace(NextMoveType::OneMoveEmptyTerritory, std::ostringstream());
   nextMoveTypeStreams.emplace(NextMoveType::ZeroMoveEmptyTerritory, std::ostringstream());
 
-  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+  const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
   const BoardHistory history(board);
-  const vector<Loc> reasonableBlackLocs = history.getReasonableMoves(board, P_BLACK, Board::PASS_LOC, false, capturesAndTerritoriesInfos);
-  const vector<Loc> reasonableWhiteLocs = history.getReasonableMoves(board, P_WHITE, Board::PASS_LOC, false, capturesAndTerritoriesInfos);
+  const vector<Loc> reasonableBlackLocs = history.getReasonableMoves(board, P_BLACK, Board::PASS_LOC, false, &capturesAndTerritoriesInfos);
+  const vector<Loc> reasonableWhiteLocs = history.getReasonableMoves(board, P_WHITE, Board::PASS_LOC, false, &capturesAndTerritoriesInfos);
   int currentReasonableBlackLocIndex = 0;
   int currentReasonableWhiteLocIndex = 0;
 
@@ -290,7 +290,7 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
     for (int x = 0; x < board.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, board.x_size);
       const Color activeColorAtLoc = board.getColor(loc);
-      const auto* captureAndTerritoryInfos = capturesAndTerritoriesInfos->at(loc);
+      const auto* captureAndTerritoryInfos = capturesAndTerritoriesInfos.at(loc);
 
       auto appendColor = [&](const NextMoveType type, std::ostringstream& stream) {
         Color colorOrPlayer = C_EMPTY;
@@ -351,7 +351,6 @@ static std::map<NextMoveType, std::ostringstream> getNextMoveTypes(const Board& 
     }
   }
 
-  delete capturesAndTerritoriesInfos;
 
   testAssert(currentReasonableBlackLocIndex == reasonableBlackLocs.size());
   testAssert(currentReasonableWhiteLocIndex == reasonableWhiteLocs.size());
