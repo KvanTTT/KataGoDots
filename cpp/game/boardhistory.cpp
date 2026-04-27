@@ -773,17 +773,15 @@ bool BoardHistory::endGameIfReasonable(const Board& board, const bool checkAllPa
   if (rules.isDots) {
     float finalWhiteScore = std::numeric_limits<float>::quiet_NaN();
 
-    const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+    const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
     if (checkAllPassAlive) {
-      finalWhiteScore = whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfos);
+      finalWhiteScore = whiteScoreIfGroundingAlive(board, C_WALL, &capturesAndTerritoriesInfos);
     }
 
-    if (std::isnan(finalWhiteScore) && getReasonableMoves(board, pla, Board::PASS_LOC, true, capturesAndTerritoriesInfos).empty()) {
+    if (std::isnan(finalWhiteScore) && getReasonableMoves(board, pla, Board::PASS_LOC, true, &capturesAndTerritoriesInfos).empty()) {
       finalWhiteScore = static_cast<float>(board.numBlackCaptures - board.numWhiteCaptures) + getCompleteWhiteBonus();
     }
-
-    delete capturesAndTerritoriesInfos;
 
     if (!std::isnan(finalWhiteScore)) {
       setFinalScoreAndWinner(finalWhiteScore);
@@ -880,9 +878,17 @@ std::vector<Loc> BoardHistory::getReasonableMoves(
   const int y_size = board.y_size;
   result.reserve(board.numMaxMoves());
 
-  const auto* capturesAndTerritoriesInfos = initializedCapturesAndTerritoriesInfos != nullptr
-    ? initializedCapturesAndTerritoriesInfos :
-      (isDots ? board.calculateCapturesAndTerritoriesColorsForDots() : nullptr);
+  unique_ptr<Board::CapturesAndTerritoriesInfos> calculatedCapturesAndTerritoriesColors;
+  const Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos;
+
+  if (initializedCapturesAndTerritoriesInfos) {
+    capturesAndTerritoriesInfos = initializedCapturesAndTerritoriesInfos;
+  } else if (isDots) {
+    calculatedCapturesAndTerritoriesColors = make_unique<Board::CapturesAndTerritoriesInfos>(board.calculateCapturesAndTerritoriesColorsForDots());
+    capturesAndTerritoriesInfos = calculatedCapturesAndTerritoriesColors.get();
+  } else {
+    capturesAndTerritoriesInfos = nullptr;
+  }
 
   for (int y = 0; y < y_size; y++) {
     for (int x = 0; x < x_size; x++) {
@@ -910,10 +916,6 @@ std::vector<Loc> BoardHistory::getReasonableMoves(
     if (breakOnFirstReasonable && !result.empty()) {
       break;
     }
-  }
-
-  if (initializedCapturesAndTerritoriesInfos == nullptr) {
-    delete capturesAndTerritoriesInfos;
   }
 
   // We need at least one reasonable move. If there is no any move on board, add the PASS (GROUND) move

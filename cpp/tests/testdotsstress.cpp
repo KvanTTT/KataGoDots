@@ -259,14 +259,12 @@ static void runDotsStressTestsInternal(
           board.playMoveAssumeLegal(lastLoc, pla);
 
           if (checkingMode == CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE) {
-            Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+            const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
-            (void)boardHistory->getReasonableMoves(board, P_BLACK, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
-            (void)boardHistory->getReasonableMoves(board, P_WHITE, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
+            (void)boardHistory->getReasonableMoves(board, P_BLACK, Board::NULL_LOC, false, &capturesAndTerritoriesInfos);
+            (void)boardHistory->getReasonableMoves(board, P_WHITE, Board::NULL_LOC, false, &capturesAndTerritoriesInfos);
 
-            (void)boardHistory->whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfos);
-
-            delete capturesAndTerritoriesInfos;
+            (void)boardHistory->whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfos);
           }
         }
         currentGameMovesCount++;

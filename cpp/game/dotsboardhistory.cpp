@@ -167,10 +167,7 @@ void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const
 
 bool BoardHistory::isReasonableForDots(const Loc loc, const Board& board, const Color currentPla) {
   assert(loc != Board::PASS_LOC);
-  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
-  const bool result = isReasonableForDots(Location::getX(loc, board.x_size), Location::getY(loc, board.x_size), loc, board, currentPla, capturesAndTerritoriesInfos);
-  delete capturesAndTerritoriesInfos;
-  return result;
+  return isReasonableForDots(Location::getX(loc, board.x_size), Location::getY(loc, board.x_size), loc, board, currentPla, nullptr);
 }
 
 bool BoardHistory::isReasonableForDots(
@@ -193,11 +190,11 @@ bool BoardHistory::isReasonableForDots(
   // Check reasonability that depends on capture/territory status.
   // For instance, it doesn't make sense to play under atari if this loc can be captured by the next opp move.
   // Also, always choose territories with max square.
-  if(capturesAndTerritoriesInfos != nullptr) {
+  if (capturesAndTerritoriesInfos) {
     if (const auto* captureAndTerritoryInfo = capturesAndTerritoriesInfos->at(loc);
-       captureAndTerritoryInfo != nullptr && !captureAndTerritoryInfo->isReasonableMove(currentPla)) {
-          return false;
-       }
+       captureAndTerritoryInfo && !captureAndTerritoryInfo->isReasonableMove(currentPla)) {
+      return false;
+    }
   }
 
   return true;
