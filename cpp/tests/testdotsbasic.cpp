@@ -1288,14 +1288,13 @@ x x x x x
       );
     auto boardHistory = BoardHistory(board);
 
-    const auto* capturesAndTerritoriesInfosBeforeAtari = board.calculateCapturesAndTerritoriesColorsForDots();
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, nullptr)));
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, nullptr)));
+    const auto capturesAndTerritoriesInfosBeforeAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL)));
 
     // Draw by grounding if consider empty capturing locs
-    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfosBeforeAtari));
-    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfosBeforeAtari));
-    delete capturesAndTerritoriesInfosBeforeAtari;
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfosBeforeAtari));
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, &capturesAndTerritoriesInfosBeforeAtari));
 
     testAssert(boardHistory.endGameIfReasonable(board, true, P_BLACK));
     testAssert(boardHistory.endGameIfReasonable(board, true, P_WHITE));
@@ -1303,11 +1302,10 @@ x x x x x
     board.playMoveAssumeLegal(Location::getLoc(2, 3, board.x_size), P_WHITE);
     auto boardHistoryAfterAtari = BoardHistory(board);
 
-    const auto* capturesAndTerritoriesInfosAfterAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    const auto capturesAndTerritoriesInfosAfterAtari = board.calculateCapturesAndTerritoriesColorsForDots();
     // The position is unsettled because of atari
-    testAssert(std::isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfosAfterAtari)));
-    testAssert(std::isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfosAfterAtari)));
-    delete capturesAndTerritoriesInfosAfterAtari;
+    testAssert(std::isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfosAfterAtari)));
+    testAssert(std::isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_WALL, &capturesAndTerritoriesInfosAfterAtari)));
 
     testAssert(!boardHistoryAfterAtari.endGameIfReasonable(board, true, P_BLACK));
     testAssert(!boardHistoryAfterAtari.endGameIfReasonable(board, true, P_WHITE));
@@ -1327,12 +1325,11 @@ x x x x x
       );
     auto boardHistory = BoardHistory(board);
 
-    const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
-    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfos));
-    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_BLACK, capturesAndTerritoriesInfos));
-    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WHITE, capturesAndTerritoriesInfos));
-    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfos));
-    delete capturesAndTerritoriesInfos;
+    const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfos));
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_BLACK, &capturesAndTerritoriesInfos));
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WHITE, &capturesAndTerritoriesInfos));
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, &capturesAndTerritoriesInfos));
 
     testAssert(boardHistory.endGameIfReasonable(board, true, P_BLACK));
     testAssert(boardHistory.endGameIfReasonable(board, true, P_WHITE));
@@ -1353,10 +1350,9 @@ x x x x x
 )", {XYMove(5, 3, P_WHITE)});
 
     const auto boardHistory = BoardHistory(board);
-    const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
-    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, nullptr)));
-    testAssert(2.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfos));
-    delete capturesAndTerritoriesInfos;
+    const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL)));
+    testAssert(2.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, &capturesAndTerritoriesInfos));
   }
 
   {
@@ -1372,18 +1368,16 @@ x x x x x
 . . o x x . . x . .
 )", {XYMove(3, 3, P_WHITE), XYMove(8, 3, P_BLACK)});
     const auto boardHistoryBeforeAtari = BoardHistory(board);
-    const auto* infosBeforeAtari = board.calculateCapturesAndTerritoriesColorsForDots();
-    testAssert(isnan(boardHistoryBeforeAtari.whiteScoreIfGroundingAlive(board, C_WALL, nullptr)));
-    testAssert(0.0f == boardHistoryBeforeAtari.whiteScoreIfGroundingAlive(board, C_WALL, infosBeforeAtari));
-    delete infosBeforeAtari;
+    const auto infosBeforeAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(isnan(boardHistoryBeforeAtari.whiteScoreIfGroundingAlive(board, C_WALL)));
+    testAssert(0.0f == boardHistoryBeforeAtari.whiteScoreIfGroundingAlive(board, C_WALL, &infosBeforeAtari));
 
     board.playMoveAssumeLegal(Location::getLoc(3, 4, board.x_size), P_BLACK);
 
     const auto boardHistoryAfterAtari = BoardHistory(board);
-    const auto* infosAfterAtari = board.calculateCapturesAndTerritoriesColorsForDots();
-    testAssert(isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_WALL, infosAfterAtari)));
-    testAssert(isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_EMPTY, infosAfterAtari)));
-    delete infosAfterAtari;
+    const auto infosAfterAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_WALL, &infosAfterAtari)));
+    testAssert(isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_EMPTY, &infosAfterAtari)));
   }
 
   {
@@ -1409,17 +1403,15 @@ x x x x x
     testAssert(4 == board.numWhiteCaptures);
     testAssert(0 == board.numBlackCaptures);
 
-    const auto* capturesAndTerritoriesInfosBeforeAtari = board.calculateCapturesAndTerritoriesColorsForDots();
-    testAssert(-4.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfosBeforeAtari));
-    testAssert(-4.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfosBeforeAtari));
-    delete capturesAndTerritoriesInfosBeforeAtari;
+    const auto capturesAndTerritoriesInfosBeforeAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(-4.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfosBeforeAtari));
+    testAssert(-4.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, &capturesAndTerritoriesInfosBeforeAtari));
 
     board.playMoveAssumeLegal(Location::getLoc(9, 2, board.x_size), P_WHITE);
 
-    const auto* capturesAndTerritoriesInfosAfterAtari = board.calculateCapturesAndTerritoriesColorsForDots();
-    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfosAfterAtari)));
-    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfosAfterAtari)));
-    delete capturesAndTerritoriesInfosAfterAtari;
+    const auto capturesAndTerritoriesInfosAfterAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfosAfterAtari)));
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, &capturesAndTerritoriesInfosAfterAtari)));
   }
 
   {
@@ -1435,12 +1427,11 @@ x x x x x
 
     const auto boardHistory = BoardHistory(board);
 
-    const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
-    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfos)));
-    testAssert(-1.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfos));
-    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_BLACK, capturesAndTerritoriesInfos)));
-    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WHITE, capturesAndTerritoriesInfos)));
-    delete capturesAndTerritoriesInfos;
+    const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, &capturesAndTerritoriesInfos)));
+    testAssert(-1.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfos));
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_BLACK, &capturesAndTerritoriesInfos)));
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WHITE, &capturesAndTerritoriesInfos)));
   }
 }
 

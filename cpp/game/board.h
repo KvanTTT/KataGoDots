@@ -491,6 +491,7 @@ struct Board
 
     CapturesAndTerritoriesInfos(const CapturesAndTerritoriesInfos&) = delete;
     CapturesAndTerritoriesInfos& operator=(const CapturesAndTerritoriesInfos&) = delete;
+    CapturesAndTerritoriesInfos(CapturesAndTerritoriesInfos&& other) = default;
 
     BaseInfo* addBaseInfo(const Base& base, Loc captureLoc);
     [[nodiscard]] const std::vector<BaseInfo*>& getBaseInfos() const;
@@ -502,7 +503,7 @@ struct Board
     std::vector<BaseInfo*> baseInfos;
   };
 
-  CapturesAndTerritoriesInfos* calculateCapturesAndTerritoriesColorsForDots() const;
+  CapturesAndTerritoriesInfos calculateCapturesAndTerritoriesColorsForDots() const;
 
   // Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
@@ -626,7 +627,7 @@ struct Board
   void recalculateCapturesAndTerritories(
     Player pla,
     Loc loc,
-    CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos) const;
+    CapturesAndTerritoriesInfos& capturesAndTerritoriesInfos) const;
 
   void setGrounded(Loc loc);
   void clearGrounded(Loc loc);

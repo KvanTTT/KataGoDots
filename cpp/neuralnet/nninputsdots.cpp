@@ -49,9 +49,9 @@ void NNInputs::fillRowV7Dots(
     rowGlobal[static_cast<int>(globalFeature)] = value;
   };
 
-  const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+  const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
-  const vector<Loc> reasonableNonGroundMoves = hist.getReasonableMoves(board, nextPlayer, Board::PASS_LOC, false, capturesAndTerritoriesInfos);
+  const vector<Loc> reasonableNonGroundMoves = hist.getReasonableMoves(board, nextPlayer, Board::PASS_LOC, false, &capturesAndTerritoriesInfos);
   const bool hasReasonableNonGroundMove = !reasonableNonGroundMoves.empty();
 
   for(int y = 0; y<ySize; y++) {
@@ -89,7 +89,7 @@ void NNInputs::fillRowV7Dots(
         setSpatial(pos, DotsSpatialFeature::Grounded_8);
       }
 
-      if (const auto* captureAndTerritoryInfos = capturesAndTerritoriesInfos->at(loc);
+      if (const auto* captureAndTerritoryInfos = capturesAndTerritoriesInfos.at(loc);
          captureAndTerritoryInfos != nullptr) {
         const Color captureColor = captureAndTerritoryInfos->getOneMoveCaptureColor();
         if ((pla & captureColor) != 0) {
@@ -111,8 +111,6 @@ void NNInputs::fillRowV7Dots(
       // TODO: Set up history and ladder features, https://github.com/KvanTTT/KataGoDots/issues/3
     }
   }
-
-  delete capturesAndTerritoriesInfos;
 
   assert(deadDotsCount == board.numBlackCaptures + board.numWhiteCaptures);
 

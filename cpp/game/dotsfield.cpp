@@ -1248,13 +1248,13 @@ Board::CapturesAndTerritoriesInfos::~CapturesAndTerritoriesInfos() {
 void Board::recalculateCapturesAndTerritories(
   const Player pla,
   const Loc loc,
-  CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos) const {
+  CapturesAndTerritoriesInfos& capturesAndTerritoriesInfos) const {
 
-  CaptureAndTerritoryInfos* captureAndTerritoryInfoAtCaptureLoc = capturesAndTerritoriesInfos->at(loc);
+  CaptureAndTerritoryInfos* captureAndTerritoryInfoAtCaptureLoc = capturesAndTerritoriesInfos.at(loc);
 
   // Optimization: if the dot is placed into own territory it's expected that a larger and more optimal surrounding exists
   // with corresponding (more outer) capturing location
-  if (captureAndTerritoryInfoAtCaptureLoc != nullptr && captureAndTerritoryInfoAtCaptureLoc->hasAnyTerritory(pla)) {
+  if (captureAndTerritoryInfoAtCaptureLoc && captureAndTerritoryInfoAtCaptureLoc->hasAnyTerritory(pla)) {
     return;
   }
 
@@ -1264,7 +1264,7 @@ void Board::recalculateCapturesAndTerritories(
     const bool isSuicidal = base.type == Base::Type::SUICIDAL;
 
     if (captureAndTerritoryInfoAtCaptureLoc == nullptr) {
-      captureAndTerritoryInfoAtCaptureLoc = capturesAndTerritoriesInfos->put(loc);
+      captureAndTerritoryInfoAtCaptureLoc = capturesAndTerritoriesInfos.put(loc);
     }
 
     if (isSuicidal && captureAndTerritoryInfoAtCaptureLoc->hasAnyTerritory(base.pla)) {
@@ -1277,7 +1277,7 @@ void Board::recalculateCapturesAndTerritories(
 
     for (auto const& rollback_locs_states_capture: base.rollback_locs_states_captures) {
       const Loc territoryLoc = rollback_locs_states_capture.getLoc();
-      for (BaseInfo* territoryBaseInfo : capturesAndTerritoriesInfos->getOrPut(territoryLoc).territoryBaseInfos) {
+      for (BaseInfo* territoryBaseInfo : capturesAndTerritoriesInfos.getOrPut(territoryLoc).territoryBaseInfos) {
         if (territoryBaseInfo != nullptr) {
           overlappedBaseInfos.insert(territoryBaseInfo);
         }
@@ -1304,12 +1304,12 @@ void Board::recalculateCapturesAndTerritories(
     }
 
     BaseInfo* newBaseInfo = shouldAddNewBaseInfo
-      ? capturesAndTerritoriesInfos->addBaseInfo(base, loc)
+      ? capturesAndTerritoriesInfos.addBaseInfo(base, loc)
       : nullptr;
 
     for (auto const& rollback_locs_states_capture: base.rollback_locs_states_captures) {
       const Loc territoryLoc = rollback_locs_states_capture.getLoc();
-      auto* captureAndTerritoryInfoAtTerritoryLoc = capturesAndTerritoriesInfos->at(territoryLoc);
+      auto* captureAndTerritoryInfoAtTerritoryLoc = capturesAndTerritoriesInfos.at(territoryLoc);
 
       for (auto& baseInfoToRemove: baseInfosToRemove) {
         captureAndTerritoryInfoAtTerritoryLoc->removeCaptureAndTerritoryInfos(baseInfoToRemove);
@@ -1332,8 +1332,8 @@ void Board::recalculateCapturesAndTerritories(
   const_cast<Board*>(this)->undo(moveRecord);
 }
 
-Board::CapturesAndTerritoriesInfos* Board::calculateCapturesAndTerritoriesColorsForDots() const {
-  const auto capturesAndTerritoriesInfos = new CapturesAndTerritoriesInfos((x_size + 1) * (y_size + 1));
+Board::CapturesAndTerritoriesInfos Board::calculateCapturesAndTerritoriesColorsForDots() const {
+  CapturesAndTerritoriesInfos capturesAndTerritoriesInfos((x_size + 1) * (y_size + 1));
 
   // Don't calculate anything if the game is already over (finished) because it doesn't look correct
   if (is_finished) {
