@@ -1138,11 +1138,16 @@ Player Board::CaptureAndTerritoryInfos::getOneMoveEmptyTerritoryPlayer(const Col
 }
 
 Player Board::CaptureAndTerritoryInfos::getZeroMoveEmptyTerritoryPlayer(const Color activeColorAtLoc) const {
-  Player result = C_EMPTY;
-  for (const BaseInfo* baseInfo : territoryBaseInfos) {
-    if (baseInfo != nullptr && baseInfo->type == Base::Type::SUICIDAL && activeColorAtLoc != baseInfo->player) {
-      assert(result == C_EMPTY && "Zero move territory color can be only single");
-      result = baseInfo->player;
+  const BaseInfo* result = getZeroMoveEmptyBaseInfo();
+  return result == nullptr || result->player == activeColorAtLoc ? C_EMPTY : result->player;
+}
+
+Board::BaseInfo* Board::CaptureAndTerritoryInfos::getZeroMoveEmptyBaseInfo() const {
+  BaseInfo* result = nullptr;
+  for (BaseInfo* baseInfo : territoryBaseInfos) {
+    if (baseInfo != nullptr && baseInfo->type == Base::Type::SUICIDAL) {
+      assert(result == nullptr && "Zero move territory color can be only single");
+      result = baseInfo;
     }
   }
   return result;
@@ -1223,6 +1228,10 @@ Board::BaseInfo* Board::CapturesAndTerritoriesInfos::addBaseInfo(const Base& bas
   const auto baseInfo = new BaseInfo(base, captureLoc);
   baseInfos.push_back(baseInfo);
   return baseInfo;
+}
+
+const std::vector<Board::BaseInfo*>& Board::CapturesAndTerritoriesInfos::getBaseInfos() const {
+  return baseInfos;
 }
 
 Board::CapturesAndTerritoriesInfos::~CapturesAndTerritoriesInfos() {

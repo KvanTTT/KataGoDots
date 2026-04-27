@@ -264,6 +264,8 @@ static void runDotsStressTestsInternal(
             (void)boardHistory->getReasonableMoves(board, P_BLACK, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
             (void)boardHistory->getReasonableMoves(board, P_WHITE, Board::NULL_LOC, false, capturesAndTerritoriesInfos);
 
+            (void)boardHistory->whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfos);
+
             delete capturesAndTerritoriesInfos;
           }
         }

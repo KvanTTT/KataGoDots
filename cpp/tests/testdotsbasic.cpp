@@ -1276,6 +1276,172 @@ x x x x x
     testAssert(C_EMPTY == boardHistory.winner);
     testAssert(0.0f == boardHistory.finalWhiteMinusBlackScore);
   }
+
+  {
+    Board board = parseDotsFieldDefault(
+      R"(
+. . x . . .
+. x . x . .
+. o x o . .
+. o . o . .
+)"
+      );
+    auto boardHistory = BoardHistory(board);
+
+    const auto* capturesAndTerritoriesInfosBeforeAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, nullptr)));
+    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, nullptr)));
+
+    // Draw by grounding if consider empty capturing locs
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfosBeforeAtari));
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfosBeforeAtari));
+    delete capturesAndTerritoriesInfosBeforeAtari;
+
+    testAssert(boardHistory.endGameIfReasonable(board, true, P_BLACK));
+    testAssert(boardHistory.endGameIfReasonable(board, true, P_WHITE));
+
+    board.playMoveAssumeLegal(Location::getLoc(2, 3, board.x_size), P_WHITE);
+    auto boardHistoryAfterAtari = BoardHistory(board);
+
+    const auto* capturesAndTerritoriesInfosAfterAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    // The position is unsettled because of atari
+    testAssert(std::isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfosAfterAtari)));
+    testAssert(std::isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfosAfterAtari)));
+    delete capturesAndTerritoriesInfosAfterAtari;
+
+    testAssert(!boardHistoryAfterAtari.endGameIfReasonable(board, true, P_BLACK));
+    testAssert(!boardHistoryAfterAtari.endGameIfReasonable(board, true, P_WHITE));
+  }
+
+  {
+    // Central dot formally is ungrounded but there is no way to surround it. The game can be finished.
+    const Board board = parseDotsFieldDefault(
+      R"(
+. . x x x . .
+. x . . . x .
+. x . x . x .
+. x . . . x .
+. . x x x . .
+. . . . . . .
+)"
+      );
+    auto boardHistory = BoardHistory(board);
+
+    const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfos));
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_BLACK, capturesAndTerritoriesInfos));
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WHITE, capturesAndTerritoriesInfos));
+    testAssert(0.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfos));
+    delete capturesAndTerritoriesInfos;
+
+    testAssert(boardHistory.endGameIfReasonable(board, true, P_BLACK));
+    testAssert(boardHistory.endGameIfReasonable(board, true, P_WHITE));
+  }
+
+  {
+    // Check empty-base wave propagation via existing base
+    const Board board = parseDotsFieldDefault(
+      R"(
+. . o o o . .
+. o . . . o .
+. . o o o . .
+. o x x . . .
+. . o o o . .
+. o . . . o .
+. . o o o . .
+. . . . . . .
+)", {XYMove(5, 3, P_WHITE)});
+
+    const auto boardHistory = BoardHistory(board);
+    const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(std::isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, nullptr)));
+    testAssert(2.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfos));
+    delete capturesAndTerritoriesInfos;
+  }
+
+  {
+    // Check complicated case that contains empty bases of both colors
+    Board board = parseDotsFieldDefault(
+      R"(
+. . o . . . . x . .
+. o . o . . x . x .
+. . o . . . . x . .
+. o x . . . x o . .
+. . o . x . . x . .
+. o . o x . x . x .
+. . o x x . . x . .
+)", {XYMove(3, 3, P_WHITE), XYMove(8, 3, P_BLACK)});
+    const auto boardHistoryBeforeAtari = BoardHistory(board);
+    const auto* infosBeforeAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(isnan(boardHistoryBeforeAtari.whiteScoreIfGroundingAlive(board, C_WALL, nullptr)));
+    testAssert(0.0f == boardHistoryBeforeAtari.whiteScoreIfGroundingAlive(board, C_WALL, infosBeforeAtari));
+    delete infosBeforeAtari;
+
+    board.playMoveAssumeLegal(Location::getLoc(3, 4, board.x_size), P_BLACK);
+
+    const auto boardHistoryAfterAtari = BoardHistory(board);
+    const auto* infosAfterAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_WALL, infosAfterAtari)));
+    testAssert(isnan(boardHistoryAfterAtari.whiteScoreIfGroundingAlive(board, C_EMPTY, infosAfterAtari)));
+    delete infosAfterAtari;
+  }
+
+  {
+    // Check base-in-base that's empty-base grounded. The empty base contains another inner base
+    Board board = parseDotsFieldDefault(
+      R"(
+. . . . x x x . . . .
+. . . x . . . x . . .
+. . x . . x . . x . o
+. . x . x . x . . x o
+. . x . . x . . x o o
+. . . x . . . x . . .
+. . . . x x x . . . .
+. . . . x . x . . . .
+. . . x . o . x . . .
+. . . x o . o . . . .
+. . . x . o . x . . .
+. . . . x x x . . . .
+. . . . . . . . . . .
+)", {XYMove(5, 9, P_BLACK), XYMove(7, 9, P_BLACK)});
+
+    const auto boardHistory = BoardHistory(board);
+    testAssert(4 == board.numWhiteCaptures);
+    testAssert(0 == board.numBlackCaptures);
+
+    const auto* capturesAndTerritoriesInfosBeforeAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(-4.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfosBeforeAtari));
+    testAssert(-4.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfosBeforeAtari));
+    delete capturesAndTerritoriesInfosBeforeAtari;
+
+    board.playMoveAssumeLegal(Location::getLoc(9, 2, board.x_size), P_WHITE);
+
+    const auto* capturesAndTerritoriesInfosAfterAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfosAfterAtari)));
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfosAfterAtari)));
+    delete capturesAndTerritoriesInfosAfterAtari;
+  }
+
+  {
+    // Check combination of empty base, ungrounded dot and regular grounded unrelated base
+    const Board board = parseDotsFieldDefault(
+      R"(
+. . x . . . . x .
+. x . x . . x o x
+. . x . . . x o .
+. . . . x . . x .
+. . . . . . . . .
+)", {XYMove(8, 2, P_BLACK)});
+
+    const auto boardHistory = BoardHistory(board);
+
+    const auto* capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WALL, capturesAndTerritoriesInfos)));
+    testAssert(-1.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, capturesAndTerritoriesInfos));
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_BLACK, capturesAndTerritoriesInfos)));
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_WHITE, capturesAndTerritoriesInfos)));
+    delete capturesAndTerritoriesInfos;
+  }
 }
 
 // We need to check both playMoveRecorded and playMoveAssumeLegal because they have different implementations
