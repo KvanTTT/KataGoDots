@@ -455,6 +455,7 @@ struct Board
     Loc captureLoc{};
     Player player{};
     Base::Type type{};
+    bool removed;
     std::unordered_set<Loc> territory;
 
     BaseInfo(const Base& base, Loc newCaptureLoc);
@@ -468,7 +469,7 @@ struct Board
 
     void addCaptureInfo(BaseInfo* newBaseInfo);
     void addTerritoryInfo(BaseInfo* newBaseInfo);
-    bool removeCaptureAndTerritoryInfos(const BaseInfo* baseInfoToRemove);
+    bool removeCaptureAndTerritoryInfos(BaseInfo* baseInfoToRemove);
 
     [[nodiscard]] Color getOneMoveCaptureColor() const;
     [[nodiscard]] Color getOneMoveEmptyCaptureColor() const;
