@@ -41,7 +41,8 @@ float BoardHistory::whiteScoreIfGroundingAlive(const Board& board, const Color g
   int normBlackScoreIfWhiteGrounds = board.blackScoreIfWhiteGrounds;
   int normWhiteScoreIfBlackGrounds = board.whiteScoreIfBlackGrounds;
 
-  if (capturesAndTerritoriesInfos != nullptr) {
+  if (capturesAndTerritoriesInfos && !rules.dotsCaptureEmptyBases) {
+    // Ignore mode when capturing empty bases is enabled because no empty base can be created
     handleEffectivelyGroundedEmptyBases(board, capturesAndTerritoriesInfos, normBlackScoreIfWhiteGrounds, normWhiteScoreIfBlackGrounds);
   }
 
@@ -69,7 +70,8 @@ float BoardHistory::whiteScoreIfGroundingAlive(const Board& board, const Color g
   return std::numeric_limits<float>::quiet_NaN();
 }
 
-void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos, int& normBlackScoreIfWhiteGrounds, int& normWhiteScoreIfBlackGrounds) {
+void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const Board::CapturesAndTerritoriesInfos* capturesAndTerritoriesInfos,
+  int& normBlackScoreIfWhiteGrounds, int& normWhiteScoreIfBlackGrounds) {
   const int x_size = board.x_size;
   const int y_size = board.y_size;
 
@@ -78,16 +80,16 @@ void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const
   // Firstly, filter out empty bases that can be broken
   // Store this info into marked vector (the `true` values prevent the wave from being propagated)
   for (const auto* baseInfo : capturesAndTerritoriesInfos->getBaseInfos()) {
-    // Only normal bases can break empty territories
-    if (baseInfo->type != Board::Base::Type::NORMAL) {
+    // Ignore removed bases and include only normal bases since only they can break empty territories
+    if (baseInfo->removed || baseInfo->type != Board::Base::Type::NORMAL) {
       continue;
     }
 
     const Loc captureLoc = baseInfo->captureLoc;
     assert(captureLoc != Board::NULL_LOC);
 
-    // Make sure the capture location is inside an empty territory
     const Color emptyTerritoryColorAtLoc = getEmptyTerritoryColor(board.getState(captureLoc));
+    // Make sure the capture location is inside an empty territory
     if (emptyTerritoryColorAtLoc == C_EMPTY) {
       continue;
     }
@@ -120,34 +122,38 @@ void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const
   for (int y = 0; y < y_size; y++) {
     for (int x = 0; x < x_size; x++) {
       const Loc loc = Location::getLoc(x, y, x_size);
+      const State state = board.getState(loc);
 
-      if (const State state = board.getState(loc); isGrounded(state)) {
-        assert(!marked[loc]);
-        const Color activeColor = getActiveColor(state);
-        assert(activeColor == C_BLACK || activeColor == C_WHITE);
+      // The wave can be propagated from grounded dots
+      if (!isGrounded(state)) {
+        continue;
+      }
 
-        walkStack.clear();
-        walkStack.push_back(loc);
-        while (!walkStack.empty()) {
-          const Loc currentLoc = walkStack.back();
-          walkStack.pop_back();
+      assert(!marked[loc]);
+      const Color activeColor = getActiveColor(state);
+      assert(activeColor == C_BLACK || activeColor == C_WHITE);
 
-          board.forEachAdjacent(currentLoc, [&](const Loc adjLoc) {
-            if (const State adjState = board.getState(adjLoc);
-              !isGrounded(adjState) &&
-              // The wave can propagate both through empty territory and active dots
-              (getActiveColor(adjState) == activeColor || getEmptyTerritoryColor(adjState) == activeColor) &&
-              !marked[adjLoc]
-            ) {
-              walkStack.push_back(adjLoc);
-              marked[adjLoc] = true;
-              // The only placed dots can affect score
-              if (getPlacedDotColor(adjState) != C_EMPTY) {
-                groundedViaEmptyBasesDots.emplace_back(adjLoc, activeColor);
-              }
+      assert(walkStack.empty());
+      walkStack.push_back(loc);
+      while (!walkStack.empty()) {
+        const Loc currentLoc = walkStack.back();
+        walkStack.pop_back();
+
+        board.forEachAdjacent(currentLoc, [&](const Loc adjLoc) {
+          if (const State adjState = board.getState(adjLoc);
+            !isGrounded(adjState) &&
+            // The wave can propagate both through empty territory and active dots
+            (getActiveColor(adjState) == activeColor || getEmptyTerritoryColor(adjState) == activeColor) &&
+            !marked[adjLoc]
+          ) {
+            walkStack.push_back(adjLoc);
+            marked[adjLoc] = true;
+            // The only placed dots can affect score
+            if (getPlacedDotColor(adjState) != C_EMPTY) {
+              groundedViaEmptyBasesDots.emplace_back(adjLoc, activeColor);
             }
-          });
-        }
+          }
+        });
       }
     }
   }
