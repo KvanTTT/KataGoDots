@@ -481,7 +481,7 @@ void Board::undoDots(const MoveRecord& moveRecord) {
 vector<Loc> Board::fillGrounding(const Loc loc) {
   vector<Loc> groundedLocs;
 
-  walkStack.clear();
+  assert(walkStack.empty());
   walkStack.push_back(loc);
   const Player pla = getColor(loc);
   assert(pla != C_EMPTY && pla != C_WALL);
@@ -840,7 +840,7 @@ void Board::getTerritoryLocations(const Player pla,
                                   const bool grounding,
                                   int &numCapturedDots, int &numFreedDots
 ) const {
-  walkStack.clear();
+  assert(walkStack.empty());
   territoryLocationsBuffer.clear();
   numCapturedDots = 0;
   numFreedDots = 0;
@@ -968,7 +968,7 @@ void Board::updateStatesAndAppendBase(
 }
 
 void Board::invalidateAdjacentEmptyTerritoryIfNeeded(const Loc loc) {
-  walkStack.clear();
+  assert(walkStack.empty());
   walkStack.push_back(loc);
   closureOrInvalidateLocsBuffer.clear();
 
@@ -996,6 +996,7 @@ Board::BaseInfo::BaseInfo(const Base& base, const Loc newCaptureLoc) {
   player = base.pla;
   captureLoc = newCaptureLoc;
   type = base.type;
+  removed = false;
   territory.reserve(base.rollback_locs_states_captures.size());
 
   for(const auto& rollback_locs_states_capture: base.rollback_locs_states_captures) {
@@ -1075,7 +1076,7 @@ void Board::CaptureAndTerritoryInfos::addTerritoryInfo(BaseInfo* newBaseInfo) {
   assert(added && "Too many capture locs, max is 2");
 }
 
-bool Board::CaptureAndTerritoryInfos::removeCaptureAndTerritoryInfos(const BaseInfo* baseInfoToRemove) {
+bool Board::CaptureAndTerritoryInfos::removeCaptureAndTerritoryInfos(BaseInfo* baseInfoToRemove) {
   bool captureBaseInfoRemoved = false;
   assert(baseInfoToRemove != nullptr && "Attempt to remove null base info");
   for (BaseInfo*& baseInfo : captureBaseInfos) {
@@ -1093,6 +1094,7 @@ bool Board::CaptureAndTerritoryInfos::removeCaptureAndTerritoryInfos(const BaseI
       territoryBaseInfoRemoved = true;
     }
   }
+  baseInfoToRemove->removed = true;
   return captureBaseInfoRemoved || territoryBaseInfoRemoved;
 }
 
@@ -1258,7 +1260,7 @@ void Board::recalculateCapturesAndTerritories(
     return;
   }
 
-  MoveRecord moveRecord = const_cast<Board*>(this)->playMoveRecordedDots(loc, pla);
+  const MoveRecord moveRecord = const_cast<Board*>(this)->playMoveRecordedDots(loc, pla);
 
   for (Base const& base: moveRecord.bases) {
     const bool isSuicidal = base.type == Base::Type::SUICIDAL;
