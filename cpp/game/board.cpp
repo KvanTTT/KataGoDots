@@ -980,9 +980,9 @@ void Board::undo(const MoveRecord& record)
     return;
   }
 
-  ko_loc = record.ko_loc;
+  ko_loc = record.ko_loc_or_ground_locs_offset;
 
-  Loc loc = record.loc;
+  const Loc loc = record.loc;
   if(loc == PASS_LOC || loc == RESIGN_LOC)
     return;
 
@@ -990,7 +990,7 @@ void Board::undo(const MoveRecord& record)
   for(int i = 0; i<4; i++)
   {
     int adj = loc + adj_offsets[i];
-    if(record.capDirs & (1 << i))
+    if(record.capDirsOrPreviousState & (1 << i))
     {
       if(colors[adj] == C_EMPTY) {
         addChain(adj, getOpp(record.pla));
@@ -1004,7 +1004,7 @@ void Board::undo(const MoveRecord& record)
     }
   }
   //Re-fill suicided stones
-  if(record.capDirs == 0x10) {
+  if(record.capDirsOrPreviousState == 0x10) {
     assert(colors[loc] == C_EMPTY);
     addChain(loc,record.pla);
     int numUncaptured = chain_data[chain_head[loc]].num_locs;
@@ -3173,10 +3173,9 @@ bool Board::simpleRepetitionBoundGt(Loc loc, int bound) const {
 Board::MoveRecord::MoveRecord(const Loc initLoc, const Player initPla, const Loc init_ko_loc, const uint8_t initCapDirs) {
   loc = initLoc;
   pla = initPla;
-  ko_loc = init_ko_loc;
-  capDirs = initCapDirs;
+  ko_loc_or_ground_locs_offset = init_ko_loc;
+  capDirsOrPreviousState = initCapDirs;
 
-  previousState = C_EMPTY;
   bases = {};
-  emptyBaseInvalidateLocations = {};
+  internalLocs = {};
 }
