@@ -250,15 +250,17 @@ struct Board
   //Move data passed back when moves are made to allow for undos
   struct MoveRecord {
     Player pla;
-    Loc loc;
-    Loc ko_loc;
-    uint8_t capDirs; //First 4 bits indicate directions of capture, fifth bit indicates suicide
+    // Go game: First 4 bits indicate directions of capture, fifth bit indicates suicide
+    // Dots game: previous state
+    State capDirsOrPreviousState;
 
-    // Move data for Dots game
-    State previousState;
+    Loc loc;
+    Loc ko_loc_or_ground_locs_offset;
+
     std::vector<Base> bases;
-    std::vector<Loc> emptyBaseInvalidateLocations;
-    std::vector<Loc> groundingLocations;
+    // Before ko_loc_or_ground_locs_offset: emptyBaseInvalidateLocations
+    // After ko_loc_or_ground_locs_offset: groundingLocations
+    std::vector<Loc> internalLocs;
 
     MoveRecord() = default;
 

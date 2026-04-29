@@ -224,15 +224,15 @@ Board::MoveRecord::MoveRecord(
   const vector<Loc>& newEmptyBaseInvalidateLocations,
   const vector<Loc>& newGroundingLocations
 ) {
-  ko_loc = NULL_LOC;
-  capDirs = 0;
+  capDirsOrPreviousState = newPreviousState;
 
   loc = newLoc;
   pla = newPla;
-  previousState = newPreviousState;
   bases = newBases;
-  emptyBaseInvalidateLocations = newEmptyBaseInvalidateLocations;
-  groundingLocations = newGroundingLocations;
+  ko_loc_or_ground_locs_offset = newEmptyBaseInvalidateLocations.size();
+  internalLocs.reserve(ko_loc_or_ground_locs_offset + newGroundingLocations.size());
+  internalLocs.insert(internalLocs.end(), newEmptyBaseInvalidateLocations.begin(), newEmptyBaseInvalidateLocations.end());
+  internalLocs.insert(internalLocs.end(), newGroundingLocations.begin(), newGroundingLocations.end());
 }
 
 bool Board::isSuicideDots(const Loc loc, const Player pla) const {
@@ -398,7 +398,9 @@ void Board::undoDots(const MoveRecord& moveRecord) {
 
   const bool isGroundingMove = moveRecord.loc == PASS_LOC;
 
-  for (const Loc& loc : moveRecord.groundingLocations) {
+  int groundingLocsOffset = moveRecord.ko_loc_or_ground_locs_offset;
+  for (size_t i = groundingLocsOffset; i < moveRecord.internalLocs.size(); i++) {
+    const Loc loc = moveRecord.internalLocs[i];
     if (const State state = getState(loc); getPlacedDotColor(state) != C_EMPTY) {
       if (getActiveColor(state) == P_BLACK) {
         whiteScoreIfBlackGrounds++;
@@ -418,7 +420,8 @@ void Board::undoDots(const MoveRecord& moveRecord) {
   }
 
   const Player emptyTerritoryPlayer = isGroundingMove ? moveRecord.pla : getOpp(moveRecord.pla);
-  for (const Loc& loc : moveRecord.emptyBaseInvalidateLocations) {
+  for (size_t i = 0; i < groundingLocsOffset; i++) {
+    const Loc loc = moveRecord.internalLocs[i];
     assert(0 == getState(loc));
     setState(loc, static_cast<State>(emptyTerritoryPlayer << EMPTY_TERRITORY_SHIFT));
   }
@@ -470,7 +473,7 @@ void Board::undoDots(const MoveRecord& moveRecord) {
   }
 
   if (!isGroundingMove) {
-    setState(moveRecord.loc, moveRecord.previousState);
+    setState(moveRecord.loc, moveRecord.capDirsOrPreviousState);
     pos_hash ^= ZOBRIST_BOARD_HASH[moveRecord.loc][moveRecord.pla];
   } else {
     assert(is_finished);
