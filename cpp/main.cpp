@@ -12,7 +12,7 @@
 
 #include <sstream>
 
-#ifdef USE_EIGEN_BACKEND 
+#ifdef USE_EIGEN_BACKEND
 #include <Eigen/Core>
 #endif  // USE_EIGEN_BACKEND
 
@@ -157,8 +157,6 @@ static int handleSubcommand(const string& subcommand, const vector<string>& args
     return MainCmds::checksgfhintpolicy(subArgs);
   else if(subcommand == "genposesfromselfplayinit")
     return MainCmds::genposesfromselfplayinit(subArgs);
-  else if(subcommand == "demoplay")
-    return MainCmds::demoplay(subArgs);
   else if(subcommand == "writetrainingdata")
     return MainCmds::writetrainingdata(subArgs);
   else if(subcommand == "sampleinitializations")
@@ -250,7 +248,7 @@ std::string Version::getAppName() {
 }
 
 string Version::getAppVersion() {
-  return "1.16.4";
+  return "1.16.5";
 }
 
 string Version::getBuildType() {
