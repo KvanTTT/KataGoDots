@@ -70,7 +70,7 @@ string generateBoardRepresentation(Board& board) {
     return generateBoardStateRepresentation(board, {}, {}, {}, {});
 }
 
-string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersCache& laddersCache) {
+string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersInfo& laddersCache) {
     if (const Loc moveLoc = Location::getLoc(move.x, move.y, board.x_size); moveLoc != Board::NULL_LOC) {
         cout << "Move: " << move.toString() << ". ";
         EXPECT_TRUE(board.playMove(moveLoc, move.player, true));
@@ -106,7 +106,7 @@ string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersCach
     std::unordered_set<Loc> whiteCapturedLocs;
 
     for (const auto* ladderMoveInfo : workingLadderMoveInfos) {
-        assert(ladderMoveInfo->type == Board::LadderMoveInfo::LADDER);
+        assert(ladderMoveInfo->type == Board::LadderMoveType::LADDER);
         Player ladderPlayer = ladderMoveInfo->player;
         assert(ladderPlayer != C_EMPTY);
 
@@ -124,9 +124,9 @@ string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersCach
                                             whiteCapturedLocs);
 }
 
-static void checkLadders(const string& boardData, const optional<string>& expectedLaddersInfo) {
-    Board field = parseDotsFieldDefault(boardData);
-    Board::LaddersCache laddersCache;
+static void checkLadders(const string& fieldDataWithLaddersInfo, const optional<string>& expectedLaddersInfo) {
+    Board field = parseDotsFieldDefault(fieldDataWithLaddersInfo);
+    Board::LaddersInfo laddersCache(field);
 
     const string actualFieldLadderInfo = playAndDumpLadderInfo(field, XYMove::getNullMove(), laddersCache);
 
@@ -135,6 +135,102 @@ static void checkLadders(const string& boardData, const optional<string>& expect
         : generateBoardRepresentation(field);
 
     EXPECT_EQ_TRIMMED(expectedLaddersInfoString, actualFieldLadderInfo);
+}
+
+static Board parseDotsFieldWithLaddersInfo(const string& boardData) {
+    int y = 0;
+    int x = 0;
+    int maxX = 0;
+
+    vector<XYMove> moves;
+
+    for (size_t i = 0; i < boardData.size(); ++i) {
+        switch (const char c = boardData[i]) {
+            case ' ':
+                continue;
+            case '\n':
+                // Skip empty lines
+                if (x > 0) {
+                    if (x - 1 > maxX) {
+                        maxX = x - 1;
+                    }
+
+                    y++;
+                    x = 0;
+                }
+                continue;
+            case '.':
+                if (i < boardData.size() - 1) {
+                    switch (boardData[i + 1]) {
+                        case '\n':
+                            break;
+                        case ' ': // Empty loc
+                        case FIRST_PLA_LOWER: // First player working move
+                        case SECOND_PLA_LOWER: // Second player working move
+                        case '\'': // Captured loc
+                            i++;
+                            break;
+                        default:
+                            throw StringError(string("Unexpected ladder loc type: ") + boardData[i + 1]);
+                    }
+                }
+                x++;
+                break;
+            case FIRST_PLA_UPPER:
+            case SECOND_PLA_UPPER: {
+                const Color color = c == FIRST_PLA_UPPER ? C_BLACK : C_WHITE;
+                moves.push_back(XYMove(x, y, color));
+
+                if (i < boardData.size() - 1) {
+                    switch (boardData[i + 1]) {
+                        case '\n':
+                            break;
+                        case ' ': // Empty loc
+                        case '\'': // Captured loc
+                            i++;
+                            break;
+                        default:
+                            throw StringError(string("Unexpected ladder loc type: ") + boardData[i + 1]);
+                    }
+                }
+
+                x++;
+                break;
+            }
+            default:
+               throw StringError(string("Unexpected field character: ") + c);
+        }
+    }
+
+    if (x == 0) {
+        y--;
+    }
+
+    auto field = Board(maxX + 1, y + 1, Rules::DEFAULT_DOTS);
+
+    vector<Move> linearMoves;
+    linearMoves.reserve(moves.size());
+
+    std::transform(
+        moves.begin(),
+        moves.end(),
+        std::back_inserter(linearMoves),
+        [maxX](const XYMove& item) {
+            return item.toMove(maxX + 1);
+        }
+    );
+
+    field.setStonesFailIfNoLibs(linearMoves);
+    return field;
+}
+
+static void checkLadders(const string& fieldDataWithLaddersInfo) {
+    Board field = parseDotsFieldWithLaddersInfo(fieldDataWithLaddersInfo);
+    Board::LaddersInfo laddersCache(field);
+
+    const string actualFieldLadderInfo = playAndDumpLadderInfo(field, XYMove::getNullMove(), laddersCache);
+
+    EXPECT_EQ_TRIMMED(fieldDataWithLaddersInfo, actualFieldLadderInfo);
 }
 
 static void checkLaddersSequence(
@@ -146,9 +242,10 @@ static void checkLaddersSequence(
     const string& expectedLaddersInfoOnNextNextMove
 ) {
     const Board origField = parseDotsFieldDefault(boardData);
-    Board::LaddersCache laddersCache;
 
     Board field = origField;
+    Board::LaddersInfo laddersCache(field);
+
     const string origFieldLadderInfo = playAndDumpLadderInfo(field, XYMove::getNullMove(), laddersCache);
     EXPECT_EQ_TRIMMED(origFieldLadderInfo, expectedLaddersInfo);
 
@@ -164,12 +261,6 @@ static void checkLaddersSequence(
 TEST(LadderTests, MinimalCapturing) {
     checkLadders(
         R"(
-.  .  .  .  .
-.  X  O  .  X
-X  O  O  X  .
-.  X  X  .  .
-)",
-        R"(
 .  .  .x .  .
 .  X  O' .  X
 X  O' O' X  .
@@ -179,13 +270,6 @@ X  O' O' X  .
 
 TEST(LadderTests, MinimalCapturingWithReplace) {
     checkLadders(
-        R"(
-.  X  .  .
-.  .  X  .
-.  O  O  X
-.  X  O  X
-.  .  X  .
-)",
         R"(
 .  X  .  .
 .  .  X  .
@@ -200,12 +284,6 @@ TEST(LadderTests, IndirectLadder) {
         R"(
 .  X  .  .  .
 .  .  .  X  .
-.  X  O  .  .
-.  .  X  .  .
-)",
-        R"(
-.  X  .  .  .
-.  .  .  X  .
 .  X  O' .x .
 .  .  X  .  .
 )"
@@ -214,18 +292,6 @@ TEST(LadderTests, IndirectLadder) {
 
 TEST(LadderTests, IndirectFarLadder) {
     checkLadders(
-        R"(
-.  .  .  .  .  .  .  .  .  .  .
-.  X  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  .  .  .  .  .  .
-.  .  .  .  X  .  .  .  .  .  .
-.  .  .  .  O  X  .  .  .  .  .
-.  .  .  X  O  O  X  .  .  .  .
-.  .  .  .  X  O  .  .  .  .  .
-.  .  .  .  .  X  .  .  .  .  .
-.  .  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  .  .  .  .  .  .
-)",
         R"(
 .  .  .  .  .  .  .  .  .  .  .
 .  X  .  .  .  .  .  .  .  .  .
@@ -249,19 +315,11 @@ R"(
 .  .  O  X  .  .
 .  .  .  O  .  .
 .  .  .  .  .  .
-)",
-    nullopt);
+)");
 }
 
-/*TEST(LadderTests, WorkingMoveIsAlsoCapturingMove) {
+TEST(LadderTests, WorkingMoveIsAlsoCapturingMove) {
     checkLadders(
-        R"(
-.  .  .  X  .  .  .
-.  .  X  .  .  .  .
-.  X  O  O  .  .  .
-.  .  X  X  O  X  .
-.  .  .  .  X  .  .
-)",
         R"(
 .  .  .  X  .  .  .
 .  .  X  .' .x .  .
@@ -269,15 +327,10 @@ R"(
 .  .  X  X  O' X  .
 .  .  .  .  X  .  .
 )");
-}*/
+}
 
 TEST(LadderTests, EmptyTerrtirotyIsNotAccountable) {
     checkLadders(
-        R"(
-.  .  .  .  .  .
-.  X  .  .  X  .
-.  .  X  X  .  .
-)",
         R"(
 .  .  .  .  .  .
 .  X  .  .  X  .
@@ -293,8 +346,7 @@ TEST(LadderTests, NotLadderBecauseOfOppAtari) {
 .  .  .  .  .
 X  O  O  X  .
 .  X  X  O  .
-)",
-        nullopt);
+)");
 }
 
 TEST(LadderTests, NoLadderBecauseOfOppFarAtari) {
@@ -309,39 +361,23 @@ TEST(LadderTests, NoLadderBecauseOfOppFarAtari) {
 .  .  X  X  O  .  .  .  .  .
 .  .  .  .  .  O  O  .  .  .
 .  .  .  .  .  .  .  .  .  .
-)",
-        nullopt
+)"
         );
 }
 
-/*TEST(LadderTests, OppAtariButWorkingLadder) {
+TEST(LadderTests, OppAtariButWorkingLadder) {
     checkLadders(
         R"(
-.  .  .  .  .  .  .  .
-.  .  .  .  .  .  X  .
-.  X  O  O  X  .  X  .
-.  .  X  X  O  .  X  .
-.  .  .  .  X  X  .  .
-)",
-        R"(
-.  .  .  .  .  .  .  .
-.  .  .x .  .  .  X  .
-.  X  O' O' X  .  X  .
-.  .  X  X  O' .  X  .
+.  .  .  X  .x .  .  .
+.  .  X  O' O' .  X  .
+.  X  O' O' X  .' X  .
+.  .  X  X  O' .' X  .
 .  .  .  .  X  X  .  .
 )");
-}*/
+}
 
 TEST(LadderTests, CapturedAndWorkingLocsArePresentedAndDifferent) {
     checkLadders(
-        R"(
-.  .  .  .  .  .  .  .
-.  .  X  X  O  O  .  .
-.  X  O  O  X  X  O  .
-.  .  .  X  .  .  .  .
-.  X  .  .  .  .  O  .
-.  .  .  .  .  .  .  .
-)",
         R"(
 .  .  .  .  .  .  .  .
 .  .  X  X  O  O  .  .
@@ -353,53 +389,8 @@ TEST(LadderTests, CapturedAndWorkingLocsArePresentedAndDifferent) {
     );
 }
 
-TEST(LadderTests, Rotation) {
-    checkLadders(
-        R"(
-.  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  .  .  X  .  .
-.  .  .  .  .  .  .  .  .  .
-.  X  O  O  X  .  .  .  .  .
-.  .  X  X  .  .  .  .  X  .
-.  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  .  .  .  .  .
-)",
-        R"(
-.  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  .  .  X  .  .
-.  .  .x .  .  .  .  .  .  .
-.  X  O' O' X  .  .  .  .  .
-.  .  X  X  .  .  .  .  X  .
-.  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  .  .  .  .  .
-)");
-}
-
-/*TEST(LadderTests, RotatationNotEnoughSpace) {
-    checkLadders(
-        R"(
-.  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  .  .  X  .  .
-.  .  .  .  .  .  .  .  .  .
-.  X  O  O  X  .  .  .  .  .
-.  .  X  X  .  .  .  .  X  .
-.  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  .  .  .  .  .
-)",
-        nullopt);
-}*/
-
 TEST(LadderTests, MoveInsideEmptyTerritory) {
     checkLadders(
-        R"(
-.  X  X  X  .
-X  O  O  O  X
-X  O  .  O  X
-.  X  O  .  .
-.  .  .  .  .
-)",
         R"(
 .  X  X  X  .
 X  O' O' O' X
@@ -413,13 +404,6 @@ TEST(LadderTests, ComplexAtari) {
     checkLadders(
         R"(
 .  X  X  X  .  .
-X  O  O  O  X  .
-X  O  X  O  .  .
-.  X  .  .  .  .
-.  .  .  .  X  .
-)",
-        R"(
-.  X  X  X  .  .
 X  O' O' O' X  .
 X  O' X  O' .  .
 .  X  .  .x .  .
@@ -427,7 +411,7 @@ X  O' X  O' .  .
 )");
 }
 
-/*TEST(LadderTests, ComplexAtariNotWorking) {
+TEST(LadderTests, ComplexAtariNotWorking) {
     checkLadders(
         R"(
 .  .  .  X  X  X  .  .  .
@@ -438,11 +422,35 @@ X  O' X  O' .  .
 .  .  .  .  .  .  .  .  .
 .  .  .  .  .  .  .  .  .
 .  .  .  .  .  .  .  .  .
-)",
-        R"(
-
 )");
-}*/
+}
+
+TEST(LadderTests, Rotation) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  X  .  .
+.  .  .x .  .  .  .  .  .  .
+.  X  O' O' X  .  .  .  .  .
+.  .  X  X  .  .  .  .  X  .
+.  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .
+)");
+}
+
+TEST(LadderTests, RotatationNotEnoughSpace) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  X  .  .
+.  .  .  .  .  .  .  .  .  .
+.  X  O  O  X  .  .  .  .  .
+.  .  X  X  .  .  .  .  X  .
+.  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .
+)");
+}
 
 TEST(LadderTests, StressSimple) {
     constexpr int width = Board::MAX_LEN_X;

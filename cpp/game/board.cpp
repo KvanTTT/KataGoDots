@@ -2849,10 +2849,15 @@ void Board::printBoard(
       const Loc loc = Location::getLoc(x, y, board.x_size);
       const State state = board.getState(loc);
       const char s = PlayerIO::stateToChar(state, board.rules.isDots);
-      if(getActiveColor(state) == C_EMPTY && markLoc == loc)
+      /*if(getActiveColor(state) == C_EMPTY && markLoc == loc)
         out << '@';
       else
-        out << s;
+        out << s;*/
+
+      out << s;
+      if (markLoc == loc) {
+        out << '@';
+      }
 
       bool histMarked = false;
       if(hist != nullptr) {
@@ -3007,6 +3012,17 @@ Board Board::ofJson(const nlohmann::json& data) {
 
 std::string Board::debugLoc(const Loc loc) const {
   return Location::toStringMach(loc, *this);
+}
+
+std::string Board::debugLocs(const std::vector<std::pair<LadderMoveType, Loc>>& ladderLocs) const {
+  vector<Loc> locs;
+  locs.reserve(ladderLocs.size());
+
+  for (const auto& [moveType, loc] : ladderLocs) {
+    locs.push_back(loc);
+  }
+
+  return debugLocs(locs);
 }
 
 std::string Board::debugLocsVector(const vector<Loc>& locs) const {

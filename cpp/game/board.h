@@ -8,6 +8,7 @@
 #define GAME_BOARD_H_
 
 #include <array>
+#include <sstream>
 #include <unordered_set>
 #include "../core/global.h"
 #include "../core/hash.h"
@@ -508,13 +509,13 @@ struct Board
 
   CapturesAndTerritoriesInfos calculateCapturesAndTerritoriesColorsForDots() const;
 
-  struct LadderMoveInfo {
-    enum LadderMoveInfoType : uint8_t {
-      EMPTY,
-      LADDER,
-      CAPTURE,
-    };
+  enum LadderMoveType : uint8_t {
+    EMPTY,
+    CAPTURE,
+    LADDER,
+  };
 
+  struct LadderMoveInfo {
     static LadderMoveInfo createEmpty(const Player pla) {
       return LadderMoveInfo(NULL_LOC, std::vector<Base>(), pla);
     }
@@ -552,12 +553,16 @@ struct Board
     [[nodiscard]] bool isWorseThan(const LadderMoveInfo* other) const {
       if (other == nullptr) return true;
 
-      if (territoryLocs.size() < other->territoryLocs.size()) return true;
-
-      return false;
+      return isWorseThan(*other);
     }
 
-    LadderMoveInfoType type;
+    [[nodiscard]] bool isWorseThan(const LadderMoveInfo& other) const {
+      assert(player == other.player);
+
+      return territoryLocs.size() < other.territoryLocs.size();
+    }
+
+    LadderMoveType type;
     Color player;
     Loc workingMove;
     std::unordered_set<Loc> territoryLocs;
@@ -598,8 +603,42 @@ struct Board
     }
   };
 
-  class LaddersCache {
+  class LaddersInfo {
   public:
+    std::vector<MoveRecord> movesSequence;
+
+    explicit LaddersInfo(Board& newBoard) {
+      board = &newBoard;
+      movesSequence.reserve(newBoard.numMaxMoves());
+    }
+
+    const MoveRecord& play(const Loc loc, const Player pla) {
+      const MoveRecord& moveRecord = board->playMoveRecordedDots(loc, pla);
+      movesSequence.push_back(moveRecord);
+
+      std::vector<Move> hist;
+      hist.reserve(movesSequence.size());
+      for (const auto& move : movesSequence) {
+        hist.push_back(Move(move.loc, move.pla));
+      }
+
+      std::ostringstream oss;
+      printBoard(oss, *board, movesSequence.back().loc, &hist, false, true);
+      std::cout << oss.str();
+
+      movesCounter++;
+      if (movesSequence.size() > maxDepth) {
+        maxDepth = movesSequence.size();
+      }
+      return movesSequence.back();
+    }
+
+    void undo() {
+      const MoveRecord& moveRecord = movesSequence.back();
+      board->undoDots(moveRecord);
+      movesSequence.pop_back();
+    }
+
     const LadderMoveInfo* put(const Hash128& field_hash, const LadderMoveInfo& value) {
       const Hash128 field_with_player_hash = field_hash ^ ZOBRIST_PLAYER_HASH[value.player];
       auto [it, inserted] = data_.insert_or_assign(field_with_player_hash, value);
@@ -630,47 +669,61 @@ struct Board
     [[nodiscard]] size_t getCacheSize() const { return data_.size(); }
 
     void clear() { data_.clear(); }
-
   private:
+    Board* board;
     std::unordered_map<Hash128, LadderMoveInfo, Hash128Hash> data_;
     uint16_t movesCounter = 0;
     uint16_t maxDepth = 0;
     uint16_t cacheHits = 0;
   };
 
-  std::vector<const LadderMoveInfo*> iterDotsLadders(LaddersCache &cachedLadderMoveInfos);
+  std::vector<const LadderMoveInfo*> iterDotsLadders(LaddersInfo &cachedLadderMoveInfos);
 
-  const LadderMoveInfo* ladderStart(Loc initLoc, Player pla, LaddersCache& cache);
+  const LadderMoveInfo* ladderStart(Loc initLoc, Player pla, LaddersInfo& cache);
+
+  LadderMoveInfo ladderIterPlaCapture(Player pla,
+                                      std::unordered_set<short>& plaChainLocs,
+                                      std::unordered_set<short>& oppChainLocs,
+                                      std::unordered_set<short>& oppChainAdjLocs,
+                                      std::unordered_set<short>& oppInitCaptures,
+                                      LaddersInfo& laddersInfo,
+                                      const std::vector<std::pair<LadderMoveType, short>>& potentiallyCaptureLocs);
+
+  bool ladderIterOppCapture(Player pla, std::unordered_set<short>& plaChainLocs,
+                            std::unordered_set<short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs,
+                            std::unordered_set<short>& oppInitCaptures, LaddersInfo& laddersInfo);
 
   static void cleanUpChainAndAdjLocs(std::unordered_set<short>& chainLocs, std::unordered_set<short>& chainAdjLocs,
-                              const std::vector<short>& chainNewLocs, const std::vector<short>& chainAdjNewLocs);
+                                     const std::vector<short>& chainNewLocs, const std::vector<short>& chainAdjNewLocs);
 
-  static bool ladderIsRelevantCapturing(const MoveRecord& moveRecord, Loc initLoc, Player pla, int depth, std::unordered_set<Loc>& oppInitCaptures);
+  std::vector<std::pair<LadderMoveType, short>> getSortedRelevantLocsToCheck(
+    Player pla, const std::unordered_set<Loc>& plaChainLocs, const LaddersInfo& ladderInfo
+  );
 
-  bool ladderIsRelevantLadderLoc(Loc loc, Player pla, bool oneMoveCapturing,
-                                 std::unordered_set<Loc>& chainLocs) const;
+  static bool ladderIsRelevantCapturing(const MoveRecord& moveRecord, const MoveRecord& initMoveRecord, Player pla, bool initOppCaptures, std::unordered_set<Loc>& oppInitCaptures);
 
-  const LadderMoveInfo* ladderIterPla(Loc initLoc, Player pla, std::vector<Loc>& movesSequence,
+  LadderMoveType ladderGetPotentiallyRelevantLadderLocType(Loc loc, Player pla,
+                                                           const std::unordered_set<Loc>& chainLocs, bool onlyConnectingLoc) const;
+
+  bool ladderIsPotentialCapture(Loc loc, Player pla, const std::unordered_set<short>& chainLocs, bool ignoreLoc = false) const;
+
+  const LadderMoveInfo* ladderIterPla(Player pla,
                                       std::unordered_set<Loc>& plaChainLocs,
                                       std::unordered_set<Loc>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures,
-                                      LaddersCache &cache);
+                                      LaddersInfo &laddersInfo);
 
-  const LadderMoveInfo* ladderIterAdjLocs(Loc initLoc, Loc loc, Player pla,
-                                          std::vector<short>& movesSequence, std::unordered_set<Loc>& plaChainLocs,
-                                          std::unordered_set<Loc>& plaChainAdjLocs, std::unordered_set<Loc>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs,
-                                          std::unordered_set<Loc>& oppInitCaptures, LaddersCache& cache);
+  bool ladderIterOppDefend(Player pla, Loc potentiallyDefendingLoc,
+                           std::unordered_set<Loc>& plaChainLocs,
+                           std::unordered_set<Loc>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs,
+                           std::unordered_set<Loc>& oppInitCaptures,
+                           LaddersInfo& laddersInfo);
 
-  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Player pla, Loc potentiallyDefendingLoc, std::vector<Loc>& movesSequence,
-                                      std::unordered_set<Loc> &plaChainLocs, std::unordered_set<Loc>& plaChainAdjLocs,
-                                      std::unordered_set<Loc>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures,
-                                      LaddersCache& cache);
+  void appendAllDiagonallyConnectedDots(Loc loc, Player pla, std::unordered_set<short>& chain,
+                                      std::vector<short>& newChainLocs);
 
   void appendAllDiagonallyConnectedDots(Loc loc, Player pla,
     std::unordered_set<Loc> &chain, std::unordered_set<short>& chainAdjLocs,
     std::vector<Loc>& newChainLocs, std::vector<short>& newAdjLocs);
-
-  std::unordered_set<short> getAdjLocsForAllDiagonallyConnected(Loc loc, Player pla, std::unordered_set<short>& chain,
-                                                                std::vector<short>& newChainLocs);
 
   // Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
@@ -688,6 +741,8 @@ struct Board
 
   // Method to make debugging more convenient
   std::string debugLoc(Loc loc) const;
+
+  std::string debugLocs(const std::vector<std::pair<LadderMoveType, Loc>> &ladderLocs) const;
 
   std::string debugLocsVector(const std::vector<short> &locs) const;
 
