@@ -1578,7 +1578,7 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
 
         // Try to continue the ladder
         const LadderMoveInfo* foundLadderFromOppCaptureMoveOrNull =
-          ladderIterAdjLocs(initLoc, oppChainAdjLoc, loc, prevLoc, pla, depth, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
+          ladderIterAdjLocs(initLoc, oppChainAdjLoc, prevLoc, prevPrevLoc, pla, depth, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
 
         if (foundLadderFromOppCaptureMoveOrNull != nullptr && foundLadderFromOppCaptureMoveOrNull->isLadderOrCapture(pla)) {
           if (foundLadderFromOppCaptureMoveOrNull->isWorseThan(worstFoundLadderOrCaptureOrNull)) {
@@ -1642,23 +1642,37 @@ const Board::LadderMoveInfo* Board::ladderIterAdjLocs(
   array<Loc, 16> actualLocs{};
   int actualLocsSize = 0;
 
+  // Make sure the color of the last location is opp to traverse its adjacent locs to find maybe capture of ladder pla locs.
+  // The adjacent loc should be empty and have at least one connection with the player chain (otherwise it can't create ladders).
+  assert(getColor(loc) == getOpp(pla));
   for (const int adj_offset : adj_offsets) {
-    const Loc adjLoc = static_cast<Loc>(loc + adj_offset);
-    if (ladderIsRelevantLadderLoc(adjLoc, pla, false, plaChainLocs)) {
+    if (const Loc adjLoc = static_cast<Loc>(loc + adj_offset); ladderIsRelevantLadderLoc(adjLoc, pla, false, plaChainLocs)) {
       actualLocs[actualLocsSize++] = adjLoc;
     }
   }
 
-  for (const int adj_offset : adj_offsets) {
-    const Loc adjPrevLoc = static_cast<Loc>(prevLoc + adj_offset);
+  // Handle a special case when the surrounding can go through empty territory that's not directly adjacent to last opp location:
+  //
+  // .  X  X  X  .
+  // X  O' O' O' X
+  // X  O' .  O' X
+  // .  X  O  .x .
+  // .  .  .  .  .
+  //
+  // Make sure the color of prevLoc is pla but don't use the assertion on active color because the prevLoc can already be captured by opp player
+  assert(getPlacedColor(prevLoc) == pla);
+  if (getColor(prevLoc) == pla) {
+    for (const int adj_offset : adj_offsets) {
+      const Loc adjPrevLoc = static_cast<Loc>(prevLoc + adj_offset);
 
-    if (const auto end = actualLocs.begin() + actualLocsSize;
-      std::find(actualLocs.begin(), end, adjPrevLoc) != end) {
-      continue;
-    }
+      if (const auto end = actualLocs.begin() + actualLocsSize;
+        std::find(actualLocs.begin(), end, adjPrevLoc) != end) {
+        continue;
+      }
 
-    if (ladderIsRelevantLadderLoc(adjPrevLoc, pla, false, plaChainLocs)) {
-      actualLocs[actualLocsSize++] = adjPrevLoc;
+      if (ladderIsRelevantLadderLoc(adjPrevLoc, pla, true, plaChainLocs)) {
+        actualLocs[actualLocsSize++] = adjPrevLoc;
+      }
     }
   }
 
