@@ -1,17 +1,14 @@
 #include "../core/global.h"
 #include "../core/config_parser.h"
-#include "../core/fileutils.h"
 #include "../dataio/sgf.h"
-#include "../search/asyncbot.h"
 #include "../program/setup.h"
 #include "../program/playutils.h"
 #include "../tests/tests.h"
 #include "../command/commandline.h"
 #include "../main.h"
+#include "../version.h"
 
-#include <chrono>
 #include <map>
-#include <sstream>
 #include <fstream>
 
 using namespace std;

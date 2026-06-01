@@ -10,6 +10,7 @@
 #include "../command/commandline.h"
 #include "../core/test.h"
 #include "../main.h"
+#include "../version.h"
 
 #include <csignal>
 

@@ -23,6 +23,32 @@ namespace Tests {
   void runDotsBoardHistoryGroundingTests();
   void runDotsPosHashTests();
   void runDotsStartPosTests();
+
+  enum CheckingMode {
+    REGULAR,
+    UNDO_AND_STATES,
+
+    // The following modes are expensive, especially ladders
+    CAPTURE_TERRITORY_ON_EACH_MOVE,
+    LADDERS_ON_EACH_MOVE,
+  };
+
+  void runDotsStressTestsInternal(
+    int x_size,
+    int y_size,
+    int gamesCount,
+    bool dotsGame,
+    int startPos,
+    bool startPosIsRandom,
+    bool dotsCaptureEmptyBase,
+    float komi,
+    bool suicideAllowed,
+    float groundingStartCoef,
+    float groundingEndCoef,
+    CheckingMode checkingMode,
+    int randSeed
+  );
+
   void runDotsStressTests();
 
   void runDotsOwnershipTests();

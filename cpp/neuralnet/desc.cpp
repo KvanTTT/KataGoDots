@@ -4,7 +4,7 @@
 #include <fstream>
 #include <zlib.h>
 
-#include "../main.h"
+#include "../version.h"
 #include "../core/global.h"
 #include "../core/fileutils.h"
 #include "../neuralnet/modelversion.h"
