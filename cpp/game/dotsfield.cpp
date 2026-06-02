@@ -265,7 +265,7 @@ bool Board::wouldBeCaptureDots(const Loc loc, const Player pla) const {
 }
 
 Board::MoveRecord Board::playMoveRecordedDots(const Loc loc, const Player pla) {
-  const MoveRecord& result = tryPlayMoveRecordedDots(loc, pla, true);
+  const MoveRecord result = tryPlayMoveRecordedDots(loc, pla, true);
   assert(result.pla == pla);
   return result;
 }
