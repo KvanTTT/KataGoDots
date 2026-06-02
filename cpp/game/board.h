@@ -610,49 +610,70 @@ struct Board
     }
   };
 
-  class LaddersCache {
+  class LaddersInfo {
   public:
+    explicit LaddersInfo() = delete;
+
+    explicit LaddersInfo(Board& newBoard) {
+      board = &newBoard;
+    }
+
+    MoveRecord play(const Loc loc, const Player pla) {
+      const MoveRecord moveRecord = board->playMoveRecordedDots(loc, pla);
+
+      movesCounter++;
+      currentDepth++;
+      if (currentDepth > maxDepth) {
+        maxDepth = currentDepth;
+      }
+
+      return moveRecord;
+    }
+
+    void undo(const MoveRecord& moveRecord) {
+      board->undoDots(moveRecord);
+      currentDepth--;
+    }
+
     const LadderMoveInfo* put(const Hash128& field_hash, const LadderMoveInfo& value) {
       const Hash128 field_with_player_hash = field_hash ^ ZOBRIST_PLAYER_HASH[value.player];
-      auto [it, inserted] = data_.insert_or_assign(field_with_player_hash, value);
+      auto [it, inserted] = cache.insert_or_assign(field_with_player_hash, value);
       //assert(inserted);
       return &it->second;
     }
 
     [[nodiscard]] const LadderMoveInfo* get(const Hash128& field_hash, const Player pla) {
       const Hash128 field_with_player_hash = field_hash ^ ZOBRIST_PLAYER_HASH[pla];
-      const auto it = data_.find(field_with_player_hash);
-      if (it == data_.end()) {
+      const auto it = cache.find(field_with_player_hash);
+      if (it == cache.end()) {
         return nullptr;
       }
       cacheHits++;
       return &it->second;
     }
 
-    uint16_t incMovesCount() { return ++movesCounter; }
     [[nodiscard]] uint16_t getMovesCount() const { return movesCounter; }
     [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
+    [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
     void clearMaxDepth() { maxDepth = 0; }
-    void recalcMaxDepth(const int currentDepth) {
-      if (currentDepth > maxDepth) {
-        maxDepth = currentDepth;
-      }
-    }
     [[nodiscard]] uint16_t getCacheHits() const { return cacheHits; }
-    [[nodiscard]] size_t getCacheSize() const { return data_.size(); }
+    [[nodiscard]] size_t getCacheSize() const { return cache.size(); }
 
-    void clear() { data_.clear(); }
+    void clear() { cache.clear(); }
 
   private:
-    std::unordered_map<Hash128, LadderMoveInfo, Hash128Hash> data_;
-    uint16_t movesCounter = 0;
+    uint16_t currentDepth = 0;
     uint16_t maxDepth = 0;
     uint16_t cacheHits = 0;
+    uint16_t movesCounter = 0;
+
+    Board* board = nullptr;
+    std::unordered_map<Hash128, LadderMoveInfo, Hash128Hash> cache;
   };
 
-  std::vector<const LadderMoveInfo*> iterDotsLadders(LaddersCache &cachedLadderMoveInfos);
+  std::vector<const LadderMoveInfo*> iterDotsLadders(LaddersInfo &laddersInfo);
 
-  const LadderMoveInfo* ladderStart(Loc initLoc, Player pla, LaddersCache& cache);
+  const LadderMoveInfo* ladderStart(Loc initLoc, Player pla, LaddersInfo& cache);
 
   static void cleanUpChainAndAdjLocs(std::unordered_set<short>& chainLocs, std::unordered_set<short>& chainAdjLocs,
                               const std::vector<short>& chainNewLocs, const std::vector<short>& chainAdjNewLocs);
@@ -662,16 +683,16 @@ struct Board
   bool ladderIsRelevantLadderLoc(Loc loc, Player pla, bool oneMoveCapturing,
                                  std::unordered_set<Loc>& chainLocs) const;
 
-  const LadderMoveInfo* ladderIterPla(Loc initLoc, Loc loc, Loc prevLoc, Player pla,
-                                      uint16_t depth, std::unordered_set<Loc> &plaChainLocs, std::unordered_set<short>& plaChainAdjLocs, std::unordered_set<
-                                      short>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersCache &cache);
+  const LadderMoveInfo* ladderIterPla(Loc initLoc, Loc loc, Player pla,
+                                      std::unordered_set<Loc> &plaChainLocs, std::unordered_set<short>& plaChainAdjLocs, std::unordered_set<
+                                        short>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersInfo &laddersInfo);
 
-  const LadderMoveInfo* ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Loc prevPrevLoc, Player pla,
-                                          uint16_t depth, std::unordered_set<Loc>& plaChainLocs, std::unordered_set<short>& plaChainAdjLocs, std::unordered_set<
-                                          short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersCache& cache);
+  const LadderMoveInfo* ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla,
+                                          std::unordered_set<Loc>& plaChainLocs, std::unordered_set<short>& plaChainAdjLocs, std::unordered_set<
+                                            short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersInfo& laddersInfo);
 
-  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Loc prevPrevLoc, Player pla, uint16_t depth, std::unordered_set<Loc> &plaChainLocs, std::unordered_set<short>&
-                                      plaChainAdjLocs, std::unordered_set<short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersCache& cache);
+  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, std::unordered_set<Loc> &plaChainLocs, std::unordered_set<short>&
+                                      plaChainAdjLocs, std::unordered_set<short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersInfo& laddersInfo);
 
   void appendAllDiagonallyConnectedDots(Loc loc, Player pla, std::unordered_set<Loc> &chain, std::unordered_set<short>& chainAdjLocs, std::vector<Loc>& newChainLocs, std
                                         ::vector<short>& newAdjLocs);
