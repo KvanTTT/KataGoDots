@@ -249,6 +249,8 @@ add_executable(katago
   core/TimeStampHandler.cpp
   game/board.cpp
   game/dotsfield.cpp
+  game/dotsfieldCapturesAndTerritories.cpp
+  game/dotsfieldLadders.cpp
   game/rules.cpp
   game/boardhistory.cpp
   game/dotsboardhistory.cpp
@@ -694,6 +696,8 @@ add_executable(katago_tests
   game/boardhistory.cpp
   game/rules.cpp
   game/dotsfield.cpp
+  game/dotsfieldCapturesAndTerritories.cpp
+  game/dotsfieldLadders.cpp
   game/dotsboardhistory.cpp
 )
 
