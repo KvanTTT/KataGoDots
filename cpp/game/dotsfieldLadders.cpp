@@ -2,7 +2,7 @@
 
 using namespace std;
 
-vector<const Board::LadderMoveInfo*> Board::iterDotsLadders(LaddersCache& cachedLadderMoveInfos) {
+vector<const Board::LadderMoveInfo*> Board::iterDotsLadders(LaddersInfo& laddersInfo) {
   vector<const LadderMoveInfo*> result;
 
   if (is_finished) {
@@ -25,7 +25,7 @@ vector<const Board::LadderMoveInfo*> Board::iterDotsLadders(LaddersCache& cached
           return;
         }
 
-        if (const LadderMoveInfo* ladderMoveInfo = ladderStart(loc, pla, cachedLadderMoveInfos); ladderMoveInfo->isLadder(pla)) {
+        if (const LadderMoveInfo* ladderMoveInfo = ladderStart(loc, pla, laddersInfo); ladderMoveInfo->isLadder(pla)) {
           assert(ladderMoveInfo->workingMove != NULL_LOC);
 
           result.push_back(ladderMoveInfo);
@@ -40,38 +40,36 @@ vector<const Board::LadderMoveInfo*> Board::iterDotsLadders(LaddersCache& cached
   return result;
 }
 
-const Board::LadderMoveInfo* Board::ladderStart(const Loc initLoc, const Player pla, LaddersCache& cache) {
+const Board::LadderMoveInfo* Board::ladderStart(const Loc initLoc, const Player pla, LaddersInfo& cache) {
   unordered_set<Loc> plaChainLocs;
   unordered_set<Loc> plaChainAdjLocs;
   unordered_set<Loc> oppChainLocs;
   unordered_set<Loc> oppChainAdjLocs;
   unordered_set<Loc> oppInitCaptures;
 
-  return ladderIterPla(initLoc, initLoc, NULL_LOC, pla, 1,
-                       plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
+  return ladderIterPla(initLoc, initLoc, pla, plaChainLocs, plaChainAdjLocs,
+                       oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
 }
 
-const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc loc, const Loc prevLoc,
-                                                  const Player pla, const uint16_t depth,
+const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc loc,
+                                                  const Player pla,
                                                   unordered_set<Loc>& plaChainLocs, unordered_set<Loc>& plaChainAdjLocs,
                                                   unordered_set<Loc>& oppChainLocs, unordered_set<Loc>& oppChainAdjLocs,
                                                   unordered_set<Loc>& oppInitCaptures,
-                                                  LaddersCache& cache) {
-  const MoveRecord moveRecordForLoc = playMoveRecordedDots(loc, pla);
-  cache.recalcMaxDepth(depth);
-  cache.incMovesCount();
+                                                  LaddersInfo& laddersInfo) {
+  const MoveRecord moveRecordForLoc = laddersInfo.play(loc, pla);
 
-  if (const LadderMoveInfo* calculatedResult = cache.get(pos_hash, pla); calculatedResult != nullptr) {
+  if (const LadderMoveInfo* calculatedResult = laddersInfo.get(pos_hash, pla); calculatedResult != nullptr) {
     auto* result = calculatedResult->type == LadderMoveInfo::LADDER && calculatedResult->workingMove != loc
-      ? cache.put(pos_hash, LadderMoveInfo::createLadder(loc, *calculatedResult))
+      ? laddersInfo.put(pos_hash, LadderMoveInfo::createLadder(loc, *calculatedResult))
       : calculatedResult;
-    undoDots(moveRecordForLoc);
+    laddersInfo.undo(moveRecordForLoc);
     return result;
   }
 
-  if (ladderIsRelevantCapturing(moveRecordForLoc, initLoc, pla, depth, oppInitCaptures)) {
-    const LadderMoveInfo* result = cache.put(pos_hash, LadderMoveInfo::createCapture(moveRecordForLoc.bases));
-    undoDots(moveRecordForLoc);
+  if (ladderIsRelevantCapturing(moveRecordForLoc, initLoc, pla, laddersInfo.getCurrentDepth(), oppInitCaptures)) {
+    const LadderMoveInfo* result = laddersInfo.put(pos_hash, LadderMoveInfo::createCapture(moveRecordForLoc.bases));
+    laddersInfo.undo(moveRecordForLoc);
     return result;
   }
 
@@ -86,15 +84,13 @@ const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc l
       continue;
     }
 
-    const MoveRecord secondMoveRecord = playMoveRecordedDots(plaChainAdjLoc, pla);
-    cache.incMovesCount();
-
-    bool potentialCapturingIsFound = ladderIsRelevantCapturing(secondMoveRecord, initLoc, pla, depth + 1, oppInitCaptures);
-    undoDots(secondMoveRecord);
+    const MoveRecord secondMoveRecord = laddersInfo.play(plaChainAdjLoc, pla);
+    bool potentialCapturingIsFound = ladderIsRelevantCapturing(secondMoveRecord, initLoc, pla, laddersInfo.getCurrentDepth(), oppInitCaptures);
+    laddersInfo.undo(secondMoveRecord);
 
     if (potentialCapturingIsFound) {
-      if (const LadderMoveInfo* adjLocLadderMoveInfo = ladderIterOpp(initLoc, plaChainAdjLoc, loc, prevLoc, pla, depth + 1,
-        plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
+      if (const LadderMoveInfo* adjLocLadderMoveInfo = ladderIterOpp(initLoc, plaChainAdjLoc, loc, pla, plaChainLocs, plaChainAdjLocs,
+                                                                     oppChainLocs, oppChainAdjLocs, oppInitCaptures, laddersInfo);
           adjLocLadderMoveInfo != nullptr &&
           adjLocLadderMoveInfo->isLadderOrCapture(pla)
       ) {
@@ -112,14 +108,14 @@ const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc l
 
   cleanUpChainAndAdjLocs(plaChainLocs, plaChainAdjLocs, plaChainNewLocs, plaChainAdjNewLocs);
 
-  const LadderMoveInfo* result = cache.put(pos_hash, worstResult);
-  undoDots(moveRecordForLoc);
+  const LadderMoveInfo* result = laddersInfo.put(pos_hash, worstResult);
+  laddersInfo.undo(moveRecordForLoc);
   return result;
 }
 
-const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc loc, Loc prevLoc, Loc prevPrevLoc,
-                                                  const Player pla, const uint16_t depth, unordered_set<Loc>& plaChainLocs, unordered_set<Loc>& plaChainAdjLocs,
-                                                  unordered_set<Loc>& oppChainLocs, unordered_set<Loc>& oppChainAdjLocs, unordered_set<Loc>& oppInitCaptures, LaddersCache& cache
+const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc loc, const Loc prevLoc,
+                                                  const Player pla, unordered_set<Loc>& plaChainLocs, unordered_set<Loc>& plaChainAdjLocs,
+                                                  unordered_set<Loc>& oppChainLocs, unordered_set<Loc>& oppChainAdjLocs, unordered_set<Loc>& oppInitCaptures, LaddersInfo& laddersInfo
 ) {
   const Player opp = getOpp(pla);
 
@@ -127,7 +123,7 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
 
   // Try capturing part of pla surrounding at first.
   assert(!oppInitCaptures.empty());
-  if (depth == 2) {
+  if (laddersInfo.getCurrentDepth() == 1) {
     oppChainLocs.clear();
     oppChainAdjLocs.clear();
     vector<Loc> oppChainNewLocs;
@@ -140,8 +136,7 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
       continue;
     }
 
-    MoveRecord potentialDefendCapturingMoveRecord = playMoveRecordedDots(oppChainAdjLoc, opp);
-    cache.incMovesCount();
+    MoveRecord potentialDefendCapturingMoveRecord = laddersInfo.play(oppChainAdjLoc, opp);
 
     for (const Base& base : potentialDefendCapturingMoveRecord.bases) {
       assert(base.pla == opp);
@@ -163,14 +158,14 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
 
         // Try to continue the ladder
         const LadderMoveInfo* foundLadderFromOppCaptureMoveOrNull =
-          ladderIterAdjLocs(initLoc, oppChainAdjLoc, prevLoc, prevPrevLoc, pla, depth, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
+          ladderIterAdjLocs(initLoc, oppChainAdjLoc, prevLoc, pla, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, laddersInfo);
 
         if (foundLadderFromOppCaptureMoveOrNull != nullptr && foundLadderFromOppCaptureMoveOrNull->isLadderOrCapture(pla)) {
           if (foundLadderFromOppCaptureMoveOrNull->isWorseThan(worstFoundLadderOrCaptureOrNull)) {
             worstFoundLadderOrCaptureOrNull = foundLadderFromOppCaptureMoveOrNull;
           }
         } else {
-          undoDots(potentialDefendCapturingMoveRecord);
+          laddersInfo.undo(potentialDefendCapturingMoveRecord);
           cleanUpChainAndAdjLocs(oppChainLocs, oppChainAdjLocs, oppChainNewLocs, oppChainNewAdjLocs);
           return nullptr;
         }
@@ -179,21 +174,18 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
       }
     }
 
-    undoDots(potentialDefendCapturingMoveRecord);
+    laddersInfo.undo(potentialDefendCapturingMoveRecord);
   }
 
   // Try defending at second
-  const MoveRecord& defendMove = playMoveRecordedDots(loc, opp);
+  const MoveRecord& defendMove = laddersInfo.play(loc, opp);
 
   vector<Loc> oppChainNewLocs;
   vector<Loc> oppChainNewAdjLocs;
   appendAllDiagonallyConnectedDots(loc, opp, oppChainLocs, oppChainAdjLocs, oppChainNewLocs, oppChainNewAdjLocs);
 
-  cache.recalcMaxDepth(depth);
-  cache.incMovesCount();
-
   if (const LadderMoveInfo* foundLadderFromDefendMoveOrNull =
-    ladderIterAdjLocs(initLoc, loc, prevLoc, prevPrevLoc, pla, depth, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
+    ladderIterAdjLocs(initLoc, loc, prevLoc, pla, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, laddersInfo);
     foundLadderFromDefendMoveOrNull != nullptr && foundLadderFromDefendMoveOrNull->isLadderOrCapture(pla)
   ) {
     if (foundLadderFromDefendMoveOrNull->isWorseThan(worstFoundLadderOrCaptureOrNull)) {
@@ -203,7 +195,7 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
     worstFoundLadderOrCaptureOrNull = nullptr;
   }
 
-  undoDots(defendMove);
+  laddersInfo.undo(defendMove);
 
   cleanUpChainAndAdjLocs(oppChainLocs, oppChainAdjLocs, oppChainNewLocs, oppChainNewAdjLocs);
 
@@ -214,15 +206,13 @@ const Board::LadderMoveInfo* Board::ladderIterAdjLocs(
   const Loc initLoc,
   const Loc loc,
   const Loc prevLoc,
-  const Loc prevPrevLoc,
   const Player pla,
-  const uint16_t depth,
   unordered_set<Loc>& plaChainLocs,
   unordered_set<Loc>& plaChainAdjLocs,
   unordered_set<Loc>& oppChainLocs,
   unordered_set<Loc>& oppChainAdjLocs,
   unordered_set<Loc>& oppInitCaptures,
-  LaddersCache& cache
+  LaddersInfo& laddersInfo
 ) {
   array<Loc, 16> actualLocs{};
   int actualLocsSize = 0;
@@ -265,7 +255,7 @@ const Board::LadderMoveInfo* Board::ladderIterAdjLocs(
     const Loc actualLoc = actualLocs[i];
 
     if (const LadderMoveInfo* ladderMoveInfoAtAdjLoc =
-          ladderIterPla(initLoc, actualLoc, prevLoc, pla, depth + 1, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, cache);
+          ladderIterPla(initLoc, actualLoc, pla, plaChainLocs, plaChainAdjLocs, oppChainLocs, oppChainAdjLocs, oppInitCaptures, laddersInfo);
       ladderMoveInfoAtAdjLoc->isLadderOrCapture(pla)
     ) {
       return ladderMoveInfoAtAdjLoc;

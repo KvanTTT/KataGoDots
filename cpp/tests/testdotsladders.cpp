@@ -70,33 +70,33 @@ string generateBoardRepresentation(Board& board) {
     return generateBoardStateRepresentation(board, {}, {}, {}, {});
 }
 
-string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersCache& laddersCache) {
+string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersInfo& laddersInfo) {
     if (const Loc moveLoc = Location::getLoc(move.x, move.y, board.x_size); moveLoc != Board::NULL_LOC) {
         cout << "Move: " << move.toString() << ". ";
         EXPECT_TRUE(board.playMove(moveLoc, move.player, true));
     }
 
-    bool firstIteration = laddersCache.getCacheSize() == 0;
+    bool firstIteration = laddersInfo.getCacheSize() == 0;
 
-    uint16_t previousMovesCount = laddersCache.getMovesCount();
-    uint16_t previousCacheHits = laddersCache.getCacheHits();
-    size_t previousCacheSize = laddersCache.getCacheSize();
-    laddersCache.clearMaxDepth();
+    uint16_t previousMovesCount = laddersInfo.getMovesCount();
+    uint16_t previousCacheHits = laddersInfo.getCacheHits();
+    size_t previousCacheSize = laddersInfo.getCacheSize();
+    laddersInfo.clearMaxDepth();
 
-    const vector<const Board::LadderMoveInfo*> workingLadderMoveInfos = board.iterDotsLadders(laddersCache);
+    const vector<const Board::LadderMoveInfo*> workingLadderMoveInfos = board.iterDotsLadders(laddersInfo);
 
-    cout << "Total moves count: " << laddersCache.getMovesCount();
+    cout << "Total moves count: " << laddersInfo.getMovesCount();
     if (!firstIteration) {
-        cout << " (+" << laddersCache.getMovesCount() - previousMovesCount << ")";
+        cout << " (+" << laddersInfo.getMovesCount() - previousMovesCount << ")";
     }
-    cout << ", max depth: " << laddersCache.getMaxDepth();
-    cout << ", cache hits: " << laddersCache.getCacheHits();
+    cout << ", max depth: " << laddersInfo.getMaxDepth();
+    cout << ", cache hits: " << laddersInfo.getCacheHits();
     if (!firstIteration) {
-        cout << " (+" << laddersCache.getCacheHits() - previousCacheHits << ")";
+        cout << " (+" << laddersInfo.getCacheHits() - previousCacheHits << ")";
     }
-    cout << ", cache size: " << laddersCache.getCacheSize();
+    cout << ", cache size: " << laddersInfo.getCacheSize();
     if (!firstIteration) {
-        cout << " (+" << laddersCache.getCacheSize() - previousCacheSize << ")";
+        cout << " (+" << laddersInfo.getCacheSize() - previousCacheSize << ")";
     }
     cout << endl;
 
@@ -126,9 +126,9 @@ string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersCach
 
 static void checkLadders(const string& fieldDataWithLaddersInfo, const optional<string>& expectedLaddersInfo) {
     Board field = parseDotsFieldDefault(fieldDataWithLaddersInfo);
-    Board::LaddersCache laddersCache;
+    Board::LaddersInfo laddersInfo(field);
 
-    const string actualFieldLadderInfo = playAndDumpLadderInfo(field, XYMove::getNullMove(), laddersCache);
+    const string actualFieldLadderInfo = playAndDumpLadderInfo(field, XYMove::getNullMove(), laddersInfo);
 
     const string expectedLaddersInfoString = expectedLaddersInfo.has_value()
         ? expectedLaddersInfo.value()
@@ -226,9 +226,9 @@ static Board parseDotsFieldWithLaddersInfo(const string& boardData) {
 
 static void checkLadders(const string& fieldDataWithLaddersInfo) {
     Board field = parseDotsFieldWithLaddersInfo(fieldDataWithLaddersInfo);
-    Board::LaddersCache laddersCache;
+    Board::LaddersInfo laddersInfo(field);
 
-    const string actualFieldLadderInfo = playAndDumpLadderInfo(field, XYMove::getNullMove(), laddersCache);
+    const string actualFieldLadderInfo = playAndDumpLadderInfo(field, XYMove::getNullMove(), laddersInfo);
 
     EXPECT_EQ_TRIMMED(fieldDataWithLaddersInfo, actualFieldLadderInfo);
 }
