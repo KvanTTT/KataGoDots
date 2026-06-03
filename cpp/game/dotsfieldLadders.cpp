@@ -205,15 +205,31 @@ const Board::LadderMoveInfo* Board::ladderIterAdjLocs(
   unordered_set<Loc>& oppInitCaptures,
   LaddersInfo& laddersInfo
 ) {
-  array<Loc, 16> actualLocs{};
+  array<pair<LadderMoveInfo::LadderMoveInfoType, Loc>, 16> actualLocs{};
   int actualLocsSize = 0;
+
+  // Prioritize captures to get rid of calculating useless ladders if a capture move found.
+  auto insertCaptureBeforeLadders = [&](const Loc captureLoc) {
+    const auto end = actualLocs.begin() + actualLocsSize;
+    const auto insertPos = std::find_if(actualLocs.begin(), end, [](const auto& item) {
+      return item.first == LadderMoveInfo::LadderMoveInfoType::LADDER;
+    });
+    std::move_backward(insertPos, end, end + 1);
+    *insertPos = make_pair(LadderMoveInfo::LadderMoveInfoType::CAPTURE, captureLoc);
+    actualLocsSize++;
+  };
 
   // Make sure the color of the last location is opp to traverse its adjacent locs to find maybe capture of ladder pla locs.
   // The adjacent loc should be empty and have at least one connection with the player chain (otherwise it can't create ladders).
   assert(getColor(loc) == getOpp(pla));
   for (const int adj_offset : adj_offsets) {
-    if (const Loc adjLoc = static_cast<Loc>(loc + adj_offset); laddersInfo.maybeChainCaptureLoc(adjLoc, pla, false)) {
-      actualLocs[actualLocsSize++] = adjLoc;
+    const Loc adjLoc = static_cast<Loc>(loc + adj_offset);
+    if (const auto chainCaptureLocType = laddersInfo.getChainCaptureLocType(adjLoc, pla);
+      chainCaptureLocType == LadderMoveInfo::LadderMoveInfoType::LADDER
+    ) {
+      actualLocs[actualLocsSize++] = make_pair(chainCaptureLocType, adjLoc);
+    } else if (chainCaptureLocType == LadderMoveInfo::LadderMoveInfoType::CAPTURE) {
+      insertCaptureBeforeLadders(adjLoc);
     }
   }
 
@@ -232,18 +248,21 @@ const Board::LadderMoveInfo* Board::ladderIterAdjLocs(
       const Loc adjPrevLoc = static_cast<Loc>(prevLoc + adj_offset);
 
       if (const auto end = actualLocs.begin() + actualLocsSize;
-        std::find(actualLocs.begin(), end, adjPrevLoc) != end) {
+        std::find_if(actualLocs.begin(), end,   [adjPrevLoc](const auto& item) {
+          return item.second == adjPrevLoc;
+        }) != end
+      ) {
         continue;
       }
 
       if (laddersInfo.maybeChainCaptureLoc(adjPrevLoc, pla)) {
-        actualLocs[actualLocsSize++] = adjPrevLoc;
+        insertCaptureBeforeLadders(adjPrevLoc);
       }
     }
   }
 
   for (int i = 0; i < actualLocsSize; i++) {
-    const Loc actualLoc = actualLocs[i];
+    const Loc actualLoc = actualLocs[i].second;
 
     if (const LadderMoveInfo* ladderMoveInfoAtAdjLoc =
           ladderIterPla(initLoc, actualLoc, pla, oppInitCaptures, laddersInfo);
