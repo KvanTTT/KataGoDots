@@ -747,15 +747,19 @@ struct Board
       chainsData[loc] = chainsData[loc] & ~(pla << 2);
     }
 
-    bool maybeChainCaptureLoc(const Loc loc, const Player pla, const bool oneMoveCapturing = true) const {
+    bool maybeChainCaptureLoc(const Loc loc, const Player pla) const {
+      return getChainCaptureLocType(loc, pla) == LadderMoveInfo::LadderMoveInfoType::CAPTURE;
+    }
+
+    LadderMoveInfo::LadderMoveInfoType getChainCaptureLocType(const Loc loc, const Player pla) const {
       const State state = board->getState(loc);
       if (getActiveColor(state) != C_EMPTY) {
-        return false;
+        return LadderMoveInfo::LadderMoveInfoType::EMPTY;
       }
       if (const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
         emptyTerritoryColor == pla || (emptyTerritoryColor != C_EMPTY && !board->wouldBeCaptureDots(loc, pla))
       ) {
-        return false;
+        return LadderMoveInfo::LadderMoveInfoType::EMPTY;
       }
 
       int unconnectedLocsSize = 0;
@@ -767,11 +771,13 @@ struct Board
         }
       }
 
-      if (oneMoveCapturing) {
-        return chainConnectionLocsSize >= 2;
+      if (chainConnectionLocsSize >= 2) {
+        return LadderMoveInfo::LadderMoveInfoType::CAPTURE;
       }
 
-      return chainConnectionLocsSize >= 1;
+      return chainConnectionLocsSize >= 1
+        ? LadderMoveInfo::LadderMoveInfoType::LADDER
+        : LadderMoveInfo::LadderMoveInfoType::EMPTY;
     }
 
     const LadderMoveInfo* put(const Hash128& field_hash, const LadderMoveInfo& value) {
