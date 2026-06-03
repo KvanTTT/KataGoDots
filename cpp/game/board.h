@@ -706,7 +706,7 @@ struct Board
     }
 
     Color getChainColor(const Loc loc) const {
-      const Color color = chainsData[loc] & 0b0011;
+      const Color color = chainsData[loc] & 0b11;
       assert(color != C_WALL && "Chains can't have colors of both player");
       return color;
     }
@@ -720,7 +720,7 @@ struct Board
     }
 
     Color getMaybeCaptureColor(const Loc loc) const {
-      return chainsData[loc] >> 2;
+      return (chainsData[loc] >> 2) & 0b11;
     }
 
     bool alreadyMaybeCapture(const Loc loc, const Player pla) const {
@@ -733,6 +733,27 @@ struct Board
 
     void unsetMaybeCapturePlayer(const Loc loc, const Player pla) {
       chainsData[loc] = chainsData[loc] & ~(pla << 2);
+    }
+
+    void setInitSurrounding(const Loc loc) {
+      chainsData[loc] = chainsData[loc] | 0b10000;
+      initSurrounding.push_back(loc);
+    }
+
+    void resetInitSurrounding() {
+      assert(!initSurrounding.empty());
+      for (const Loc loc : initSurrounding) {
+        chainsData[loc] = chainsData[loc] & ~0b10000;
+      }
+      initSurrounding.clear();
+    }
+
+    bool isInitSurrounding(const Loc loc) const {
+      return (chainsData[loc] & 0b10000) != 0;
+    }
+
+    Loc getFirstInitSurroundingLoc() const {
+      return initSurrounding[0];
     }
 
     bool maybeChainCaptureLoc(const Loc loc, const Player pla) const {
@@ -841,6 +862,7 @@ struct Board
     Board* board = nullptr;
     std::unordered_map<Hash128, LadderMoveInfo, Hash128Hash> cache;
     std::vector<char> chainsData;
+    std::vector<Loc> initSurrounding;
     std::vector<Loc> firstPlaMaybeCaptureLocs;
     std::vector<Loc> secondPlaMaybeCaptureLocs;
   };
@@ -849,15 +871,13 @@ struct Board
 
   const LadderMoveInfo* ladderStart(Loc initLoc, Player pla, LaddersInfo& cache);
 
-  static bool ladderIsRelevantCapturing(const MoveRecord& moveRecord, Loc initLoc, Player pla, int depth, std::unordered_set<Loc>& oppInitCaptures);
+  static bool ladderIsRelevantCapturing(const MoveRecord& moveRecord, Loc initLoc, Player pla, LaddersInfo& laddersInfo);
 
-  const LadderMoveInfo* ladderIterPla(Loc initLoc, Loc loc, Player pla,
-                                      std::unordered_set<Loc>& oppInitCaptures, LaddersInfo &laddersInfo);
+  const LadderMoveInfo* ladderIterPla(Loc initLoc, Loc loc, Player pla, LaddersInfo &laddersInfo);
 
-  const LadderMoveInfo* ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla,
-                                          std::unordered_set<Loc>& oppInitCaptures, LaddersInfo& laddersInfo);
+  const LadderMoveInfo* ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
 
-  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, std::unordered_set<Loc>& oppInitCaptures, LaddersInfo& laddersInfo);
+  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
 
   // Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
