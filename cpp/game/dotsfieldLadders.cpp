@@ -41,15 +41,10 @@ vector<const Board::LadderMoveInfo*> Board::iterDotsLadders(LaddersInfo& ladders
 }
 
 const Board::LadderMoveInfo* Board::ladderStart(const Loc initLoc, const Player pla, LaddersInfo& cache) {
-  unordered_set<Loc> oppInitCaptures;
-
-  return ladderIterPla(initLoc, initLoc, pla, oppInitCaptures, cache);
+  return ladderIterPla(initLoc, initLoc, pla, cache);
 }
 
-const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc loc,
-                                                  const Player pla,
-                                                  unordered_set<Loc>& oppInitCaptures,
-                                                  LaddersInfo& laddersInfo) {
+const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc loc, const Player pla, LaddersInfo& laddersInfo) {
   const MoveRecord moveRecordForLoc = laddersInfo.play(loc, pla);
 
   if (const LadderMoveInfo* calculatedResult = laddersInfo.get(pos_hash, pla); calculatedResult != nullptr) {
@@ -60,7 +55,7 @@ const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc l
     return result;
   }
 
-  if (ladderIsRelevantCapturing(moveRecordForLoc, initLoc, pla, laddersInfo.getCurrentDepth(), oppInitCaptures)) {
+  if (ladderIsRelevantCapturing(moveRecordForLoc, initLoc, pla, laddersInfo)) {
     const LadderMoveInfo* result = laddersInfo.put(pos_hash, LadderMoveInfo::createCapture(moveRecordForLoc.bases));
     laddersInfo.undo(moveRecordForLoc);
     return result;
@@ -78,11 +73,19 @@ const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc l
     }
 
     const MoveRecord secondMoveRecord = laddersInfo.play(maybeCaptureLoc, pla);
-    bool ladderCapturingIsFound = ladderIsRelevantCapturing(secondMoveRecord, initLoc, pla, laddersInfo.getCurrentDepth(), oppInitCaptures);
+    bool ladderCapturingIsFound = ladderIsRelevantCapturing(secondMoveRecord, initLoc, pla, laddersInfo);
     laddersInfo.undo(secondMoveRecord);
 
     if (ladderCapturingIsFound) {
-      if (const LadderMoveInfo* adjLocLadderMoveInfo = ladderIterOpp(initLoc, maybeCaptureLoc, loc, pla, oppInitCaptures, laddersInfo);
+      bool initializeOppChain = laddersInfo.getCurrentDepth() == 1;
+      vector<Loc> oppChainNewLocs;
+      vector<Loc> oppChainNewMaybeCaptureLocs;
+
+      if (initializeOppChain) {
+        laddersInfo.extendChain(laddersInfo.getFirstInitSurroundingLoc(), getOpp(pla), oppChainNewLocs, oppChainNewMaybeCaptureLocs);
+      }
+
+      if (const LadderMoveInfo* adjLocLadderMoveInfo = ladderIterOpp(initLoc, maybeCaptureLoc, loc, pla, laddersInfo);
           adjLocLadderMoveInfo != nullptr &&
           adjLocLadderMoveInfo->isLadderOrCapture(pla)
       ) {
@@ -95,6 +98,11 @@ const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc l
           }
         }
       }
+
+      if (initializeOppChain) {
+        laddersInfo.reduceChain(getOpp(pla), oppChainNewLocs, oppChainNewMaybeCaptureLocs);
+        laddersInfo.resetInitSurrounding();
+      }
     }
   }
 
@@ -104,23 +112,12 @@ const Board::LadderMoveInfo* Board::ladderIterPla(const Loc initLoc, const Loc l
   return result;
 }
 
-const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc loc, const Loc prevLoc,
-                                                  const Player pla,
-                                                  unordered_set<Loc>& oppInitCaptures, LaddersInfo& laddersInfo
+const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc loc, const Loc prevLoc, const Player pla,
+                                                  LaddersInfo& laddersInfo
 ) {
   const Player opp = getOpp(pla);
 
   const LadderMoveInfo* worstFoundLadderOrCaptureOrNull = nullptr;
-
-  vector<Loc> oppChainNewLocs;
-  vector<Loc> oppChainNewMaybeCaptureLocs;
-
-  assert(!oppInitCaptures.empty());
-  bool initializeOppChain = laddersInfo.getCurrentDepth() == 1;
-  if (initializeOppChain) {
-    // TODO: check for empty opp chain
-    laddersInfo.extendChain(*oppInitCaptures.begin(), opp, oppChainNewLocs, oppChainNewMaybeCaptureLocs);
-  }
 
   // Try capturing part of pla surrounding at first.
   bool breakingCaptureFound = false;
@@ -152,7 +149,7 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
 
         // Try to continue the ladder
         const LadderMoveInfo* foundLadderFromOppCaptureMoveOrNull =
-          ladderIterAdjLocs(initLoc, oppMaybeCaptureLoc, prevLoc, pla, oppInitCaptures, laddersInfo);
+          ladderIterAdjLocs(initLoc, oppMaybeCaptureLoc, prevLoc, pla, laddersInfo);
 
         if (foundLadderFromOppCaptureMoveOrNull != nullptr && foundLadderFromOppCaptureMoveOrNull->isLadderOrCapture(pla)) {
           if (foundLadderFromOppCaptureMoveOrNull->isWorseThan(worstFoundLadderOrCaptureOrNull)) {
@@ -177,7 +174,7 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
     const MoveRecord defendMove = laddersInfo.playAndExtendChain(loc, opp, oppChainNewLocsAfterDefending, oppChainNewMaybeCaptureLocsAfterDefending);
 
     if (const LadderMoveInfo* foundLadderFromDefendMoveOrNull =
-      ladderIterAdjLocs(initLoc, loc, prevLoc, pla, oppInitCaptures, laddersInfo);
+      ladderIterAdjLocs(initLoc, loc, prevLoc, pla, laddersInfo);
       foundLadderFromDefendMoveOrNull != nullptr && foundLadderFromDefendMoveOrNull->isLadderOrCapture(pla)
     ) {
       if (foundLadderFromDefendMoveOrNull->isWorseThan(worstFoundLadderOrCaptureOrNull)) {
@@ -190,19 +187,10 @@ const Board::LadderMoveInfo* Board::ladderIterOpp(const Loc initLoc, const Loc l
     laddersInfo.reduceChainAndUndo(defendMove, oppChainNewLocsAfterDefending, oppChainNewMaybeCaptureLocsAfterDefending);
   }
 
-  if (initializeOppChain) {
-    laddersInfo.reduceChain(opp, oppChainNewLocs, oppChainNewMaybeCaptureLocs);
-  }
-
   return worstFoundLadderOrCaptureOrNull;
 }
 
-const Board::LadderMoveInfo* Board::ladderIterAdjLocs(
-  const Loc initLoc,
-  const Loc loc,
-  const Loc prevLoc,
-  const Player pla,
-  unordered_set<Loc>& oppInitCaptures,
+const Board::LadderMoveInfo* Board::ladderIterAdjLocs(const Loc initLoc,const Loc loc, const Loc prevLoc, const Player pla,
   LaddersInfo& laddersInfo
 ) {
   array<pair<LadderMoveInfo::LadderMoveInfoType, Loc>, 16> actualLocs{};
@@ -265,8 +253,7 @@ const Board::LadderMoveInfo* Board::ladderIterAdjLocs(
     const Loc actualLoc = actualLocs[i].second;
 
     if (const LadderMoveInfo* ladderMoveInfoAtAdjLoc =
-          ladderIterPla(initLoc, actualLoc, pla, oppInitCaptures, laddersInfo);
-      ladderMoveInfoAtAdjLoc->isLadderOrCapture(pla)
+          ladderIterPla(initLoc, actualLoc, pla, laddersInfo); ladderMoveInfoAtAdjLoc->isLadderOrCapture(pla)
     ) {
       return ladderMoveInfoAtAdjLoc;
     }
@@ -275,10 +262,9 @@ const Board::LadderMoveInfo* Board::ladderIterAdjLocs(
   return nullptr;
 }
 
-bool Board::ladderIsRelevantCapturing(const MoveRecord& moveRecord, const Loc initLoc, const Player pla,
-                                      const int depth, unordered_set<Loc>& oppInitCaptures) {
+bool Board::ladderIsRelevantCapturing(const MoveRecord& moveRecord, const Loc initLoc, const Player pla, LaddersInfo& laddersInfo) {
+  const int depth = laddersInfo.getCurrentDepth();
   if (depth <= 1) {
-    assert(oppInitCaptures.empty());
     return false;
   }
 
@@ -290,19 +276,16 @@ bool Board::ladderIsRelevantCapturing(const MoveRecord& moveRecord, const Loc in
     if (!contains(base.surrounding_locs, initLoc)) continue; // Init loc is expected to be contained
 
     if (depth == 2) {
-      oppInitCaptures.clear();
       for (const auto& rollback_locs_states_capture: base.rollback_locs_states_captures) {
         if (getPlacedDotColor(rollback_locs_states_capture.getState()) == getOpp(pla)) {
-          oppInitCaptures.insert(rollback_locs_states_capture.getLoc());
+          laddersInfo.setInitSurrounding(rollback_locs_states_capture.getLoc());
         }
       }
-      assert(!oppInitCaptures.empty());
       return true;
     }
 
-    assert(!oppInitCaptures.empty());
     for (const auto& rollback_locs_states_capture: base.rollback_locs_states_captures) {
-      if (oppInitCaptures.find(rollback_locs_states_capture.getLoc()) != oppInitCaptures.end()) {
+      if (laddersInfo.isInitSurrounding(rollback_locs_states_capture.getLoc())) {
         return true;
       }
     }
