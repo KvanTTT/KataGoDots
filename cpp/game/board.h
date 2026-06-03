@@ -14,6 +14,7 @@
 #include "../core/rand.h"
 #include "../external/nlohmann_json/json.hpp"
 #include "rules.h"
+#include <sstream>
 
 #ifndef COMPILE_MAX_BOARD_LEN
 #define COMPILE_MAX_BOARD_LEN 39
@@ -616,6 +617,13 @@ struct Board
 
     explicit LaddersInfo(Board& newBoard) {
       board = &newBoard;
+      chainsData.resize((newBoard.x_size + 1) * (newBoard.y_size + 1));
+    }
+
+    MoveRecord playAndExtendChain(const Loc loc, const Player pla, std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCapturingLocs) {
+      const MoveRecord moveRecord = play(loc, pla);
+      extendChain(loc, pla, newChainLocs, newMaybeCapturingLocs);
+      return moveRecord;
     }
 
     MoveRecord play(const Loc loc, const Player pla) {
@@ -630,9 +638,140 @@ struct Board
       return moveRecord;
     }
 
+    void reduceChainAndUndo(const MoveRecord& moveRecord, const std::vector<Loc>& newChainLocs, const std::vector<Loc>& newMaybeCapturingLocs) {
+      reduceChain(moveRecord.pla, newChainLocs, newMaybeCapturingLocs);
+      undo(moveRecord);
+    }
+
     void undo(const MoveRecord& moveRecord) {
       board->undoDots(moveRecord);
       currentDepth--;
+    }
+
+    const std::vector<Loc>& extendChain(const Loc loc, const Player pla, std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCaptureLocs) {
+      auto& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
+
+      assert(newChainLocs.empty() && C_WALL != pla);
+      auto& boardWalkStack = board->walkStack; // Use with caution (can't be used together with play move methods)
+      assert(boardWalkStack.empty());
+      boardWalkStack.push_back(loc);
+
+      while (!boardWalkStack.empty()) {
+        const Loc currentLoc = boardWalkStack.back();
+        boardWalkStack.pop_back();
+
+        if (const State adjState = board->getState(currentLoc); getActiveColor(adjState) == pla && !isTerritory(adjState) && getChainColor(currentLoc) != pla) {
+          setChainPlayer(currentLoc, pla);
+          newChainLocs.push_back(currentLoc);
+
+          for (const short adj_offset : board->adj_offsets) {
+            boardWalkStack.push_back(static_cast<Loc>(currentLoc + adj_offset));
+          }
+        }
+      }
+
+      for (const Loc newChainLoc : newChainLocs) {
+        for (const short adj_offset_for_adj_loc : board->adj_offsets) {
+          if (const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset_for_adj_loc);
+            !alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla)
+          ) {
+            setMaybeCapturePlayer(adjLocForChainLoc, pla);
+            //assert(!contains(maybeCaptureLocs, adjLocForChainLoc));
+
+            maybeCaptureLocs.push_back(adjLocForChainLoc);
+            newMaybeCaptureLocs.push_back(adjLocForChainLoc);
+          }
+        }
+      }
+
+      return maybeCaptureLocs;
+    }
+
+    const std::vector<Loc>& getMaybeCaptureLocs(const Player pla) const {
+      return pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
+    }
+
+    void reduceChain(const Player pla, const std::vector<Loc>& newChainLocs, const std::vector<Loc>& newMaybeCapturingLocs) {
+      auto& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
+
+      assert(!newChainLocs.empty());
+      for (const Loc newChainLoc : newChainLocs) {
+        assert(board->getColor(newChainLoc) == pla);
+        resetChainPlayer(newChainLoc);
+      }
+
+      for (const Loc newMaybeCapturingLoc : newMaybeCapturingLocs) {
+        assert(board->getColor(newMaybeCapturingLoc) == C_EMPTY);
+        unsetMaybeCapturePlayer(newMaybeCapturingLoc, pla);
+      }
+
+      const auto sizeBefore = maybeCaptureLocs.size();
+
+      maybeCaptureLocs.erase(
+        std::remove_if(maybeCaptureLocs.begin(), maybeCaptureLocs.end(), [&](int value) {
+          return std::find(newMaybeCapturingLocs.begin(), newMaybeCapturingLocs.end(), value) != newMaybeCapturingLocs.end();
+        }),
+        maybeCaptureLocs.end()
+      );
+
+      assert(sizeBefore - newMaybeCapturingLocs.size() == maybeCaptureLocs.size());
+    }
+
+    Color getChainColor(const Loc loc) const {
+      const Color color = chainsData[loc] & 0b0011;
+      assert(color != C_WALL && "Chains can't have colors of both player");
+      return color;
+    }
+
+    void setChainPlayer(const Loc loc, const Player pla) {
+      chainsData[loc] = chainsData[loc] | pla;
+    }
+
+    void resetChainPlayer(const Loc loc) {
+      chainsData[loc] = chainsData[loc] & ~0b11;
+    }
+
+    Color getMaybeCaptureColor(const Loc loc) const {
+      return chainsData[loc] >> 2;
+    }
+
+    bool alreadyMaybeCapture(const Loc loc, const Player pla) const {
+      return (chainsData[loc] >> 2 & pla) != 0;
+    }
+
+    void setMaybeCapturePlayer(const Loc loc, const Player pla) {
+      chainsData[loc] = chainsData[loc] | (pla << 2);
+    }
+
+    void unsetMaybeCapturePlayer(const Loc loc, const Player pla) {
+      chainsData[loc] = chainsData[loc] & ~(pla << 2);
+    }
+
+    bool maybeChainCaptureLoc(const Loc loc, const Player pla, const bool oneMoveCapturing = true) const {
+      const State state = board->getState(loc);
+      if (getActiveColor(state) != C_EMPTY) {
+        return false;
+      }
+      if (const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
+        emptyTerritoryColor == pla || (emptyTerritoryColor != C_EMPTY && !board->wouldBeCaptureDots(loc, pla))
+      ) {
+        return false;
+      }
+
+      int unconnectedLocsSize = 0;
+      const std::array<Loc, 4> unconnectedLocs = board->getUnconnectedLocations(loc, pla, unconnectedLocsSize);
+      int chainConnectionLocsSize = 0;
+      for (int i = 0; i < unconnectedLocsSize; i++) {
+        if (getChainColor(unconnectedLocs[i]) == pla) {
+          chainConnectionLocsSize++;
+        }
+      }
+
+      if (oneMoveCapturing) {
+        return chainConnectionLocsSize >= 2;
+      }
+
+      return chainConnectionLocsSize >= 1;
     }
 
     const LadderMoveInfo* put(const Hash128& field_hash, const LadderMoveInfo& value) {
@@ -661,6 +800,44 @@ struct Board
 
     void clear() { cache.clear(); }
 
+    std::string debugChainsData() const {
+      std::ostringstream stream;
+      for (int y = 0; y < board->y_size; y++) {
+        for (int x = 0; x < board->x_size; x++) {
+          const Loc loc = Location::getLoc(x, y, board->x_size);
+
+          const Color chainColor = getChainColor(loc);
+          Color maybeCaptureColor = getMaybeCaptureColor(loc);
+
+          stream << PlayerIO::colorToChar(chainColor);
+          std::string maybeCaptureString;
+          switch (maybeCaptureColor) {
+            case C_EMPTY:
+              maybeCaptureString = "  ";
+              break;
+            case C_BLACK:
+              maybeCaptureString = "x ";
+              break;
+            case C_WHITE:
+              maybeCaptureString = "o ";
+              break;
+            case C_WALL:
+              maybeCaptureString = "xo";
+              break;
+            default:
+              ASSERT_UNREACHABLE;
+          }
+          stream << maybeCaptureString;
+
+          if (x < board->x_size - 1) {
+            stream << ' ';
+          }
+        }
+        stream << std::endl;
+      }
+      return stream.str();
+    }
+
   private:
     uint16_t currentDepth = 0;
     uint16_t maxDepth = 0;
@@ -669,33 +846,24 @@ struct Board
 
     Board* board = nullptr;
     std::unordered_map<Hash128, LadderMoveInfo, Hash128Hash> cache;
+    std::vector<char> chainsData;
+    std::vector<Loc> firstPlaMaybeCaptureLocs;
+    std::vector<Loc> secondPlaMaybeCaptureLocs;
   };
 
   std::vector<const LadderMoveInfo*> iterDotsLadders(LaddersInfo &laddersInfo);
 
   const LadderMoveInfo* ladderStart(Loc initLoc, Player pla, LaddersInfo& cache);
 
-  static void cleanUpChainAndAdjLocs(std::unordered_set<short>& chainLocs, std::unordered_set<short>& chainAdjLocs,
-                              const std::vector<short>& chainNewLocs, const std::vector<short>& chainAdjNewLocs);
-
   static bool ladderIsRelevantCapturing(const MoveRecord& moveRecord, Loc initLoc, Player pla, int depth, std::unordered_set<Loc>& oppInitCaptures);
 
-  bool ladderIsRelevantLadderLoc(Loc loc, Player pla, bool oneMoveCapturing,
-                                 std::unordered_set<Loc>& chainLocs) const;
-
   const LadderMoveInfo* ladderIterPla(Loc initLoc, Loc loc, Player pla,
-                                      std::unordered_set<Loc> &plaChainLocs, std::unordered_set<short>& plaChainAdjLocs, std::unordered_set<
-                                        short>& oppChainLocs, std::unordered_set<Loc>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersInfo &laddersInfo);
+                                      std::unordered_set<Loc>& oppInitCaptures, LaddersInfo &laddersInfo);
 
   const LadderMoveInfo* ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla,
-                                          std::unordered_set<Loc>& plaChainLocs, std::unordered_set<short>& plaChainAdjLocs, std::unordered_set<
-                                            short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersInfo& laddersInfo);
+                                          std::unordered_set<Loc>& oppInitCaptures, LaddersInfo& laddersInfo);
 
-  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, std::unordered_set<Loc> &plaChainLocs, std::unordered_set<short>&
-                                      plaChainAdjLocs, std::unordered_set<short>& oppChainLocs, std::unordered_set<short>& oppChainAdjLocs, std::unordered_set<Loc>& oppInitCaptures, LaddersInfo& laddersInfo);
-
-  void appendAllDiagonallyConnectedDots(Loc loc, Player pla, std::unordered_set<Loc> &chain, std::unordered_set<short>& chainAdjLocs, std::vector<Loc>& newChainLocs, std
-                                        ::vector<short>& newAdjLocs);
+  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, std::unordered_set<Loc>& oppInitCaptures, LaddersInfo& laddersInfo);
 
   // Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
