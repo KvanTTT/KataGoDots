@@ -83,7 +83,7 @@ string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersInfo
     size_t previousCacheSize = laddersInfo.getCacheSize();
     laddersInfo.clearMaxDepth();
 
-    const vector<const Board::LadderMoveInfo*> workingLadderMoveInfos = board.iterDotsLadders(laddersInfo);
+    const vector<Board::LadderLocInfo> workingLadderLocInfos = board.iterDotsLadders(laddersInfo);
 
     cout << "Total moves count: " << laddersInfo.getMovesCount();
     if (!firstIteration) {
@@ -105,17 +105,16 @@ string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersInfo
     std::unordered_set<Loc> blackCapturedLocs;
     std::unordered_set<Loc> whiteCapturedLocs;
 
-    for (const auto* ladderMoveInfo : workingLadderMoveInfos) {
-        assert(ladderMoveInfo->type == Board::LadderMoveInfo::LADDER);
-        Player ladderPlayer = ladderMoveInfo->player;
+    for (const auto& ladderLocInfo : workingLadderLocInfos) {
+        Player ladderPlayer = ladderLocInfo.player;
         assert(ladderPlayer != C_EMPTY);
 
-        if (ladderMoveInfo->workingMove != Board::NULL_LOC) {
+        if (ladderLocInfo.workingLoc != Board::NULL_LOC) {
             std::unordered_set<Loc>& workingLocs = ladderPlayer == C_BLACK ? blackWorkingLocs : whiteWorkingLocs;
-            workingLocs.insert(ladderMoveInfo->workingMove);
+            workingLocs.insert(ladderLocInfo.workingLoc);
         }
         std::unordered_set<Loc>& capturedLocs = ladderPlayer == C_BLACK ? blackCapturedLocs : whiteCapturedLocs;
-        for (const auto& territoryLoc : ladderMoveInfo->territoryLocs) {
+        for (const auto& territoryLoc : ladderLocInfo.territoryLocs) {
             capturedLocs.insert(territoryLoc);
         }
     }
@@ -137,7 +136,7 @@ static void checkLadders(const string& fieldDataWithLaddersInfo, const optional<
     EXPECT_EQ_TRIMMED(expectedLaddersInfoString, actualFieldLadderInfo);
 }
 
-static Board parseDotsFieldWithLaddersInfo(const string& boardData) {
+static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool captureEmptyBases) {
     int y = 0;
     int x = 0;
     int maxX = 0;
@@ -206,7 +205,14 @@ static Board parseDotsFieldWithLaddersInfo(const string& boardData) {
         y--;
     }
 
-    auto field = Board(maxX + 1, y + 1, Rules::DEFAULT_DOTS);
+    const auto rules = Rules(
+        Rules::START_POS_EMPTY,
+        Rules::DEFAULT_DOTS.startPosIsRandom,
+        Rules::DEFAULT_DOTS.multiStoneSuicideLegal,
+        captureEmptyBases,
+        Rules::DEFAULT_DOTS.dotsFreeCapturedDots
+        );
+    auto field = Board(maxX + 1, y + 1, rules);
 
     vector<Move> linearMoves;
     linearMoves.reserve(moves.size());
@@ -224,8 +230,8 @@ static Board parseDotsFieldWithLaddersInfo(const string& boardData) {
     return field;
 }
 
-static void checkLadders(const string& fieldDataWithLaddersInfo) {
-    Board field = parseDotsFieldWithLaddersInfo(fieldDataWithLaddersInfo);
+static void checkLadders(const string& fieldDataWithLaddersInfo, const bool captureEmptyBases = Rules::DEFAULT_DOTS.dotsCaptureEmptyBases) {
+    Board field = parseDotsFieldWithLaddersInfo(fieldDataWithLaddersInfo, captureEmptyBases);
     Board::LaddersInfo laddersInfo(field);
 
     const string actualFieldLadderInfo = playAndDumpLadderInfo(field, XYMove::getNullMove(), laddersInfo);
@@ -243,7 +249,7 @@ X  O' O' X  .
 )");
 }
 
-TEST(LadderTests, MinimalCapturingWithReplace) {
+TEST(LadderTests, MinimalCapturingRotated) {
     checkLadders(
         R"(
 .  X  .  .
@@ -251,6 +257,16 @@ TEST(LadderTests, MinimalCapturingWithReplace) {
 .x O' O' X
 .  X  O' X
 .  .  X  .
+)");
+}
+
+TEST(LadderTests, MinimalCapturingWithEmptyLocs) {
+    checkLadders(
+        R"(
+.  .  .x .  .
+.  X  O' .  X
+X  .' .' X  .
+.  X  X  .  .
 )");
 }
 
@@ -282,26 +298,51 @@ TEST(LadderTests, IndirectFarLadder) {
         );
 }
 
+TEST(LadderTests, SingleCaptureIsNotLadder) {
+    checkLadders(
+R"(
+.  .  .  .  .
+.  .  X  .  .
+.  X  O  X  .
+.  .  .  .  .
+.  .  .  .  .
+)");
+}
+
 TEST(LadderTests, DoubleAtariIsNotLadder) {
     checkLadders(
 R"(
 .  .  .  .  .  .
-.  O  X  .  .  .
-.  .  O  X  .  .
-.  .  .  O  .  .
+.  X  O  .  .  .
+.  .  X  O  .  .
+.  .  .  X  .  .
 .  .  .  .  .  .
 )");
 }
 
-// TODO: Fix (it should be minimal capturing)
-/*TEST(LadderTests, WorkingMoveIsAlsoCapturingMove) {
+TEST(LadderTests, WorkingMoveIsAlsoCapturingMove) {
     checkLadders(
         R"(
 .  .  .  X  .  .  .
-.  .  X  .' .x .  .
-.  X  O' O' .x .  .
-.  .  X  X  O' X  .
+.  .  X  .  .  .  .
+.  X  O' O' .x O  .
+.  .  X  X  O  X  .
 .  .  .  .  X  .  .
+)");
+}
+
+// TODO: Fix
+/*TEST(LadderTests, OneWorkingMoveIsAlsoUnrelatedCapturing) {
+    checkLadders(
+        R"(
+.  .  X  .  .  .  .  .
+.  .  .  .  X  .  .  .
+.  .  .  X  O  X  .  .
+.  .  .  .  .  O  O  .
+.  .  .x .  .  .  .  .
+.  X  O' O' X  .  .  .
+.  .  X  X  .  .  .  .
+.  .  .  .  .  .  .  .
 )");
 }*/
 
@@ -322,6 +363,32 @@ TEST(LadderTests, NotLadderBecauseOfOppAtari) {
 .  .  .  .  .
 X  O  O  X  .
 .  X  X  O  .
+)");
+}
+
+TEST(LadderTests, TwoLaddersAndTworWorkingMoves) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .
+.  X  .  .  .  .  X  .
+.  .  .  .  .  .  .  .
+.  .  .  .x .x .  .  .
+.  .  X  O' O' X  .  .
+.  .  .  X  X  .  .  .
+.  .  .  .  .  .  .  .
+)");
+}
+
+TEST(LadderTests, TwoUnrelatedLadders) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .  .
+.  X  .  .  .  .  .  .  .  X  .
+.  .  .  .  .  .  .  .  .  .  .
+.  .  .  .x .  .  .  .x .  .  .
+.  X  O' O' X  .  X  O' O' X  .
+.  .  X  X  .  .  .  X  X  .  .
+.  .  .  .  .  .  .  .  .  .  .
 )");
 }
 
@@ -425,6 +492,18 @@ TEST(LadderTests, RotationNotEnoughSpace) {
 .  .  .  .  .  .  .  .  .  .
 )");
 }
+
+// TODO: implement support of dotsCaptureEmptyBases moe
+/*TEST(LadderTests, LadderWhenCaptureEmptyBaseIsEnabled) {
+    checkLadders(
+        R"(
+.  .  .  .  .
+.  .  .  .  X
+X  .  .  X  .
+.  X  X  .  .
+)",
+        true);
+}*/
 
 TEST(LadderTests, StressSimple) {
     constexpr int width = Board::MAX_LEN_X;

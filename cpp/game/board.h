@@ -509,98 +509,23 @@ struct Board
 
   CapturesAndTerritoriesInfos calculateCapturesAndTerritoriesColorsForDots() const;
 
-  struct LadderMoveInfo {
+  struct LadderLocInfo {
+    explicit LadderLocInfo(const Loc workingLoc, const Player pla, const std::vector<Loc>& captureLocs)
+      : workingLoc(workingLoc), player(pla), territoryLocs(captureLocs) {}
+
+    Loc workingLoc;
+    Player player;
+    std::vector<Loc> territoryLocs;
+  };
+
+  class LaddersInfo {
+  public:
     enum LadderMoveInfoType : uint8_t {
       EMPTY,
       LADDER,
       CAPTURE,
     };
 
-    static LadderMoveInfo createEmpty(const Player pla) {
-      return LadderMoveInfo(NULL_LOC, std::vector<Base>(), pla);
-    }
-
-    static LadderMoveInfo createLadder(const Loc workingMove, const std::vector<Base>& bases) {
-      assert(workingMove != Board::NULL_LOC);
-      return LadderMoveInfo(workingMove, bases, bases.back().pla);
-    }
-
-    static LadderMoveInfo createLadder(const Loc newWorkingMove, const LadderMoveInfo& oldLadderMoveInfo) {
-      return LadderMoveInfo(newWorkingMove, oldLadderMoveInfo);
-    }
-
-    static LadderMoveInfo createCapture(const std::vector<Base>& bases) {
-      return LadderMoveInfo(NULL_LOC, bases, bases.back().pla);
-    }
-
-    void mergeWith(const Loc newWorkingMove, const std::vector<Base>& bases) {
-      assert(type == LADDER && workingMove == newWorkingMove);
-      handleBases(bases);
-    }
-
-    [[nodiscard]] bool isLadder(const Player pla) const {
-      return type == LADDER && player == pla;
-    }
-
-    [[nodiscard]] bool isLadderOrCapture(const Player pla) const {
-      return (type == LADDER || type == CAPTURE) && player == pla;
-    }
-
-    [[nodiscard]] bool containsCapturedLoc(const Loc loc) const {
-      return territoryLocs.find(loc) != territoryLocs.end();
-    }
-
-    [[nodiscard]] bool isWorseThan(const LadderMoveInfo* other) const {
-      if (other == nullptr) return true;
-
-      if (territoryLocs.size() < other->territoryLocs.size()) return true;
-
-      return false;
-    }
-
-    LadderMoveInfoType type;
-    Color player;
-    Loc workingMove;
-    std::unordered_set<Loc> territoryLocs;
-
-  private:
-    explicit LadderMoveInfo(const Loc newWorkingMove, const LadderMoveInfo& oldLadderMoveInfo) {
-      assert(oldLadderMoveInfo.type == LADDER || oldLadderMoveInfo.type == CAPTURE);
-      type = LADDER;
-      player = oldLadderMoveInfo.player;
-      workingMove = newWorkingMove;
-      territoryLocs = oldLadderMoveInfo.territoryLocs;
-    }
-
-    explicit LadderMoveInfo(const Loc newWorkingMove, const std::vector<Base>& newBases, const Player newPlayer) {
-      workingMove = newWorkingMove;
-
-      if (newBases.empty()) {
-        type = EMPTY;
-        assert(newWorkingMove == NULL_LOC);
-      } else {
-        type = newWorkingMove != NULL_LOC ? LADDER : CAPTURE;
-        assert(newPlayer == newBases.back().pla);
-      }
-      player = newPlayer;
-
-      handleBases(newBases);
-    }
-
-    void handleBases(const std::vector<Base>& newBases) {
-      for (const Base& base : newBases) {
-        assert(player == base.pla);
-
-        for (const auto& rollbackLocStateCapture : base.rollback_locs_states_captures) {
-          /*auto [it, inserted] =*/ territoryLocs.insert(rollbackLocStateCapture.getLoc());
-          //assert(inserted);
-        }
-      }
-    }
-  };
-
-  class LaddersInfo {
-  public:
     explicit LaddersInfo() = delete;
 
     explicit LaddersInfo(Board& newBoard) {
@@ -639,7 +564,7 @@ struct Board
     const std::vector<Loc>& extendChain(const Loc loc, const Player pla, std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCaptureLocs) {
       auto& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
 
-      assert(newChainLocs.empty() && C_WALL != pla);
+      assert(newChainLocs.empty() && C_WALL != pla && board->getColor(loc) == pla);
       auto& boardWalkStack = board->walkStack; // Use with caution (can't be used together with play move methods)
       assert(boardWalkStack.empty());
       boardWalkStack.push_back(loc);
@@ -696,7 +621,7 @@ struct Board
       const auto sizeBefore = maybeCaptureLocs.size();
 
       maybeCaptureLocs.erase(
-        std::remove_if(maybeCaptureLocs.begin(), maybeCaptureLocs.end(), [&](int value) {
+        std::remove_if(maybeCaptureLocs.begin(), maybeCaptureLocs.end(), [&](const int value) {
           return std::find(newMaybeCapturingLocs.begin(), newMaybeCapturingLocs.end(), value) != newMaybeCapturingLocs.end();
         }),
         maybeCaptureLocs.end()
@@ -735,40 +660,57 @@ struct Board
       chainsData[loc] = chainsData[loc] & ~(pla << 2);
     }
 
-    void setInitSurrounding(const Loc loc) {
+    void setInitTerritory(const Loc loc) {
       chainsData[loc] = chainsData[loc] | 0b10000;
-      initSurrounding.push_back(loc);
+      initTerritory.push_back(loc);
     }
 
-    void resetInitSurrounding() {
-      assert(!initSurrounding.empty());
-      for (const Loc loc : initSurrounding) {
+    void handleAndResetInitTerritory(bool success) {
+      assert(currentDepth == 1);
+      assert(!initTerritory.empty());
+      for (const Loc loc : initTerritory) {
         chainsData[loc] = chainsData[loc] & ~0b10000;
       }
-      initSurrounding.clear();
+      if (success && (initFinalTerritory.empty() || initTerritory.size() < initFinalTerritory.size())) {
+        initFinalTerritory.clear();
+        initFinalTerritory.insert(initFinalTerritory.end(), initTerritory.begin(), initTerritory.end());
+      }
+      initTerritory.clear();
     }
 
-    bool isInitSurrounding(const Loc loc) const {
+    std::vector<Loc> getInitFinalTerritory() {
+      std::vector<Loc> result = initFinalTerritory;
+      initFinalTerritory.clear();
+      return result;
+    }
+
+    bool isInitTerritory(const Loc loc) const {
       return (chainsData[loc] & 0b10000) != 0;
     }
 
-    Loc getFirstInitSurroundingLoc() const {
-      return initSurrounding[0];
+    Loc getFirstInitTerritoryLoc(const Player opp) const {
+      assert(currentDepth == 1);
+      for (const Loc initSurroundingLoc : initTerritory) {
+        if (board->getColor(initSurroundingLoc) == opp) {
+          return initSurroundingLoc;
+        }
+      }
+      ASSERT_UNREACHABLE;
     }
 
     bool maybeChainCaptureLoc(const Loc loc, const Player pla) const {
-      return getChainCaptureLocType(loc, pla) == LadderMoveInfo::LadderMoveInfoType::CAPTURE;
+      return getChainCaptureLocType(loc, pla) == CAPTURE;
     }
 
-    LadderMoveInfo::LadderMoveInfoType getChainCaptureLocType(const Loc loc, const Player pla) const {
+    LadderMoveInfoType getChainCaptureLocType(const Loc loc, const Player pla) const {
       const State state = board->getState(loc);
       if (getActiveColor(state) != C_EMPTY) {
-        return LadderMoveInfo::LadderMoveInfoType::EMPTY;
+        return EMPTY;
       }
       if (const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
         emptyTerritoryColor == pla || (emptyTerritoryColor != C_EMPTY && !board->wouldBeCaptureDots(loc, pla))
       ) {
-        return LadderMoveInfo::LadderMoveInfoType::EMPTY;
+        return EMPTY;
       }
 
       int unconnectedLocsSize = 0;
@@ -781,22 +723,19 @@ struct Board
       }
 
       if (chainConnectionLocsSize >= 2) {
-        return LadderMoveInfo::LadderMoveInfoType::CAPTURE;
+        return CAPTURE;
       }
 
-      return chainConnectionLocsSize >= 1
-        ? LadderMoveInfo::LadderMoveInfoType::LADDER
-        : LadderMoveInfo::LadderMoveInfoType::EMPTY;
+      return chainConnectionLocsSize >= 1 ? LADDER : EMPTY;
     }
 
-    const LadderMoveInfo* put(const Hash128& field_hash, const LadderMoveInfo& value) {
-      const Hash128 field_with_player_hash = field_hash ^ ZOBRIST_PLAYER_HASH[value.player];
-      auto [it, inserted] = cache.insert_or_assign(field_with_player_hash, value);
-      //assert(inserted);
-      return &it->second;
+    void put(const Hash128& field_hash, const Player pla, const bool success) {
+      const Hash128 field_with_player_hash = field_hash ^ ZOBRIST_PLAYER_HASH[pla];
+      auto [it, inserted] = cache.insert_or_assign(field_with_player_hash, success);
+      assert(inserted);
     }
 
-    [[nodiscard]] const LadderMoveInfo* get(const Hash128& field_hash, const Player pla) {
+    [[nodiscard]] const bool* get(const Hash128& field_hash, const Player pla) {
       const Hash128 field_with_player_hash = field_hash ^ ZOBRIST_PLAYER_HASH[pla];
       const auto it = cache.find(field_with_player_hash);
       if (it == cache.end()) {
@@ -860,24 +799,23 @@ struct Board
     uint16_t movesCounter = 0;
 
     Board* board = nullptr;
-    std::unordered_map<Hash128, LadderMoveInfo, Hash128Hash> cache;
+    std::unordered_map<Hash128, bool, Hash128Hash> cache;
     std::vector<char> chainsData;
-    std::vector<Loc> initSurrounding;
+    std::vector<Loc> initTerritory;
+    std::vector<Loc> initFinalTerritory;
     std::vector<Loc> firstPlaMaybeCaptureLocs;
     std::vector<Loc> secondPlaMaybeCaptureLocs;
   };
 
-  std::vector<const LadderMoveInfo*> iterDotsLadders(LaddersInfo &laddersInfo);
-
-  const LadderMoveInfo* ladderStart(Loc initLoc, Player pla, LaddersInfo& cache);
+  std::vector<LadderLocInfo> iterDotsLadders(LaddersInfo& laddersInfo);
 
   static bool ladderIsRelevantCapturing(const MoveRecord& moveRecord, Loc initLoc, Player pla, LaddersInfo& laddersInfo);
 
-  const LadderMoveInfo* ladderIterPla(Loc initLoc, Loc loc, Player pla, LaddersInfo &laddersInfo);
+  bool ladderIterPla(Loc initLoc, Loc loc, Player pla, LaddersInfo& laddersInfo);
 
-  const LadderMoveInfo* ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
+  bool ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
 
-  const LadderMoveInfo* ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
+  bool ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
 
   // Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
