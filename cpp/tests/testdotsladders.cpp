@@ -331,8 +331,7 @@ TEST(LadderTests, WorkingMoveIsAlsoCapturingMove) {
 )");
 }
 
-// TODO: Fix
-/*TEST(LadderTests, OneWorkingMoveIsAlsoUnrelatedCapturing) {
+TEST(LadderTests, OneWorkingMoveIsAlsoUnrelatedCapturing) {
     checkLadders(
         R"(
 .  .  X  .  .  .  .  .
@@ -344,7 +343,7 @@ TEST(LadderTests, WorkingMoveIsAlsoCapturingMove) {
 .  .  X  X  .  .  .  .
 .  .  .  .  .  .  .  .
 )");
-}*/
+}
 
 TEST(LadderTests, EmptyTerrtirotyIsNotAccountable) {
     checkLadders(
@@ -454,15 +453,14 @@ X  O' X  O' .  .
 )");
 }
 
-TEST(LadderTests, ComplexAtariNotWorking) {
+TEST(LadderTests, ComplexAtariWhenInitLocIsCapturedByOppButFinallyFreed) {
     checkLadders(
         R"(
 .  .  .  X  X  X  .  .  .
-.  .  X  O  O  O  X  .  .
-.  X  O  O  X  O  .  .  .
-.  X  O  X  .  .  .  .  .
+.  .  X  O' O' O' X  .  .
+.  X  O' O' X  O' .  .  .
+.  X  O' X  .  .x .  .  .
 .  .  X  .  .  .  .  X  .
-.  .  .  .  .  .  .  .  .
 .  .  .  .  .  .  .  .  .
 .  .  .  .  .  .  .  .  .
 )");
