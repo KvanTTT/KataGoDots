@@ -231,7 +231,10 @@ bool Board::ladderIsRelevantCapturing(const MoveRecord& moveRecord, const Loc in
     assert(base.pla == pla);
     if (base.type == Base::Type::EMPTY) return false;
     assert(base.type == Base::Type::NORMAL);
-    return contains(base.surrounding_locs, initLoc);
+    // Filter out unrelated surroundings using checking of initLoc inclusion
+    return contains(base.surrounding_locs, initLoc) || std::any_of(base.rollback_locs_states_captures.begin(), base.rollback_locs_states_captures.end(), [&](const auto& state) {
+      return state.getLoc() == initLoc;
+    });
   })) {
     return false;
   }
