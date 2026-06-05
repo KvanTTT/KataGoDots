@@ -474,8 +474,8 @@ TEST(LadderTests, StressSimple) {
 
 TEST(LaddersPerformanceTests, RandomGames) {
     Tests::runDotsStressTestsInternal(
-      20,
-      20,
+      39,
+      32,
       1,
       true,
       Rules::START_POS_CROSS,
