@@ -281,6 +281,21 @@ TEST(LadderTests, IndirectLadder) {
         );
 }
 
+TEST(LadderTests, IndirectLadder2) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .  .
+.  X  .  X  X  X  .  .  .  .  .  .  .
+.  .  .  O' O' O' .x .  .  .  .  .  .
+.  .  X  X  X  X  X  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .  .
+)");
+}
+
 TEST(LadderTests, IndirectFarLadder) {
     checkLadders(
         R"(
@@ -354,17 +369,6 @@ TEST(LadderTests, EmptyTerritoryIsNotAccountable) {
 )");
 }
 
-TEST(LadderTests, NotLadderBecauseOfOppAtari) {
-    checkLadders(
-        R"(
-.  .  .  X  .
-.  .  .  .  .
-.  .  .  .  .
-X  O  O  X  .
-.  X  X  O  .
-)");
-}
-
 TEST(LadderTests, TwoLaddersAndTworWorkingMoves) {
     checkLadders(
         R"(
@@ -388,6 +392,32 @@ TEST(LadderTests, TwoUnrelatedLadders) {
 .  X  O' O' X  .  X  O' O' X  .
 .  .  X  X  .  .  .  X  X  .  .
 .  .  .  .  .  .  .  .  .  .  .
+)");
+}
+
+TEST(LadderTests, NotLadderBecauseOfOppAtari) {
+    checkLadders(
+        R"(
+.  .  .  X  .
+.  .  .  .  .
+.  .  .  .  .
+X  O  O  X  .
+.  X  X  O  .
+)");
+}
+
+TEST(LadderTests, NotLadderBecauseOfOppAtari2) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  X  .  .
+.  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .
+.  .  .  X  X  .  .  .  .  .
+.  O  X  O  O  O  .  .  .  .
+.  .  .  X  O  O  X  .  .  .
+.  O  X  O  O  X  .  .  .  .
+.  .  .  X  X  .  .  .  .  .
 )");
 }
 
@@ -431,7 +461,7 @@ TEST(LadderTests, CapturedAndWorkingLocsArePresentedAndDifferent) {
     );
 }
 
-TEST(LadderTests, MoveInsideEmptyTerritory) {
+TEST(LadderTests, CapturingMoveInsideEmptyTerritory) {
     checkLadders(
         R"(
 .  X  X  X  .
@@ -491,8 +521,74 @@ TEST(LadderTests, RotationNotEnoughSpace) {
 )");
 }
 
-// TODO: implement support of dotsCaptureEmptyBases moe
-/*TEST(LadderTests, LadderWhenCaptureEmptyBaseIsEnabled) {
+// TODO: Fix creating of opp chains, consider also outer adjacent dots
+TEST(LadderTests, DISABLED_NotWorkingLadderBecauseOfInternalCapturing) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  X  .  .  .  .  .
+.  .  .  .  X  .  X  O  O  .  .
+.  .  .  X  O  .  .  X  O  O  .
+.  .  .  O  O  .  .  .  X  O  .
+.  .  .  O  O  .  .  X  O  O  .
+.  .  .  X  X  .  X  O  O  .  .
+.  X  .  .  .  X  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .
+)");
+}
+
+// TODO: Fix calculation of best opp defending by capturing (the ladder's territory should be minimal)
+TEST(LadderTests, DISABLED_WorkingLadderDespiteTheInternalCapturings) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  X  X  .  .  .  .  .
+.  .  .  .  X  .' .' X  O  O  .  .
+.  .  .  X  O' .' .  .  X  O  O  .
+.  .  .x O' O' .  .  .  .  X  O  .
+.  .  .  O' O' .' .  .  X  O  O  .
+.  X  .  X  X  .' .' X  O  O  .  .
+.  .  .  .  .  X  X  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .
+)");
+}
+
+// TODO: Fix calculation of minimal territory considering ideal pla play
+TEST(LadderTests, DISABLED_ComplexInterwoundSurroundings) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .
+.  .  .  O  O  .  X  .  .
+.  .  O  .  X  .  .  .  .
+.  O  X  X  .' .  .  .  .
+.  X  O' .' .' O' X  .  .
+.  X  O' .' .' X  O  .  .
+.  X  O' .' .' O' .x .  .
+.  X  O' O' O' X  X  .  .
+.  .  X  X  X  .  .  .  .
+.  .  .  .  .  .  .  .  .
+)");
+}
+
+// TODO: Fix calculation of two ladders with single working move but when both of them are inescapable
+TEST(LadderTests, DISABLED_WorkingMoveCreatesTwoLadders) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .
+.  X  .  .  .  .  .  .
+.  .  .  X  .  .  .  .
+.  X  O' O' .x .  .  .
+.  .  X  X  O' X  .  .
+.  .  .  X  O' .  .  .
+.  .  .  .  X  .  .  .
+.  .  .  .  .  .  X  .
+.  .  .  .  .  .  .  .
+)");
+}
+
+// TODO: implement support of dotsCaptureEmptyBases mode
+TEST(LadderTests, DISABLED_LadderWhenCaptureEmptyBaseIsEnabled) {
     checkLadders(
         R"(
 .  .  .  .  .
@@ -501,7 +597,7 @@ X  .  .  X  .
 .  X  X  .  .
 )",
         true);
-}*/
+}
 
 TEST(LadderTests, StressSimple) {
     constexpr int width = Board::MAX_LEN_X;
