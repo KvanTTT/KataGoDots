@@ -407,7 +407,7 @@ TEST(LadderTests, NoLadderBecauseOfOppFarAtari) {
         );
 }
 
-TEST(LadderTests, OppAtariButWorkingLadder) {
+TEST(LadderTests, OppAtariButOuterCapture) {
     checkLadders(
         R"(
 .  .  .  X  .x .  .  .
