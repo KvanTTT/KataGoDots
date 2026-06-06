@@ -41,13 +41,7 @@ vector<Board::LadderLocInfo> Board::iterDotsLadders(LaddersInfo& laddersInfo) {
 bool Board::ladderIterPla(const Loc initLoc, const Loc loc, const Player pla, LaddersInfo& laddersInfo) {
   const MoveRecord moveRecordForLoc = laddersInfo.play(loc, pla);
 
-  if (const bool* calculatedResult = laddersInfo.get(pos_hash, pla); calculatedResult != nullptr) {
-    laddersInfo.undo(moveRecordForLoc);
-    return *calculatedResult;
-  }
-
   if (ladderIsRelevantCapturing(moveRecordForLoc, initLoc, pla, laddersInfo)) {
-    laddersInfo.put(pos_hash, pla, true);
     laddersInfo.undo(moveRecordForLoc);
     return true;
   }
@@ -87,7 +81,6 @@ bool Board::ladderIterPla(const Loc initLoc, const Loc loc, const Player pla, La
     }
   }
 
-  laddersInfo.put(pos_hash, pla, success);
   laddersInfo.reduceChainAndUndo(moveRecordForLoc, plaChainNewLocs, plaChainMainCaptureLocs);
 
   return success;
