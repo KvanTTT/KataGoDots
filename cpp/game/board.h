@@ -601,8 +601,6 @@ struct Board
             !alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla)
           ) {
             setMaybeCapturePlayer(adjLocForChainLoc, pla);
-            //assert(!contains(maybeCaptureLocs, adjLocForChainLoc));
-
             maybeCaptureLocs.push_back(adjLocForChainLoc);
             newMaybeCaptureLocs.push_back(adjLocForChainLoc);
           }
@@ -711,10 +709,10 @@ struct Board
     }
 
     bool maybeChainCaptureLoc(const Loc loc, const Player pla) const {
-      return getChainCaptureLocType(loc, pla) == CAPTURE;
+      return getChainCaptureLocType(loc, pla, false) == CAPTURE;
     }
 
-    LadderMoveInfoType getChainCaptureLocType(const Loc loc, const Player pla) const {
+    LadderMoveInfoType getChainCaptureLocType(const Loc loc, const Player pla, const bool requireAtLeastTwoUnconnectedDotsForLadder) const {
       const State state = board->getState(loc);
       if (getActiveColor(state) != C_EMPTY) {
         return EMPTY;
@@ -738,7 +736,13 @@ struct Board
         return CAPTURE;
       }
 
-      return chainConnectionLocsSize >= 1 ? LADDER : EMPTY;
+      // The requireAtLeastTwoUnconnectedDotsForLadder is actual when opp defends by counter-capturing:
+      // In this case it's known that pla dot always should connect a chain to proceed with the ladder.
+      // Unfortunately, we can't rely on the ladder's chain because it might not be complete:
+      // we check empty locs *before* dot placement, but the chain is fully-formed *after* the dot placement.
+      return chainConnectionLocsSize == 1 && (!requireAtLeastTwoUnconnectedDotsForLadder || unconnectedLocsSize >= 2)
+        ? LADDER
+        : EMPTY;
     }
 
     void put(const Hash128& field_hash, const Player pla, const bool success) {
@@ -825,7 +829,7 @@ struct Board
 
   bool ladderIterPla(Loc initLoc, Loc loc, Player pla, LaddersInfo& laddersInfo);
 
-  bool ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
+  bool ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo, bool requireAtLeastTwoUnconnectedDotsForLadder);
 
   bool ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
 
