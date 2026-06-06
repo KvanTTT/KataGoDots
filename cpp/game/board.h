@@ -564,7 +564,7 @@ struct Board
     const std::vector<Loc>& extendChain(const Loc loc, const Player pla, std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCaptureLocs) {
       auto& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
 
-      assert(newChainLocs.empty() && C_WALL != pla && board->getColor(loc) == pla);
+      assert(C_WALL != pla && board->getColor(loc) == pla);
       auto& boardWalkStack = board->walkStack; // Use with caution (can't be used together with play move methods)
       assert(boardWalkStack.empty());
       boardWalkStack.push_back(loc);
@@ -684,16 +684,6 @@ struct Board
 
     bool isInitTerritory(const Loc loc) const {
       return (chainsData[loc] & 0b10000) != 0;
-    }
-
-    Loc getFirstInitTerritoryLoc(const Player opp) const {
-      assert(currentDepth == 1);
-      for (const Loc initSurroundingLoc : initTerritory) {
-        if (board->getColor(initSurroundingLoc) == opp) {
-          return initSurroundingLoc;
-        }
-      }
-      ASSERT_UNREACHABLE;
     }
 
     bool maybeChainCaptureLoc(const Loc loc, const Player pla) const {
@@ -820,6 +810,9 @@ struct Board
   bool ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo, bool requireAtLeastTwoUnconnectedDotsForLadder);
 
   bool ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
+
+  void initializeOpponentChain(Player pla, LaddersInfo& laddersInfo, const MoveRecord& capturingMoveRecord,
+                             std::vector<Loc>& oppChainNewLocs, std::vector<Loc>& oppChainNewMaybeCaptureLocs) const;
 
   // Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
