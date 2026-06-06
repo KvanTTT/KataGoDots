@@ -73,8 +73,7 @@ bool Board::ladderIterPla(const Loc initLoc, const Loc loc, const Player pla, La
       vector<Loc> oppChainNewMaybeCaptureLocs;
 
       if (initializeOppChain) {
-        const Player opp = getOpp(pla);
-        laddersInfo.extendChain(laddersInfo.getFirstInitTerritoryLoc(opp), opp, oppChainNewLocs, oppChainNewMaybeCaptureLocs);
+        initializeOpponentChain(pla, laddersInfo, secondMoveRecord, oppChainNewLocs, oppChainNewMaybeCaptureLocs);
       }
 
       success = success | ladderIterOpp(initLoc, maybeCaptureLoc, loc, pla, laddersInfo);
@@ -258,5 +257,20 @@ bool Board::ladderIsRelevantCapturing(const MoveRecord& moveRecord, const Loc in
     }
   }
   return result;
+}
+
+void Board::initializeOpponentChain(const Player pla, LaddersInfo& laddersInfo,
+  const MoveRecord& capturingMoveRecord, vector<Loc>& oppChainNewLocs, vector<Loc>& oppChainNewMaybeCaptureLocs) const {
+  const Player opp = getOpp(pla);
+  for (const auto& base : capturingMoveRecord.bases) {
+    if (base.type == Base::Type::EMPTY) continue;
+    for (const auto& surrounding_loc : base.surrounding_locs) {
+      forEachAdjacent(surrounding_loc, [&](const Loc adjLoc) {
+        if (getColor(adjLoc) == opp) {
+          laddersInfo.extendChain(adjLoc, opp, oppChainNewLocs, oppChainNewMaybeCaptureLocs);
+        }
+      });
+    }
+  }
 }
 
