@@ -114,21 +114,20 @@ bool Board::ladderIterOpp(const Loc initLoc, const Loc loc, const Loc prevLoc, c
       if (breakingCaptureFound || oppBase.type == Base::Type::EMPTY) continue;
       assert(oppBase.type == Base::Type::NORMAL);
 
-      bool potentialDefendCaptureMoveIsFound = false;
-      for (const auto& rollback_locs_states_capture: oppBase.rollback_locs_states_captures) {
-        if (laddersInfo.getChainColor(rollback_locs_states_capture.getLoc()) == pla) {
-          potentialDefendCaptureMoveIsFound = true;
-          break;
-        }
-      }
+      const auto& oppBaseStates = oppBase.rollback_locs_states_captures;
+      const bool potentialDefendCaptureMoveIsFound = std::any_of(oppBaseStates.begin(), oppBaseStates.end(),
+        [&](const auto& state) {
+          return laddersInfo.getChainColor(state.getLoc()) == pla;
+      });
 
       if (potentialDefendCaptureMoveIsFound) {
         vector<Loc> oppChainNewLocsAfterCapturing;
         vector<Loc> oppChainNewMaybeCaptureLocsAfterCapturing;
         laddersInfo.extendChain(oppMaybeCaptureLoc, opp, oppChainNewLocsAfterCapturing, oppChainNewMaybeCaptureLocsAfterCapturing);
 
-        // Try to continue the ladder
-        breakingCaptureFound = breakingCaptureFound | !ladderIterAdjLocs(initLoc, oppMaybeCaptureLoc, prevLoc, pla, laddersInfo);
+        // Try to continue the ladder (only captures or strictly connecting locs are relevant).
+        breakingCaptureFound = breakingCaptureFound |
+          !ladderIterAdjLocs(initLoc, oppMaybeCaptureLoc, prevLoc, pla, laddersInfo, true);
 
         laddersInfo.reduceChain(opp, oppChainNewLocsAfterCapturing, oppChainNewMaybeCaptureLocsAfterCapturing);
       }
@@ -136,6 +135,8 @@ bool Board::ladderIterOpp(const Loc initLoc, const Loc loc, const Loc prevLoc, c
 
     laddersInfo.undo(potentialDefendCapturingMoveRecord);
 
+    // It assumed that the defending capture is successful for opp and breaks part of the pla ladder chain.
+    // It means it doesn't make sense to continue the ladder because it's broken.
     if (breakingCaptureFound) {
       return false;
     }
@@ -146,14 +147,15 @@ bool Board::ladderIterOpp(const Loc initLoc, const Loc loc, const Loc prevLoc, c
   vector<Loc> oppChainNewMaybeCaptureLocsAfterDefending;
   const MoveRecord defendMove = laddersInfo.playAndExtendChain(loc, opp, oppChainNewLocsAfterDefending, oppChainNewMaybeCaptureLocsAfterDefending);
 
-  const bool success = ladderIterAdjLocs(initLoc, loc, prevLoc, pla, laddersInfo);
+  const bool success = ladderIterAdjLocs(initLoc, loc, prevLoc, pla, laddersInfo, false);
 
   laddersInfo.reduceChainAndUndo(defendMove, oppChainNewLocsAfterDefending, oppChainNewMaybeCaptureLocsAfterDefending);
 
   return success;
 }
 
-bool Board::ladderIterAdjLocs(const Loc initLoc, const Loc loc, const Loc prevLoc, const Player pla, LaddersInfo& laddersInfo
+bool Board::ladderIterAdjLocs(const Loc initLoc, const Loc loc, const Loc prevLoc, const Player pla, LaddersInfo& laddersInfo,
+  const bool requireAtLeastTwoUnconnectedDotsForLadder
 ) {
   array<pair<LaddersInfo::LadderMoveInfoType, Loc>, 16> actualLocs{};
   int actualLocsSize = 0;
@@ -174,7 +176,7 @@ bool Board::ladderIterAdjLocs(const Loc initLoc, const Loc loc, const Loc prevLo
   assert(getColor(loc) == getOpp(pla));
   for (const int adj_offset : adj_offsets) {
     const Loc adjLoc = static_cast<Loc>(loc + adj_offset);
-    if (const auto chainCaptureLocType = laddersInfo.getChainCaptureLocType(adjLoc, pla);
+    if (const auto chainCaptureLocType = laddersInfo.getChainCaptureLocType(adjLoc, pla, requireAtLeastTwoUnconnectedDotsForLadder);
       chainCaptureLocType == LaddersInfo::LadderMoveInfoType::LADDER
     ) {
       actualLocs[actualLocsSize++] = make_pair(chainCaptureLocType, adjLoc);
