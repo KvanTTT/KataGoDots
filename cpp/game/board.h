@@ -735,30 +735,10 @@ struct Board
         : EMPTY;
     }
 
-    void put(const Hash128& field_hash, const Player pla, const bool success) {
-      const Hash128 field_with_player_hash = field_hash ^ ZOBRIST_PLAYER_HASH[pla];
-      auto [it, inserted] = cache.insert_or_assign(field_with_player_hash, success);
-      assert(inserted);
-    }
-
-    [[nodiscard]] const bool* get(const Hash128& field_hash, const Player pla) {
-      const Hash128 field_with_player_hash = field_hash ^ ZOBRIST_PLAYER_HASH[pla];
-      const auto it = cache.find(field_with_player_hash);
-      if (it == cache.end()) {
-        return nullptr;
-      }
-      cacheHits++;
-      return &it->second;
-    }
-
     [[nodiscard]] uint16_t getMovesCount() const { return movesCounter; }
     [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
     [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
     void clearMaxDepth() { maxDepth = 0; }
-    [[nodiscard]] uint16_t getCacheHits() const { return cacheHits; }
-    [[nodiscard]] size_t getCacheSize() const { return cache.size(); }
-
-    void clear() { cache.clear(); }
 
     std::string debugChainsData() const {
       std::ostringstream stream;
@@ -801,11 +781,9 @@ struct Board
   private:
     uint16_t currentDepth = 0;
     uint16_t maxDepth = 0;
-    uint16_t cacheHits = 0;
     uint16_t movesCounter = 0;
 
     Board* board = nullptr;
-    std::unordered_map<Hash128, bool, Hash128Hash> cache;
     std::vector<char> chainsData;
     std::vector<Loc> initTerritory;
     std::vector<Loc> initFinalTerritory;
