@@ -76,11 +76,8 @@ string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersInfo
         EXPECT_TRUE(board.playMove(moveLoc, move.player, true));
     }
 
-    bool firstIteration = laddersInfo.getCacheSize() == 0;
-
     uint16_t previousMovesCount = laddersInfo.getMovesCount();
-    uint16_t previousCacheHits = laddersInfo.getCacheHits();
-    size_t previousCacheSize = laddersInfo.getCacheSize();
+    bool firstIteration = previousMovesCount== 0;
     laddersInfo.clearMaxDepth();
 
     const vector<Board::LadderLocInfo> workingLadderLocInfos = board.iterDotsLadders(laddersInfo);
@@ -90,14 +87,6 @@ string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersInfo
         cout << " (+" << laddersInfo.getMovesCount() - previousMovesCount << ")";
     }
     cout << ", max depth: " << laddersInfo.getMaxDepth();
-    cout << ", cache hits: " << laddersInfo.getCacheHits();
-    if (!firstIteration) {
-        cout << " (+" << laddersInfo.getCacheHits() - previousCacheHits << ")";
-    }
-    cout << ", cache size: " << laddersInfo.getCacheSize();
-    if (!firstIteration) {
-        cout << " (+" << laddersInfo.getCacheSize() - previousCacheSize << ")";
-    }
     cout << endl;
 
     std::unordered_set<Loc> blackWorkingLocs;
