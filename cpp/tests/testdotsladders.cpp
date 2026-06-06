@@ -521,8 +521,7 @@ TEST(LadderTests, RotationNotEnoughSpace) {
 )");
 }
 
-// TODO: Fix creating of opp chains, consider also outer adjacent dots
-TEST(LadderTests, DISABLED_NotWorkingLadderBecauseOfInternalCapturing) {
+TEST(LadderTests, NotWorkingLadderBecauseOfInternalCapturing) {
     checkLadders(
         R"(
 .  .  .  .  .  .  .  .  .  .  .
