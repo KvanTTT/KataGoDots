@@ -544,6 +544,18 @@ X  O' .  O' X
 )");
 }
 
+TEST(LadderTests, CapturingLocsAreNotDirectlyAdjacentToLastOppLoc) {
+    checkLadders(
+        R"(
+.  X  .x X  .
+X  O' .' O' X
+X  O' .' O' X
+X  O' .  O' X
+.  X  O  X  .
+.  .  .  .  .
+)");
+}
+
 TEST(LadderTests, ComplexAtari) {
     checkLadders(
         R"(
