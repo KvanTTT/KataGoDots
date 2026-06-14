@@ -113,6 +113,7 @@ namespace Location
 //Simple ko rule only.
 //Does not enforce player turn order.
 
+// Returns the maximum size of the array needed to store the board with the given dimensions including side locs.
 constexpr static int getMaxArrSize(const int x_size, const int y_size) {
   return (x_size+1)*(y_size+2)+1;
 }
@@ -459,6 +460,16 @@ struct Board
     bool isMultiStoneSuicideLegal
   ) const;
 
+  // Dots game functions
+  [[nodiscard]] bool wouldBeCaptureDots(Loc loc, Player pla) const;
+  [[nodiscard]] bool isSuicideDots(Loc loc, Player pla) const;
+  void playMoveAssumeLegalDots(Loc loc, Player pla);
+  MoveRecord playMoveRecordedDots(Loc loc, Player pla);
+  MoveRecord tryPlayMoveRecordedDots(Loc loc, Player pla, bool isSuicideLegal);
+  void undoDots(const MoveRecord& moveRecord);
+  std::array<Loc, 4> getUnconnectedLocations(Loc loc, Player pla, int& size) const;
+  Color getColorsOfPotentialCapturing(Loc loc, int minNumberOfConnections = 2) const;
+
   struct BaseInfo {
     enum class RelationType : uint8_t {
       SUBSET,
@@ -520,333 +531,6 @@ struct Board
   };
 
   CapturesAndTerritoriesInfos calculateCapturesAndTerritoriesColorsForDots() const;
-
-  struct LadderLocInfo {
-    static LadderLocInfo createZero(const Player pla) {
-      return LadderLocInfo(NULL_LOC, pla, nullptr, nullptr, 0);
-    }
-
-    static LadderLocInfo createInfinity(const Player pla) {
-      return LadderLocInfo(RESIGN_LOC, pla, nullptr, nullptr, 0);
-    }
-
-    static LadderLocInfo create(const Loc workingLoc, const Player pla, const Board& field, const MoveRecord& moveRecord, const int initialWhiteScore) {
-      return LadderLocInfo(workingLoc, pla, &field, &moveRecord, initialWhiteScore);
-    }
-
-    [[nodiscard]] bool isZero() const {
-      return workingLoc == NULL_LOC;
-    }
-
-    [[nodiscard]] bool isInfinity() const {
-      return workingLoc == RESIGN_LOC;
-    }
-
-    // Prioritize the score over territory.
-    [[nodiscard]] bool isWorseThan(const LadderLocInfo& other) const {
-      if (score < other.score) {
-        return true;
-      }
-      if (score > other.score) {
-        return false;
-      }
-
-      return territoryLocs.size() < other.territoryLocs.size();
-    }
-
-    Loc workingLoc;
-    Player player;
-    short score;
-    std::vector<Loc> territoryLocs;
-private:
-    explicit LadderLocInfo(const Loc workingLoc, const Player pla, const Board* field, const MoveRecord* moveRecord, const int initialWhiteScore)
-      : workingLoc(workingLoc), player(pla) {
-      if (!isZero() && !isInfinity()) {
-        assert(!moveRecord->bases.empty());
-        for (const auto& base : moveRecord->bases) {
-          assert(base.pla == pla);
-          if (base.type == Base::Type::EMPTY) continue;
-          for (const auto& state: base.rollback_locs_states_captures) {
-            territoryLocs.push_back(state.getLoc());
-          }
-        }
-        // Consider the whole board score instead of scoring of the created bases.
-        // It provides more refined evaluation.
-        score = static_cast<short>(pla == P_BLACK
-                 ? field->numWhiteCaptures - field->numBlackCaptures + initialWhiteScore
-                 : field->numBlackCaptures - field->numWhiteCaptures - initialWhiteScore);
-      } else {
-        assert(nullptr == moveRecord);
-        score = isInfinity() ? std::numeric_limits<short>::max() : 0;
-      }
-    }
-  };
-
-  class LaddersInfo {
-  public:
-    enum LadderMoveInfoType : uint8_t {
-      EMPTY,
-      LADDER,
-      CAPTURE,
-    };
-
-    explicit LaddersInfo() = delete;
-
-    explicit LaddersInfo(Board& newBoard) : board(newBoard) {
-      chainsData.resize((newBoard.x_size + 1) * (newBoard.y_size + 1));
-      initialWhiteScore = static_cast<short>(newBoard.numBlackCaptures - newBoard.numWhiteCaptures);
-    }
-
-    MoveRecord playAndExtendChain(const Loc loc, const Player pla, std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCapturingLocs) {
-      const MoveRecord moveRecord = play(loc, pla);
-      extendChain(loc, pla, newChainLocs, newMaybeCapturingLocs);
-      return moveRecord;
-    }
-
-    MoveRecord play(const Loc loc, const Player pla) {
-      const MoveRecord moveRecord = board.playMoveRecordedDots(loc, pla);
-
-      movesCounter++;
-      currentDepth++;
-      if (currentDepth > maxDepth) {
-        maxDepth = currentDepth;
-      }
-
-      return moveRecord;
-    }
-
-    void reduceChainAndUndo(const MoveRecord& moveRecord, const std::vector<Loc>& newChainLocs, const std::vector<Loc>& newMaybeCapturingLocs) {
-      reduceChain(moveRecord.pla, newChainLocs, newMaybeCapturingLocs);
-      undo(moveRecord);
-    }
-
-    void undo(const MoveRecord& moveRecord) {
-      board.undoDots(moveRecord);
-      currentDepth--;
-    }
-
-    const std::vector<Loc>& extendChain(const Loc loc, const Player pla, std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCaptureLocs) {
-      auto& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
-
-      assert(C_WALL != pla && board.getColor(loc) == pla);
-      auto& boardWalkStack = board.walkStack; // Use with caution (can't be used together with play move methods)
-      assert(boardWalkStack.empty());
-      boardWalkStack.push_back(loc);
-
-      while (!boardWalkStack.empty()) {
-        const Loc currentLoc = boardWalkStack.back();
-        boardWalkStack.pop_back();
-
-        if (const State adjState = board.getState(currentLoc); getActiveColor(adjState) == pla && !isTerritory(adjState) && getChainColor(currentLoc) != pla) {
-          setChainPlayer(currentLoc, pla);
-          newChainLocs.push_back(currentLoc);
-
-          for (const short adj_offset : board.adj_offsets) {
-            boardWalkStack.push_back(static_cast<Loc>(currentLoc + adj_offset));
-          }
-        }
-      }
-
-      for (const Loc newChainLoc : newChainLocs) {
-        for (const short adj_offset_for_adj_loc : board.adj_offsets) {
-          if (const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset_for_adj_loc);
-            !alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla)
-          ) {
-            setMaybeCapturePlayer(adjLocForChainLoc, pla);
-            maybeCaptureLocs.push_back(adjLocForChainLoc);
-            newMaybeCaptureLocs.push_back(adjLocForChainLoc);
-          }
-        }
-      }
-
-      return maybeCaptureLocs;
-    }
-
-    const std::vector<Loc>& getMaybeCaptureLocs(const Player pla) const {
-      return pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
-    }
-
-    void reduceChain(const Player pla, const std::vector<Loc>& newChainLocs, const std::vector<Loc>& newMaybeCapturingLocs) {
-      auto& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
-
-      assert(!newChainLocs.empty());
-      for (const Loc newChainLoc : newChainLocs) {
-        assert(board.getColor(newChainLoc) == pla);
-        resetChainPlayer(newChainLoc);
-      }
-
-      for (const Loc newMaybeCapturingLoc : newMaybeCapturingLocs) {
-        assert(board.getColor(newMaybeCapturingLoc) == C_EMPTY);
-        unsetMaybeCapturePlayer(newMaybeCapturingLoc, pla);
-      }
-
-      const auto sizeBefore = maybeCaptureLocs.size();
-
-      maybeCaptureLocs.erase(
-        std::remove_if(maybeCaptureLocs.begin(), maybeCaptureLocs.end(), [&](const int value) {
-          return std::find(newMaybeCapturingLocs.begin(), newMaybeCapturingLocs.end(), value) != newMaybeCapturingLocs.end();
-        }),
-        maybeCaptureLocs.end()
-      );
-
-      assert(sizeBefore - newMaybeCapturingLocs.size() == maybeCaptureLocs.size());
-    }
-
-    Color getChainColor(const Loc loc) const {
-      const Color color = chainsData[loc] & 0b11;
-      assert(color != C_WALL && "Chains can't have colors of both player");
-      return color;
-    }
-
-    void setChainPlayer(const Loc loc, const Player pla) {
-      chainsData[loc] = chainsData[loc] | pla;
-    }
-
-    void resetChainPlayer(const Loc loc) {
-      chainsData[loc] = chainsData[loc] & ~0b11;
-    }
-
-    Color getMaybeCaptureColor(const Loc loc) const {
-      return (chainsData[loc] >> 2) & 0b11;
-    }
-
-    bool alreadyMaybeCapture(const Loc loc, const Player pla) const {
-      return (chainsData[loc] >> 2 & pla) != 0;
-    }
-
-    void setMaybeCapturePlayer(const Loc loc, const Player pla) {
-      chainsData[loc] = chainsData[loc] | (pla << 2);
-    }
-
-    void unsetMaybeCapturePlayer(const Loc loc, const Player pla) {
-      chainsData[loc] = chainsData[loc] & ~(pla << 2);
-    }
-
-    void setInitTerritory(const Loc loc) {
-      chainsData[loc] = chainsData[loc] | 0b10000;
-      initTerritory.push_back(loc);
-    }
-
-    void resetInitTerritory() {
-      assert(currentDepth == 1);
-      assert(!initTerritory.empty());
-      for (const Loc loc : initTerritory) {
-        chainsData[loc] = chainsData[loc] & ~0b10000;
-      }
-      initTerritory.clear();
-    }
-
-    bool isInitTerritory(const Loc loc) const {
-      return (chainsData[loc] & 0b10000) != 0;
-    }
-
-    bool maybeChainCaptureLoc(const Loc loc, const Player pla) const {
-      return getChainCaptureLocType(loc, pla, false) == CAPTURE;
-    }
-
-    LadderMoveInfoType getChainCaptureLocType(const Loc loc, const Player pla, const bool requireAtLeastTwoUnconnectedDotsForLadder) const {
-      const State state = board.getState(loc);
-      if (getActiveColor(state) != C_EMPTY) {
-        return EMPTY;
-      }
-      if (const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
-        emptyTerritoryColor == pla || (emptyTerritoryColor != C_EMPTY && !board.wouldBeCaptureDots(loc, pla))
-      ) {
-        return EMPTY;
-      }
-
-      int unconnectedLocsSize = 0;
-      const std::array<Loc, 4> unconnectedLocs = board.getUnconnectedLocations(loc, pla, unconnectedLocsSize);
-      int chainConnectionLocsSize = 0;
-      for (int i = 0; i < unconnectedLocsSize; i++) {
-        if (getChainColor(unconnectedLocs[i]) == pla) {
-          chainConnectionLocsSize++;
-        }
-      }
-
-      if (chainConnectionLocsSize >= 2) {
-        return CAPTURE;
-      }
-
-      // The requireAtLeastTwoUnconnectedDotsForLadder is actual when opp defends by counter-capturing:
-      // In this case it's known that pla dot always should connect a chain to proceed with the ladder.
-      // Unfortunately, we can't rely on the ladder's chain because it might not be complete:
-      // we check empty locs *before* dot placement, but the chain is fully-formed *after* the dot placement.
-      return chainConnectionLocsSize == 1 && (!requireAtLeastTwoUnconnectedDotsForLadder || unconnectedLocsSize >= 2)
-        ? LADDER
-        : EMPTY;
-    }
-
-    [[nodiscard]] uint16_t getMovesCount() const { return movesCounter; }
-    [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
-    [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
-    [[nodiscard]] short getInitialWhiteScore() const { return initialWhiteScore; }
-    void clearMaxDepth() { maxDepth = 0; }
-
-    std::string debugChainsData() const {
-      std::ostringstream stream;
-      for (int y = 0; y < board.y_size; y++) {
-        for (int x = 0; x < board.x_size; x++) {
-          const Loc loc = Location::getLoc(x, y, board.x_size);
-
-          const Color chainColor = getChainColor(loc);
-          Color maybeCaptureColor = getMaybeCaptureColor(loc);
-
-          stream << PlayerIO::colorToChar(chainColor);
-          std::string maybeCaptureString;
-          switch (maybeCaptureColor) {
-            case C_EMPTY:
-              maybeCaptureString = "  ";
-              break;
-            case C_BLACK:
-              maybeCaptureString = "x ";
-              break;
-            case C_WHITE:
-              maybeCaptureString = "o ";
-              break;
-            case C_WALL:
-              maybeCaptureString = "xo";
-              break;
-            default:
-              ASSERT_UNREACHABLE;
-          }
-          stream << maybeCaptureString;
-
-          if (x < board.x_size - 1) {
-            stream << ' ';
-          }
-        }
-        stream << std::endl;
-      }
-      return stream.str();
-    }
-
-  private:
-    uint16_t currentDepth = 0;
-    uint16_t maxDepth = 0;
-    uint16_t movesCounter = 0;
-    short initialWhiteScore = 0;
-
-    Board& board;
-    std::vector<char> chainsData;
-    std::vector<Loc> initTerritory;
-    std::vector<Loc> firstPlaMaybeCaptureLocs;
-    std::vector<Loc> secondPlaMaybeCaptureLocs;
-  };
-
-  std::vector<LadderLocInfo> iterDotsLadders(LaddersInfo& laddersInfo);
-
-  static bool ladderIsRelevantCapturing(const MoveRecord& moveRecord, Loc initLoc, Player pla, LaddersInfo& laddersInfo);
-
-  LadderLocInfo ladderIterPla(Loc initLoc, Loc loc, Player pla, LaddersInfo& laddersInfo);
-
-  LadderLocInfo ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo,
-                                  bool requireAtLeastTwoUnconnectedDotsForLadder);
-
-  LadderLocInfo ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
-
-  void initializeOpponentChain(Player pla, LaddersInfo& laddersInfo, const MoveRecord& capturingMoveRecord,
-                             std::vector<Loc>& oppChainNewLocs, std::vector<Loc>& oppChainNewMaybeCaptureLocs) const;
 
   // Run some basic sanity checks on the board state, throws an exception if not consistent, for testing/debugging
   void checkConsistency() const;
@@ -921,12 +605,6 @@ private:
   mutable std::vector<char> visited_data = std::vector<char>();
 
   // Dots game functions
-  [[nodiscard]] bool wouldBeCaptureDots(Loc loc, Player pla) const;
-  [[nodiscard]] bool isSuicideDots(Loc loc, Player pla) const;
-  void playMoveAssumeLegalDots(Loc loc, Player pla);
-  MoveRecord playMoveRecordedDots(Loc loc, Player pla);
-  MoveRecord tryPlayMoveRecordedDots(Loc loc, Player pla, bool isSuicideLegal);
-  void undoDots(const MoveRecord& moveRecord);
   std::vector<short> fillGrounding(Loc loc);
   // We need to finish marking grounded locations
   // Because in rare cases a grounding wave doesn't traverse all necessary locs:
@@ -951,7 +629,6 @@ private:
     std::vector<Base>& bases,
     bool isSuicidal);
   void ground(Player pla, std::vector<Loc>& emptyBaseInvalidatePositions, std::vector<Base>& bases);
-  std::array<Loc, 4> getUnconnectedLocations(Loc loc, Player pla, int& size) const;
   void checkAndAddUnconnectedLocation(
     std::array<Loc, 4>& unconnectedLocationsBuffer,
     int& size,
@@ -959,7 +636,6 @@ private:
     Player currentPla,
     Loc addLoc1,
     Loc addLoc2) const;
-  Color getColorsOfPotentialCapturing(Loc loc, int minNumberOfConnections = 2) const;
   // Returns true if a closure (inner or outer) is found, or if the search terminates early (e.g. it hits a wall).
   bool tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
   void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, int &numCapturedDots, int &numFreedDots) const;
