@@ -203,8 +203,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateAdjLocs(const L
   // Make sure the color of the last location is opp to traverse its adjacent locs to find maybe capture of ladder pla locs.
   // The adjacent loc should be empty and have at least one connection with the player chain (otherwise it can't create ladders).
   assert(board.getColor(loc) == getOpp(pla));
-  for (const int adj_offset : board.adj_offsets) {
-    const Loc adjLoc = static_cast<Loc>(loc + adj_offset);
+  board.forEachAdjacent(loc, [&](const Loc adjLoc) {
     if (const auto chainCaptureLocType = getChainCaptureLocType(adjLoc, pla, requireAtLeastTwoUnconnectedDotsForLadder);
       chainCaptureLocType == LADDER
     ) {
@@ -212,7 +211,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateAdjLocs(const L
     } else if (chainCaptureLocType == CAPTURE) {
       insertCaptureBeforeLadders(adjLoc);
     }
-  }
+  });
 
   // Handle a special case when the surrounding can go through empty territory that's not directly adjacent to last opp location:
   //
