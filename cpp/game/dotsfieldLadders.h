@@ -93,10 +93,9 @@ private:
 
   LadderLocInfo iterateForPlayer(Loc initLoc, Loc loc, Player pla);
 
-  LadderLocInfo iterateAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla,
-                                  bool requireAtLeastTwoUnconnectedDotsForLadder);
+  LadderLocInfo iterateAdjLocs(Loc initLoc, Loc loc, Player pla, bool requireAtLeastTwoUnconnectedDotsForLadder);
 
-  LadderLocInfo iterateForOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla);
+  LadderLocInfo iterateForOpp(Loc initLoc, Loc loc, Player pla);
 
   void initializeOpponentChain(Player pla, const Board::MoveRecord& capturingMoveRecord,
                              std::vector<Loc>& oppChainNewLocs, std::vector<Loc>& oppChainNewMaybeCaptureLocs);

@@ -73,7 +73,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForPlayer(const
         initializeOpponentChain(pla, maybeCapturingMoveRecord, oppChainNewLocs, oppChainNewMaybeCaptureLocs);
       }
 
-      if (const auto oppLadderLocInfo = iterateForOpp(initLoc, maybeCaptureLoc, loc, pla);
+      if (const auto oppLadderLocInfo = iterateForOpp(initLoc, maybeCaptureLoc, pla);
         oppLadderLocInfo.isWorseThan(ladderLocInfo)
       ) {
         ladderLocInfo = oppLadderLocInfo;
@@ -100,7 +100,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForPlayer(const
   return ladderLocInfo;
 }
 
-DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForOpp(const Loc initLoc, const Loc loc, const Loc prevLoc, const Player pla) {
+DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForOpp(const Loc initLoc, const Loc loc, const Player pla) {
   const Player opp = getOpp(pla);
   auto oppLadderLocInfo = LadderLocInfo::createInfinity(pla);
 
@@ -130,7 +130,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForOpp(const Lo
         extendChain(oppMaybeCaptureLoc, opp, oppChainNewLocsAfterCapturing, oppChainNewMaybeCaptureLocsAfterCapturing);
 
         // Try to continue the ladder (only captures or strictly connecting locs are relevant).
-        const auto oppCapturingLadderLocInfo = iterateAdjLocs(initLoc, oppMaybeCaptureLoc, prevLoc, pla, true);
+        const auto oppCapturingLadderLocInfo = iterateAdjLocs(initLoc, oppMaybeCaptureLoc, pla, true);
         if (oppCapturingLadderLocInfo.isWorseThan(oppLadderLocInfo)) {
           oppLadderLocInfo = oppCapturingLadderLocInfo;
         }
@@ -158,7 +158,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForOpp(const Lo
   vector<Loc> oppChainNewMaybeCaptureLocsAfterDefending;
   const auto defendMove = playAndExtendChain(loc, opp, oppChainNewLocsAfterDefending, oppChainNewMaybeCaptureLocsAfterDefending);
 
-  LadderLocInfo ladderLocInfoAfterDefending = iterateAdjLocs(initLoc, loc, prevLoc, pla, false);
+  LadderLocInfo ladderLocInfoAfterDefending = iterateAdjLocs(initLoc, loc, pla, false);
   reduceChainAndUndo(defendMove, oppChainNewLocsAfterDefending, oppChainNewMaybeCaptureLocsAfterDefending);
 
   if (!ladderLocInfoAfterDefending.isZero()) {
@@ -183,8 +183,8 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForOpp(const Lo
   return oppLadderLocInfo;
 }
 
-DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateAdjLocs(const Loc initLoc, const Loc loc, const Loc prevLoc, const Player pla,
-                                              const bool requireAtLeastTwoUnconnectedDotsForLadder
+DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateAdjLocs(const Loc initLoc, const Loc loc, const Player pla,
+                                                                         const bool requireAtLeastTwoUnconnectedDotsForLadder
 ) {
   array<pair<LadderMoveInfoType, Loc>, 16> actualLocs{};
   int actualLocsSize = 0;
@@ -200,46 +200,54 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateAdjLocs(const L
     actualLocsSize++;
   };
 
-  // Make sure the color of the last location is opp to traverse its adjacent locs to find maybe capture of ladder pla locs.
-  // The adjacent loc should be empty and have at least one connection with the player chain (otherwise it can't create ladders).
+  // Make sure the color of the last location is opp to traverse its strongly and indirectly adjacent locs to find maybe capture ladder pla locs.
+  const Player opp = getOpp(pla);
   assert(board.getColor(loc) == getOpp(pla));
-  board.forEachAdjacent(loc, [&](const Loc adjLoc) {
-    if (const auto chainCaptureLocType = getChainCaptureLocType(adjLoc, pla, requireAtLeastTwoUnconnectedDotsForLadder);
+
+  auto checkAndAddAdjacentLoc = [&](const Loc directlyAdjLoc, const Loc indirectlyAdjLoc) {
+    // The adjacent loc should be empty and have at least one connection with the player chain (otherwise it can't create ladders).
+    if (const auto chainCaptureLocType = getChainCaptureLocType(directlyAdjLoc, pla, requireAtLeastTwoUnconnectedDotsForLadder);
       chainCaptureLocType == LADDER
     ) {
-      actualLocs[actualLocsSize++] = make_pair(chainCaptureLocType, adjLoc);
+      actualLocs[actualLocsSize++] = make_pair(chainCaptureLocType, directlyAdjLoc);
     } else if (chainCaptureLocType == CAPTURE) {
-      insertCaptureBeforeLadders(adjLoc);
+      insertCaptureBeforeLadders(directlyAdjLoc);
     }
-  });
 
-  // Handle a special case when the surrounding can go through empty territory that's not directly adjacent to last opp location:
-  //
-  // .  X  X  X  .
-  // X  O' O' O' X
-  // X  O' .  O' X
-  // .  X  O  .x .
-  // .  .  .  .  .
-  //
-  // Make sure the color of prevLoc is pla but don't use the assertion on active color because the prevLoc can already be captured by opp player
-  assert(board.getPlacedColor(prevLoc) == pla);
-  if (board.getColor(prevLoc) == pla) {
-    for (const int adj_offset : board.adj_offsets) {
-      const Loc adjPrevLoc = static_cast<Loc>(prevLoc + adj_offset);
-
-      if (const auto end = actualLocs.begin() + actualLocsSize;
-        std::find_if(actualLocs.begin(), end,   [adjPrevLoc](const auto& item) {
-          return item.second == adjPrevLoc;
-        }) != end
-      ) {
-        continue;
-      }
-
-      if (maybeChainCaptureLoc(adjPrevLoc, pla)) {
-        insertCaptureBeforeLadders(adjPrevLoc);
-      }
+    // Handle special cases when the capturing loc isn't directly adjacent to last opp loc:
+    //
+    // .  X  X  X  .
+    // X  O' O' O' X
+    // X  O' .  O' X
+    // .  X  O  .x .
+    // .  .  .  .  .
+    //
+    // .  X  .  X  .
+    // X  O  .  O  X
+    // X  O  .  O  X
+    // X  O  .  O  X
+    // .  X  O  X  .
+    // .  .  .  .  .
+    //
+    // Check the color of the direct adjacent loc at first because it's not safe to use locs outside the field borders + side locs.
+    // If the color isn't empty, it's safe to calculate the non-directly adjacent loc because it means the directlyAdjLoc is always
+    // within real borders and its adjacent locs are always legal.
+    if (board.getColor(directlyAdjLoc) == opp && maybeChainCaptureLoc(indirectlyAdjLoc, pla)) {
+      insertCaptureBeforeLadders(indirectlyAdjLoc);
     }
-  }
+  };
+
+  const Loc xm1yLoc = Location::xm1y(loc);
+  checkAndAddAdjacentLoc(xm1yLoc, Location::xm1y(xm1yLoc));
+
+  const Loc xym1Loc = Location::xym1(loc, board.x_size);
+  checkAndAddAdjacentLoc(xym1Loc, Location::xym1(xym1Loc, board.x_size));
+
+  const Loc xp1yLoc = Location::xp1y(loc);
+  checkAndAddAdjacentLoc(xp1yLoc, Location::xp1y(xp1yLoc));
+
+  const Loc xyp1Loc = Location::xyp1(loc, board.x_size);
+  checkAndAddAdjacentLoc(xyp1Loc, Location::xyp1(xyp1Loc, board.x_size));
 
   for (int i = 0; i < actualLocsSize; i++) {
     const Loc actualLoc = actualLocs[i].second;
