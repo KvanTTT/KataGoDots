@@ -522,12 +522,64 @@ struct Board
   CapturesAndTerritoriesInfos calculateCapturesAndTerritoriesColorsForDots() const;
 
   struct LadderLocInfo {
-    explicit LadderLocInfo(const Loc workingLoc, const Player pla, const std::vector<Loc>& captureLocs)
-      : workingLoc(workingLoc), player(pla), territoryLocs(captureLocs) {}
+    static LadderLocInfo createZero(const Player pla) {
+      return LadderLocInfo(NULL_LOC, pla, nullptr, nullptr, 0);
+    }
+
+    static LadderLocInfo createInfinity(const Player pla) {
+      return LadderLocInfo(RESIGN_LOC, pla, nullptr, nullptr, 0);
+    }
+
+    static LadderLocInfo create(const Loc workingLoc, const Player pla, const Board& field, const MoveRecord& moveRecord, const int initialWhiteScore) {
+      return LadderLocInfo(workingLoc, pla, &field, &moveRecord, initialWhiteScore);
+    }
+
+    [[nodiscard]] bool isZero() const {
+      return workingLoc == NULL_LOC;
+    }
+
+    [[nodiscard]] bool isInfinity() const {
+      return workingLoc == RESIGN_LOC;
+    }
+
+    // Prioritize the score over territory.
+    [[nodiscard]] bool isWorseThan(const LadderLocInfo& other) const {
+      if (score < other.score) {
+        return true;
+      }
+      if (score > other.score) {
+        return false;
+      }
+
+      return territoryLocs.size() < other.territoryLocs.size();
+    }
 
     Loc workingLoc;
     Player player;
+    short score;
     std::vector<Loc> territoryLocs;
+private:
+    explicit LadderLocInfo(const Loc workingLoc, const Player pla, const Board* field, const MoveRecord* moveRecord, const int initialWhiteScore)
+      : workingLoc(workingLoc), player(pla) {
+      if (!isZero() && !isInfinity()) {
+        assert(!moveRecord->bases.empty());
+        for (const auto& base : moveRecord->bases) {
+          assert(base.pla == pla);
+          if (base.type == Base::Type::EMPTY) continue;
+          for (const auto& state: base.rollback_locs_states_captures) {
+            territoryLocs.push_back(state.getLoc());
+          }
+        }
+        // Consider the whole board score instead of scoring of the created bases.
+        // It provides more refined evaluation.
+        score = static_cast<short>(pla == P_BLACK
+                 ? field->numWhiteCaptures - field->numBlackCaptures + initialWhiteScore
+                 : field->numBlackCaptures - field->numWhiteCaptures - initialWhiteScore);
+      } else {
+        assert(nullptr == moveRecord);
+        score = isInfinity() ? std::numeric_limits<short>::max() : 0;
+      }
+    }
   };
 
   class LaddersInfo {
@@ -540,9 +592,9 @@ struct Board
 
     explicit LaddersInfo() = delete;
 
-    explicit LaddersInfo(Board& newBoard) {
-      board = &newBoard;
+    explicit LaddersInfo(Board& newBoard) : board(newBoard) {
       chainsData.resize((newBoard.x_size + 1) * (newBoard.y_size + 1));
+      initialWhiteScore = static_cast<short>(newBoard.numBlackCaptures - newBoard.numWhiteCaptures);
     }
 
     MoveRecord playAndExtendChain(const Loc loc, const Player pla, std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCapturingLocs) {
@@ -552,7 +604,7 @@ struct Board
     }
 
     MoveRecord play(const Loc loc, const Player pla) {
-      const MoveRecord moveRecord = board->playMoveRecordedDots(loc, pla);
+      const MoveRecord moveRecord = board.playMoveRecordedDots(loc, pla);
 
       movesCounter++;
       currentDepth++;
@@ -569,15 +621,15 @@ struct Board
     }
 
     void undo(const MoveRecord& moveRecord) {
-      board->undoDots(moveRecord);
+      board.undoDots(moveRecord);
       currentDepth--;
     }
 
     const std::vector<Loc>& extendChain(const Loc loc, const Player pla, std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCaptureLocs) {
       auto& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
 
-      assert(C_WALL != pla && board->getColor(loc) == pla);
-      auto& boardWalkStack = board->walkStack; // Use with caution (can't be used together with play move methods)
+      assert(C_WALL != pla && board.getColor(loc) == pla);
+      auto& boardWalkStack = board.walkStack; // Use with caution (can't be used together with play move methods)
       assert(boardWalkStack.empty());
       boardWalkStack.push_back(loc);
 
@@ -585,18 +637,18 @@ struct Board
         const Loc currentLoc = boardWalkStack.back();
         boardWalkStack.pop_back();
 
-        if (const State adjState = board->getState(currentLoc); getActiveColor(adjState) == pla && !isTerritory(adjState) && getChainColor(currentLoc) != pla) {
+        if (const State adjState = board.getState(currentLoc); getActiveColor(adjState) == pla && !isTerritory(adjState) && getChainColor(currentLoc) != pla) {
           setChainPlayer(currentLoc, pla);
           newChainLocs.push_back(currentLoc);
 
-          for (const short adj_offset : board->adj_offsets) {
+          for (const short adj_offset : board.adj_offsets) {
             boardWalkStack.push_back(static_cast<Loc>(currentLoc + adj_offset));
           }
         }
       }
 
       for (const Loc newChainLoc : newChainLocs) {
-        for (const short adj_offset_for_adj_loc : board->adj_offsets) {
+        for (const short adj_offset_for_adj_loc : board.adj_offsets) {
           if (const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset_for_adj_loc);
             !alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla)
           ) {
@@ -619,12 +671,12 @@ struct Board
 
       assert(!newChainLocs.empty());
       for (const Loc newChainLoc : newChainLocs) {
-        assert(board->getColor(newChainLoc) == pla);
+        assert(board.getColor(newChainLoc) == pla);
         resetChainPlayer(newChainLoc);
       }
 
       for (const Loc newMaybeCapturingLoc : newMaybeCapturingLocs) {
-        assert(board->getColor(newMaybeCapturingLoc) == C_EMPTY);
+        assert(board.getColor(newMaybeCapturingLoc) == C_EMPTY);
         unsetMaybeCapturePlayer(newMaybeCapturingLoc, pla);
       }
 
@@ -675,23 +727,13 @@ struct Board
       initTerritory.push_back(loc);
     }
 
-    void handleAndResetInitTerritory(bool success) {
+    void resetInitTerritory() {
       assert(currentDepth == 1);
       assert(!initTerritory.empty());
       for (const Loc loc : initTerritory) {
         chainsData[loc] = chainsData[loc] & ~0b10000;
       }
-      if (success && (initFinalTerritory.empty() || initTerritory.size() < initFinalTerritory.size())) {
-        initFinalTerritory.clear();
-        initFinalTerritory.insert(initFinalTerritory.end(), initTerritory.begin(), initTerritory.end());
-      }
       initTerritory.clear();
-    }
-
-    std::vector<Loc> getInitFinalTerritory() {
-      std::vector<Loc> result = initFinalTerritory;
-      initFinalTerritory.clear();
-      return result;
     }
 
     bool isInitTerritory(const Loc loc) const {
@@ -703,18 +745,18 @@ struct Board
     }
 
     LadderMoveInfoType getChainCaptureLocType(const Loc loc, const Player pla, const bool requireAtLeastTwoUnconnectedDotsForLadder) const {
-      const State state = board->getState(loc);
+      const State state = board.getState(loc);
       if (getActiveColor(state) != C_EMPTY) {
         return EMPTY;
       }
       if (const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
-        emptyTerritoryColor == pla || (emptyTerritoryColor != C_EMPTY && !board->wouldBeCaptureDots(loc, pla))
+        emptyTerritoryColor == pla || (emptyTerritoryColor != C_EMPTY && !board.wouldBeCaptureDots(loc, pla))
       ) {
         return EMPTY;
       }
 
       int unconnectedLocsSize = 0;
-      const std::array<Loc, 4> unconnectedLocs = board->getUnconnectedLocations(loc, pla, unconnectedLocsSize);
+      const std::array<Loc, 4> unconnectedLocs = board.getUnconnectedLocations(loc, pla, unconnectedLocsSize);
       int chainConnectionLocsSize = 0;
       for (int i = 0; i < unconnectedLocsSize; i++) {
         if (getChainColor(unconnectedLocs[i]) == pla) {
@@ -738,13 +780,14 @@ struct Board
     [[nodiscard]] uint16_t getMovesCount() const { return movesCounter; }
     [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
     [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
+    [[nodiscard]] short getInitialWhiteScore() const { return initialWhiteScore; }
     void clearMaxDepth() { maxDepth = 0; }
 
     std::string debugChainsData() const {
       std::ostringstream stream;
-      for (int y = 0; y < board->y_size; y++) {
-        for (int x = 0; x < board->x_size; x++) {
-          const Loc loc = Location::getLoc(x, y, board->x_size);
+      for (int y = 0; y < board.y_size; y++) {
+        for (int x = 0; x < board.x_size; x++) {
+          const Loc loc = Location::getLoc(x, y, board.x_size);
 
           const Color chainColor = getChainColor(loc);
           Color maybeCaptureColor = getMaybeCaptureColor(loc);
@@ -769,7 +812,7 @@ struct Board
           }
           stream << maybeCaptureString;
 
-          if (x < board->x_size - 1) {
+          if (x < board.x_size - 1) {
             stream << ' ';
           }
         }
@@ -782,11 +825,11 @@ struct Board
     uint16_t currentDepth = 0;
     uint16_t maxDepth = 0;
     uint16_t movesCounter = 0;
+    short initialWhiteScore = 0;
 
-    Board* board = nullptr;
+    Board& board;
     std::vector<char> chainsData;
     std::vector<Loc> initTerritory;
-    std::vector<Loc> initFinalTerritory;
     std::vector<Loc> firstPlaMaybeCaptureLocs;
     std::vector<Loc> secondPlaMaybeCaptureLocs;
   };
@@ -795,11 +838,12 @@ struct Board
 
   static bool ladderIsRelevantCapturing(const MoveRecord& moveRecord, Loc initLoc, Player pla, LaddersInfo& laddersInfo);
 
-  bool ladderIterPla(Loc initLoc, Loc loc, Player pla, LaddersInfo& laddersInfo);
+  LadderLocInfo ladderIterPla(Loc initLoc, Loc loc, Player pla, LaddersInfo& laddersInfo);
 
-  bool ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo, bool requireAtLeastTwoUnconnectedDotsForLadder);
+  LadderLocInfo ladderIterAdjLocs(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo,
+                                  bool requireAtLeastTwoUnconnectedDotsForLadder);
 
-  bool ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
+  LadderLocInfo ladderIterOpp(Loc initLoc, Loc loc, Loc prevLoc, Player pla, LaddersInfo& laddersInfo);
 
   void initializeOpponentChain(Player pla, LaddersInfo& laddersInfo, const MoveRecord& capturingMoveRecord,
                              std::vector<Loc>& oppChainNewLocs, std::vector<Loc>& oppChainNewMaybeCaptureLocs) const;
