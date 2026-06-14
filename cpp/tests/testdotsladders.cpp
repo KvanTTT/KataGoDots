@@ -3,6 +3,7 @@
 #include "testdotsutils.h"
 #include "tests.h"
 #include "game/board.h"
+#include "game/dotsfieldLadders.h"
 
 using namespace std;
 
@@ -70,7 +71,7 @@ static string generateBoardRepresentation(Board& board) {
     return generateBoardStateRepresentation(board, {}, {}, {}, {});
 }
 
-string playAndDumpLaddersInfo(Board& board, const XYMove move, Board::LaddersInfo& laddersInfo,
+string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersEvaluator& laddersInfo,
     int& actualBlackScore, int& actualWhiteScore
     ) {
     if (const Loc moveLoc = Location::getLoc(move.x, move.y, board.x_size); moveLoc != Board::NULL_LOC) {
@@ -82,7 +83,7 @@ string playAndDumpLaddersInfo(Board& board, const XYMove move, Board::LaddersInf
     bool firstIteration = previousMovesCount== 0;
     laddersInfo.clearMaxDepth();
 
-    const vector<Board::LadderLocInfo> workingLadderLocInfos = board.iterDotsLadders(laddersInfo);
+    const auto workingLadderLocInfos = laddersInfo.evaluate();
 
     cout << "Total moves count: " << laddersInfo.getMovesCount();
     if (!firstIteration) {
@@ -127,7 +128,7 @@ static void checkLadders(const string& fieldData, const optional<string>& expect
     const optional<int> expectedBlackScore = nullopt, const optional<int> expectedWhiteScore = nullopt
 ) {
     Board field = parseDotsFieldDefault(fieldData);
-    Board::LaddersInfo laddersInfo(field);
+    DotsLaddersEvaluator laddersInfo(field);
 
     int actualBlackScore = 0;
     int actualWhiteScore = 0;
@@ -295,7 +296,7 @@ static void checkLadders(const string& fieldDataWithLaddersInfo,
     const string expectedFieldLaddersInfo = generateBoardStateRepresentation(field,
         blackWorkingLocs, whiteWorkingLocs, blackCapturedLocs, whiteCapturedLocs);
 
-    Board::LaddersInfo laddersInfo(field);
+    DotsLaddersEvaluator laddersInfo(field);
 
     int actualBlackScore = 0;
     int actualWhiteScore = 0;

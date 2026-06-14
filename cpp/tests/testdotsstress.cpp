@@ -1,6 +1,7 @@
 #include <chrono>
 
 #include "../version.h"
+#include "../game/dotsfieldLadders.h"
 #include "../tests/testdotsutils.h"
 #include "../tests/tests.h"
 
@@ -249,8 +250,8 @@ void Tests::runDotsStressTestsInternal(
 
             (void)boardHistory->whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfos);
           } else if (checkingMode == LADDERS_ON_EACH_MOVE) {
-            Board::LaddersInfo laddersInfo(board);
-            (void)board.iterDotsLadders(laddersInfo);
+            DotsLaddersEvaluator laddersEvaluator(board);
+            (void)laddersEvaluator.evaluate();
           }
         }
         currentGameMovesCount++;
