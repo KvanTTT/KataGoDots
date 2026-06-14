@@ -70,7 +70,9 @@ static string generateBoardRepresentation(Board& board) {
     return generateBoardStateRepresentation(board, {}, {}, {}, {});
 }
 
-string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersInfo& laddersInfo) {
+string playAndDumpLaddersInfo(Board& board, const XYMove move, Board::LaddersInfo& laddersInfo,
+    int& actualBlackScore, int& actualWhiteScore
+    ) {
     if (const Loc moveLoc = Location::getLoc(move.x, move.y, board.x_size); moveLoc != Board::NULL_LOC) {
         cout << "Move: " << move.toString() << ". ";
         EXPECT_TRUE(board.playMove(moveLoc, move.player, true));
@@ -94,14 +96,23 @@ string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersInfo
     std::unordered_set<Loc> blackCapturedLocs;
     std::unordered_set<Loc> whiteCapturedLocs;
 
+    actualBlackScore = 0;
+    actualWhiteScore = 0;
+
     for (const auto& ladderLocInfo : workingLadderLocInfos) {
         Player ladderPlayer = ladderLocInfo.player;
-        assert(ladderPlayer != C_EMPTY);
+        assert(ladderPlayer != C_EMPTY && ladderLocInfo.workingLoc != Board::NULL_LOC);
 
-        if (ladderLocInfo.workingLoc != Board::NULL_LOC) {
-            std::unordered_set<Loc>& workingLocs = ladderPlayer == C_BLACK ? blackWorkingLocs : whiteWorkingLocs;
-            workingLocs.insert(ladderLocInfo.workingLoc);
+        std::unordered_set<Loc>& workingLocs = ladderPlayer == C_BLACK ? blackWorkingLocs : whiteWorkingLocs;
+        if (ladderPlayer == C_BLACK) {
+            workingLocs = blackWorkingLocs;
+            actualBlackScore += ladderLocInfo.score;
+        } else {
+            workingLocs = whiteWorkingLocs;
+            actualWhiteScore += ladderLocInfo.score;
         }
+        workingLocs.insert(ladderLocInfo.workingLoc);
+
         std::unordered_set<Loc>& capturedLocs = ladderPlayer == C_BLACK ? blackCapturedLocs : whiteCapturedLocs;
         for (const auto& territoryLoc : ladderLocInfo.territoryLocs) {
             capturedLocs.insert(territoryLoc);
@@ -112,25 +123,42 @@ string playAndDumpLadderInfo(Board& board, const XYMove move, Board::LaddersInfo
                                             whiteCapturedLocs);
 }
 
-static void checkLadders(const string& fieldDataWithLaddersInfo, const optional<string>& expectedLaddersInfo) {
-    Board field = parseDotsFieldDefault(fieldDataWithLaddersInfo);
+static void checkLadders(const string& fieldData, const optional<string>& expectedLaddersInfo,
+    const optional<int> expectedBlackScore = nullopt, const optional<int> expectedWhiteScore = nullopt
+) {
+    Board field = parseDotsFieldDefault(fieldData);
     Board::LaddersInfo laddersInfo(field);
 
-    const string actualFieldLadderInfo = playAndDumpLadderInfo(field, XYMove::getNullMove(), laddersInfo);
+    int actualBlackScore = 0;
+    int actualWhiteScore = 0;
+    const string actualFieldLadderInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), laddersInfo, actualBlackScore, actualWhiteScore);
 
     const string expectedLaddersInfoString = expectedLaddersInfo.has_value()
         ? expectedLaddersInfo.value()
         : generateBoardRepresentation(field);
 
     EXPECT_EQ_TRIMMED(expectedLaddersInfoString, actualFieldLadderInfo);
+    if (expectedBlackScore.has_value()) {
+        EXPECT_EQ(expectedBlackScore, actualBlackScore);
+    }
+    if (expectedWhiteScore.has_value()) {
+        EXPECT_EQ(expectedWhiteScore, actualWhiteScore);
+    }
 }
 
-static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool captureEmptyBases) {
+static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool captureEmptyBases, const vector<XYMove>& extraMoves,
+    unordered_set<Loc>& blackWorkingLocs,
+    unordered_set<Loc>& whiteWorkingLocs,
+    unordered_set<Loc>& blackCapturedLocs,
+    unordered_set<Loc>& whiteCapturedLocs
+) {
     int y = 0;
     int x = 0;
     int maxX = 0;
 
     vector<XYMove> moves;
+    vector<XYMove> workingMoves;
+    vector<XYMove> capturedMoves;
 
     for (size_t i = 0; i < boardData.size(); ++i) {
         switch (const char c = boardData[i]) {
@@ -153,9 +181,22 @@ static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool c
                         case '\n':
                             break;
                         case ' ': // Empty loc
-                        case FIRST_PLA_LOWER: // First player working move
-                        case SECOND_PLA_LOWER: // Second player working move
-                        case '\'': // Captured loc
+                            i++;
+                            break;
+                        case FIRST_PLA_LOWER:
+                            // First player working move
+                            workingMoves.emplace_back(x, y, P_BLACK);
+                            i++;
+                            break;
+                        case SECOND_PLA_LOWER:
+                            // Second player working move
+                            workingMoves.emplace_back(x, y, P_WHITE);
+                            i++;
+                            break;
+                        case '\'':
+                            // Captured loc. Currently, it's not possible to detect the captured color reliably
+                            // Use P_BLACK as default
+                            capturedMoves.emplace_back(x, y, P_BLACK);
                             i++;
                             break;
                         default:
@@ -173,8 +214,15 @@ static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool c
                     switch (boardData[i + 1]) {
                         case '\n':
                             break;
-                        case ' ': // Empty loc
-                        case '\'': // Captured loc
+                        case ' ':
+                            // Empty loc
+                            i++;
+                            break;
+                        case '\'':
+                            // Captured loc
+                            // Currently it's not possible to detect the captured color reliably
+                            // Use P_BLACK as default
+                            capturedMoves.emplace_back(x, y, P_BLACK);
                             i++;
                             break;
                         default:
@@ -206,26 +254,60 @@ static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool c
     vector<Move> linearMoves;
     linearMoves.reserve(moves.size());
 
+    int x_size = maxX + 1;
+
     std::transform(
         moves.begin(),
         moves.end(),
         std::back_inserter(linearMoves),
-        [maxX](const XYMove& item) {
-            return item.toMove(maxX + 1);
+        [x_size](const XYMove& item) {
+            return item.toMove(x_size);
         }
     );
 
+    for (const XYMove& workingMove : workingMoves) {
+        auto& workingLocs = workingMove.player == P_BLACK ? blackWorkingLocs : whiteWorkingLocs;
+        workingLocs.insert(workingMove.toMove(x_size).loc);
+    }
+
+    for (const XYMove& capturedMove : capturedMoves) {
+        auto& capturedLocs = capturedMove.player == P_BLACK ? blackCapturedLocs : whiteCapturedLocs;
+        capturedLocs.insert(capturedMove.toMove(x_size).loc);
+    }
+
     field.setStonesFailIfNoLibs(linearMoves);
+
+    playXYMovesAssumeLegal(field, extraMoves);
+
     return field;
 }
 
-static void checkLadders(const string& fieldDataWithLaddersInfo, const bool captureEmptyBases = Rules::DEFAULT_DOTS.dotsCaptureEmptyBases) {
-    Board field = parseDotsFieldWithLaddersInfo(fieldDataWithLaddersInfo, captureEmptyBases);
+static void checkLadders(const string& fieldDataWithLaddersInfo,
+    const optional<int> expectedBlackScore = nullopt,
+    const optional<int> expectedWhiteScore = nullopt,
+    const bool captureEmptyBases = Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
+    const vector<XYMove>& extraMoves = {}
+    ) {
+
+    unordered_set<Loc> blackWorkingLocs, whiteWorkingLocs, blackCapturedLocs, whiteCapturedLocs;
+    Board field = parseDotsFieldWithLaddersInfo(fieldDataWithLaddersInfo, captureEmptyBases, extraMoves,
+        blackWorkingLocs, whiteWorkingLocs, blackCapturedLocs, whiteCapturedLocs);
+    const string expectedFieldLaddersInfo = generateBoardStateRepresentation(field,
+        blackWorkingLocs, whiteWorkingLocs, blackCapturedLocs, whiteCapturedLocs);
+
     Board::LaddersInfo laddersInfo(field);
 
-    const string actualFieldLadderInfo = playAndDumpLadderInfo(field, XYMove::getNullMove(), laddersInfo);
+    int actualBlackScore = 0;
+    int actualWhiteScore = 0;
+    const string actualFieldLaddersInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), laddersInfo, actualBlackScore, actualWhiteScore);
 
-    EXPECT_EQ_TRIMMED(fieldDataWithLaddersInfo, actualFieldLadderInfo);
+    EXPECT_EQ_TRIMMED(expectedFieldLaddersInfo, actualFieldLaddersInfo);
+    if (expectedBlackScore.has_value()) {
+        EXPECT_EQ(expectedBlackScore, actualBlackScore);
+    }
+    if (expectedWhiteScore.has_value()) {
+        EXPECT_EQ(expectedWhiteScore, actualWhiteScore);
+    }
 }
 
 TEST(LadderTests, MinimalCapturing) {
@@ -525,20 +607,61 @@ TEST(LadderTests, NotWorkingLadderBecauseOfInternalCapturing) {
 )");
 }
 
-// TODO: Fix calculation of best opp defending by capturing (the ladder's territory should be minimal)
-TEST(LadderTests, DISABLED_WorkingLadderDespiteTheInternalCapturings) {
+TEST(LadderTests, WorkingLadderWithInternalCapturings) {
     checkLadders(
         R"(
-.  .  .  .  .  .  .  .  .  .  .  .
-.  .  .  .  .  X  X  .  .  .  .  .
-.  .  .  .  X  .' .' X  O  O  .  .
-.  .  .  X  O' .' .  .  X  O  O  .
-.  .  .x O' O' .  .  .  .  X  O  .
-.  .  .  O' O' .' .  .  X  O  O  .
-.  X  .  X  X  .' .' X  O  O  .  .
-.  .  .  .  .  X  X  .  .  .  .  .
-.  .  .  .  .  .  .  .  .  .  .  .
-)");
+.  .  .  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  X  X  .  .  .  .  .  .
+.  .  .  .  .  X  .' .' X  O  O  .  .  .
+.  .  .  .  X  O' .' .  .  X  O  O  O  .
+.  .  .  .x O' O' .  .  .  .  X  O  X  .
+.  .  .  .  O' O' .' .  .  X  O  O  O  .
+.  .  .  .  X  X  .' .' X  O  O  .  .  .
+.  X  .  .  .  .  X  X  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .  .  .
+)",
+        1,
+        0,
+        false,
+        {XYMove(13, 4, P_WHITE)}
+        );
+}
+
+// Mark the ladders even it's losing or tied score.
+//   * The main thing is to hint the ladder that can be deep that's tough for NN to evaluate.
+//   * Hopefully, NN will be able to estimate the losing score by itself because the capturing territory is provided and calculated as minimal.
+//   * Currently, there is no channel that would allow marking lost dots for ladders.
+//   * Such situations are hopefully very rare.
+TEST(LadderTests, WorkingLadderWithInternalCapturingsAndZeroScore) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  X  X  .  .  .  .  .
+.  .  .  .  .  X  .' .' X  O  O  .  .
+.  .  .  .  X  O' .' .  .  X  O  O  .
+.  .  .  .x O' O' .  .  .  .  X  O  .
+.  .  .  .  O' .' .' .  .  X  O  O  .
+.  .  .  .  X  X  .' .' X  O  O  .  .
+.  X  .  .  .  .  X  X  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .  .
+)",
+        0);
+}
+
+TEST(LadderTests, WorkingLadderWithInternalCapturingsAndLosingScore) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  X  X  .  .  .  .  .
+.  .  .  .  .  X  .' .' X  O  O  O  .
+.  .  .  .  X  O' .' .  .  X  O  X  O
+.  .  .  .x O' O' .  .  .  .  X  X  O
+.  .  .  .  O' .' .' .  .  X  O  X  O
+.  .  .  .  X  X  .' .' X  O  O  O  .
+.  X  .  .  .  .  X  X  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .  .
+)",
+        -3);
 }
 
 // TODO: Fix calculation of minimal territory considering ideal pla play
@@ -605,7 +728,7 @@ TEST(LadderTests, StressSimple) {
     const string representationWithEscape = generateBoardRepresentation(board);
 
     cout << "Check escaping:" << endl;
-    checkLadders(representationWithEscape, nullopt);
+    checkLadders(representationWithEscape, 0, 0);
 
     int farMoveX;
     int farMoveY;
@@ -630,7 +753,7 @@ TEST(LadderTests, StressSimple) {
         {});
 
     cout << "Check capturing:" << endl;
-    checkLadders(representationWithCapture, expectedLadder);
+    checkLadders(representationWithCapture, expectedLadder, 2, 0);
 }
 
 TEST(LaddersPerformanceTests, RandomGames) {
