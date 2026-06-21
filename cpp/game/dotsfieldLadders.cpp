@@ -48,32 +48,25 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForPlayer(const
     return result;
   }
 
-  vector<Loc> plaChainNewLocs;
-  vector<Loc> plaChainMainCaptureLocs;
-  const auto maybeCaptureLocs = extendChain(loc, pla, plaChainNewLocs, plaChainMainCaptureLocs);
+  createAndPushChainInfo(loc, pla);
+  const auto captureLocs = extractCaptureLocs(pla);
 
   auto ladderLocInfo = LadderLocInfo::createInfinity(pla);
   bool ladderLocInfoInitialized = false;
 
-  for (const Loc maybeCaptureLoc : maybeCaptureLocs) {
-    if (!maybeChainCaptureLoc(maybeCaptureLoc, pla)) {
-      continue;
-    }
-
-    const auto maybeCapturingMoveRecord = play(maybeCaptureLoc, pla);
+  for (const Loc captureLoc : captureLocs) {
+    const auto maybeCapturingMoveRecord = play(captureLoc, pla);
     const bool ladderCapturingIsFound = isRelevantCapturing(maybeCapturingMoveRecord, initLoc, pla);
     undo(maybeCapturingMoveRecord);
 
     if (ladderCapturingIsFound) {
       const bool initializeOppChain = getCurrentDepth() == 1;
-      vector<Loc> oppChainNewLocs;
-      vector<Loc> oppChainNewMaybeCaptureLocs;
 
       if (initializeOppChain) {
-        initializeOpponentChain(pla, maybeCapturingMoveRecord, oppChainNewLocs, oppChainNewMaybeCaptureLocs);
+        initializeOpponentChain(pla, maybeCapturingMoveRecord);
       }
 
-      if (const auto oppLadderLocInfo = iterateForOpp(initLoc, maybeCaptureLoc, pla);
+      if (const auto oppLadderLocInfo = iterateForOpp(initLoc, captureLoc, pla);
         oppLadderLocInfo.isWorseThan(ladderLocInfo)
       ) {
         ladderLocInfo = oppLadderLocInfo;
@@ -81,13 +74,13 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForPlayer(const
       }
 
       if (initializeOppChain) {
-        reduceChain(getOpp(pla), oppChainNewLocs, oppChainNewMaybeCaptureLocs);
+        popChainInfo(getOpp(pla));
         resetInitTerritory();
       }
     }
   }
 
-  reduceChainAndUndo(moveRecordForLoc, plaChainNewLocs, plaChainMainCaptureLocs);
+  reduceChainAndUndo(moveRecordForLoc);
 
   if (!ladderLocInfoInitialized) {
     assert(ladderLocInfo.isInfinity());
@@ -105,15 +98,11 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForOpp(const Lo
   auto oppLadderLocInfo = LadderLocInfo::createInfinity(pla);
 
   // Try capturing part of pla surrounding at first.
-  const auto maybeCaptureLocs = getMaybeCaptureLocs(opp);
-  for (const auto& oppMaybeCaptureLoc : maybeCaptureLocs) {
-    if (!maybeChainCaptureLoc(oppMaybeCaptureLoc, opp)) {
-      continue;
-    }
+  const auto oppCaptureLocs = extractCaptureLocs(opp);
+  for (const auto& oppCaptureLoc : oppCaptureLocs) {
+    const auto potentialDefendCaptureMoveRecord = play(oppCaptureLoc, opp);
 
-    const auto potentialDefendCapturingMoveRecord = play(oppMaybeCaptureLoc, opp);
-
-    for (const auto& oppBase : potentialDefendCapturingMoveRecord.bases) {
+    for (const auto& oppBase : potentialDefendCaptureMoveRecord.bases) {
       assert(oppBase.pla == opp);
       if (oppBase.type == Board::Base::Type::EMPTY) continue;
       assert(oppBase.type == Board::Base::Type::NORMAL);
@@ -125,17 +114,15 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForOpp(const Lo
       });
 
       if (potentialDefendCaptureMoveIsFound) {
-        vector<Loc> oppChainNewLocsAfterCapturing;
-        vector<Loc> oppChainNewMaybeCaptureLocsAfterCapturing;
-        extendChain(oppMaybeCaptureLoc, opp, oppChainNewLocsAfterCapturing, oppChainNewMaybeCaptureLocsAfterCapturing);
+        createAndPushChainInfo(oppCaptureLoc, opp);
 
         // Try to continue the ladder (only captures or strictly connecting locs are relevant).
-        const auto oppCapturingLadderLocInfo = iterateAdjLocs(initLoc, oppMaybeCaptureLoc, pla, true);
+        const auto oppCapturingLadderLocInfo = iterateAdjLocs(initLoc, oppCaptureLoc, pla, true);
         if (oppCapturingLadderLocInfo.isWorseThan(oppLadderLocInfo)) {
           oppLadderLocInfo = oppCapturingLadderLocInfo;
         }
 
-        reduceChain(opp, oppChainNewLocsAfterCapturing, oppChainNewMaybeCaptureLocsAfterCapturing);
+        popChainInfo(opp);
 
         if (oppLadderLocInfo.isZero()) {
           break; // The successful opp defending capture is found -> exit
@@ -143,7 +130,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForOpp(const Lo
       }
     }
 
-    undo(potentialDefendCapturingMoveRecord);
+    undo(potentialDefendCaptureMoveRecord);
 
     // Optimization:
     // At this site it's assumed that the defending capture is successful for opp player, and it breaks part of the pla ladder chain.
@@ -154,12 +141,9 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForOpp(const Lo
   }
 
   // Try defending at second
-  vector<Loc> oppChainNewLocsAfterDefending;
-  vector<Loc> oppChainNewMaybeCaptureLocsAfterDefending;
-  const auto defendMove = playAndExtendChain(loc, opp, oppChainNewLocsAfterDefending, oppChainNewMaybeCaptureLocsAfterDefending);
-
+  const auto defendMove = playAndExtendChain(loc, opp);
   LadderLocInfo ladderLocInfoAfterDefending = iterateAdjLocs(initLoc, loc, pla, false);
-  reduceChainAndUndo(defendMove, oppChainNewLocsAfterDefending, oppChainNewMaybeCaptureLocsAfterDefending);
+  reduceChainAndUndo(defendMove);
 
   if (!ladderLocInfoAfterDefending.isZero()) {
     // Optimization: don't run iteration over adjacent opp locs to calculate the worst capturing for pla considering opp ideal play.
@@ -300,29 +284,44 @@ bool DotsLaddersEvaluator::isRelevantCapturing(const Board::MoveRecord& moveReco
   return result;
 }
 
-void DotsLaddersEvaluator::initializeOpponentChain(const Player pla,
-  const Board::MoveRecord& capturingMoveRecord, vector<Loc>& oppChainNewLocs, vector<Loc>& oppChainNewMaybeCaptureLocs
-  ) {
+void DotsLaddersEvaluator::initializeOpponentChain(const Player pla,const Board::MoveRecord& capturingMoveRecord) {
   const Player opp = getOpp(pla);
+  vector<Loc> oppChainLocs;
   for (const auto& base : capturingMoveRecord.bases) {
     if (base.type == Board::Base::Type::EMPTY) continue;
     for (const auto& surrounding_loc : base.surrounding_locs) {
       board.forEachAdjacent(surrounding_loc, [&](const Loc adjLoc) {
         if (board.getColor(adjLoc) == opp) {
-          extendChain(adjLoc, opp, oppChainNewLocs, oppChainNewMaybeCaptureLocs);
+          oppChainLocs.push_back(adjLoc);
         }
       });
     }
   }
+  createAndPushChainInfo(oppChainLocs, opp);
 }
 
-const std::vector<Loc>& DotsLaddersEvaluator::extendChain(const Loc loc, const Player pla,
-  std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCaptureLocs) {
-  auto& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
+void DotsLaddersEvaluator::createAndPushChainInfo(const Loc loc, const Player pla) {
+  vector<Loc> locs(1);
+  locs[0] = loc;
+  createAndPushChainInfo(locs, pla);
+}
 
-  assert(C_WALL != pla && board.getColor(loc) == pla);
+void DotsLaddersEvaluator::createAndPushChainInfo(const vector<Loc>& locs, const Player pla) {
+  vector<ChainsInfo>& chainInfos = pla == P_BLACK ? firstPlaChainInfos : secondPlaChainInfos;
+  vector<Loc>& chainLocs = pla == P_BLACK ? firstPlaChainLocs : secondPlaChainLocs;
+  vector<Loc>& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
+  chainInfos.emplace_back();
+  auto& [newChainLocsCount, newMaybeCaptureLocsCount] = chainInfos.back();
+
+  std::vector<Loc> newChainLocs;
+
+  assert(C_WALL != pla);
   assert(walkStack.empty());
-  walkStack.push_back(loc);
+
+  for (const Loc loc : locs) {
+    assert(board.getColor(loc) == pla);
+    walkStack.push_back(loc);
+  }
 
   while (!walkStack.empty()) {
     const Loc currentLoc = walkStack.back();
@@ -330,7 +329,9 @@ const std::vector<Loc>& DotsLaddersEvaluator::extendChain(const Loc loc, const P
 
     if (const State adjState = board.getState(currentLoc); getActiveColor(adjState) == pla && !isTerritory(adjState) && getChainColor(currentLoc) != pla) {
       setChainPlayer(currentLoc, pla);
+      chainLocs.push_back(currentLoc);
       newChainLocs.push_back(currentLoc);
+      newChainLocsCount++;
 
       for (const short adj_offset : board.adj_offsets) {
         walkStack.push_back(static_cast<Loc>(currentLoc + adj_offset));
@@ -345,43 +346,53 @@ const std::vector<Loc>& DotsLaddersEvaluator::extendChain(const Loc loc, const P
       ) {
         setMaybeCapturePlayer(adjLocForChainLoc, pla);
         maybeCaptureLocs.push_back(adjLocForChainLoc);
-        newMaybeCaptureLocs.push_back(adjLocForChainLoc);
+        newMaybeCaptureLocsCount++;
       }
     }
   }
-
-  return maybeCaptureLocs;
 }
 
-void DotsLaddersEvaluator::reduceChain(const Player pla, const std::vector<Loc>& newChainLocs,
-                              const std::vector<Loc>& newMaybeCapturingLocs) {
-  auto& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
+void DotsLaddersEvaluator::popChainInfo(const Player pla) {
+  vector<ChainsInfo>& chainInfos = pla == P_BLACK ? firstPlaChainInfos : secondPlaChainInfos;
+  vector<Loc>& chainLocs = pla == P_BLACK ? firstPlaChainLocs : secondPlaChainLocs;
+  vector<Loc>& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
+  const auto& [newChainLocsCount, newMaybeCaptureLocsCount] = chainInfos.back();
 
-  assert(!newChainLocs.empty());
-  for (const Loc newChainLoc : newChainLocs) {
-    assert(board.getColor(newChainLoc) == pla);
-    resetChainPlayer(newChainLoc);
+  assert(newChainLocsCount > 0);
+  const int chainLocsSize = static_cast<int>(chainLocs.size());
+  for (int i = chainLocsSize - 1; i >= chainLocsSize - newChainLocsCount; i--) {
+    const Loc chainLoc = chainLocs[i];
+    assert(board.getColor(chainLoc) == pla);
+    resetChainPlayer(chainLoc);
   }
+  chainLocs.resize(chainLocs.size() - newChainLocsCount);
 
-  for (const Loc newMaybeCapturingLoc : newMaybeCapturingLocs) {
-    assert(board.getColor(newMaybeCapturingLoc) == C_EMPTY);
-    unsetMaybeCapturePlayer(newMaybeCapturingLoc, pla);
+  const int lastMaybeCaptureSize = static_cast<int>(maybeCaptureLocs.size());
+  for (int i = lastMaybeCaptureSize - 1; i >= lastMaybeCaptureSize - newMaybeCaptureLocsCount ; i--) {
+    const Loc maybeCaptureLoc = maybeCaptureLocs[i];
+    assert(board.getColor(maybeCaptureLoc) == C_EMPTY);
+    unsetMaybeCapturePlayer(maybeCaptureLoc, pla);
   }
+  maybeCaptureLocs.resize(maybeCaptureLocs.size() - newMaybeCaptureLocsCount);
 
-  const auto sizeBefore = maybeCaptureLocs.size();
+  chainInfos.pop_back();
+}
 
-  maybeCaptureLocs.erase(
-    std::remove_if(maybeCaptureLocs.begin(), maybeCaptureLocs.end(), [&](const int value) {
-      return std::find(newMaybeCapturingLocs.begin(), newMaybeCapturingLocs.end(), value) != newMaybeCapturingLocs.end();
-    }),
-    maybeCaptureLocs.end()
-  );
+std::vector<Loc> DotsLaddersEvaluator::extractCaptureLocs(const Player pla) const {
+  const vector<Loc>& maybeCaptureLocs = pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
 
-  assert(sizeBefore - newMaybeCapturingLocs.size() == maybeCaptureLocs.size());
+  vector<Loc> result;
+  result.reserve(maybeCaptureLocs.size());
+  for (const Loc maybeCaptureLoc : maybeCaptureLocs) {
+    if (maybeChainCaptureLoc(maybeCaptureLoc, pla)) {
+      result.push_back(maybeCaptureLoc);
+    }
+  }
+  return result;
 }
 
 DotsLaddersEvaluator::LadderMoveInfoType DotsLaddersEvaluator::getChainCaptureLocType(const Loc loc, const Player pla,
-                                                                    const bool requireAtLeastTwoUnconnectedDotsForLadder) const {
+                                                                                      const bool requireAtLeastTwoUnconnectedDotsForLadder) const {
   const State state = board.getState(loc);
   if (getActiveColor(state) != C_EMPTY) {
     return EMPTY;

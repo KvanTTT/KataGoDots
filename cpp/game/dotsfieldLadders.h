@@ -1,4 +1,6 @@
 #pragma once
+#include <utility>
+
 #include "board.h"
 
 class DotsLaddersEvaluator {
@@ -97,12 +99,11 @@ private:
 
   LadderLocInfo iterateForOpp(Loc initLoc, Loc loc, Player pla);
 
-  void initializeOpponentChain(Player pla, const Board::MoveRecord& capturingMoveRecord,
-                             std::vector<Loc>& oppChainNewLocs, std::vector<Loc>& oppChainNewMaybeCaptureLocs);
+  void initializeOpponentChain(Player pla, const Board::MoveRecord& capturingMoveRecord);
 
-  Board::MoveRecord playAndExtendChain(const Loc loc, const Player pla, std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCapturingLocs) {
+  Board::MoveRecord playAndExtendChain(const Loc loc, const Player pla) {
     const Board::MoveRecord moveRecord = play(loc, pla);
-    extendChain(loc, pla, newChainLocs, newMaybeCapturingLocs);
+    createAndPushChainInfo(loc, pla);
     return moveRecord;
   }
 
@@ -118,8 +119,8 @@ private:
     return moveRecord;
   }
 
-  void reduceChainAndUndo(const Board::MoveRecord& moveRecord, const std::vector<Loc>& newChainLocs, const std::vector<Loc>& newMaybeCapturingLocs) {
-    reduceChain(moveRecord.pla, newChainLocs, newMaybeCapturingLocs);
+  void reduceChainAndUndo(const Board::MoveRecord& moveRecord) {
+    popChainInfo(moveRecord.pla);
     undo(moveRecord);
   }
 
@@ -128,13 +129,13 @@ private:
     currentDepth--;
   }
 
-  const std::vector<Loc>& extendChain(Loc loc, Player pla, std::vector<Loc>& newChainLocs, std::vector<Loc>& newMaybeCaptureLocs);
+  void createAndPushChainInfo(Loc loc, Player pla);
 
-  [[nodiscard]] const std::vector<Loc>& getMaybeCaptureLocs(const Player pla) const {
-    return pla == P_BLACK ? firstPlaMaybeCaptureLocs : secondPlaMaybeCaptureLocs;
-  }
+  void createAndPushChainInfo(const std::vector<Loc>& locs, Player pla);
 
-  void reduceChain(Player pla, const std::vector<Loc>& newChainLocs, const std::vector<Loc>& newMaybeCapturingLocs);
+  void popChainInfo(Player pla);
+
+  [[nodiscard]] std::vector<Loc> extractCaptureLocs(Player pla) const;
 
   [[nodiscard]] Color getChainColor(const Loc loc) const {
     const auto color = static_cast<Color>(chainsData[loc] & 0b11);
@@ -197,10 +198,19 @@ private:
   uint16_t movesCounter = 0;
   short initialWhiteScore = 0;
 
+  struct ChainsInfo {
+    uint16_t newChainLocsCount;
+    uint16_t newMaybeCaptureLocsCount;
+  };
+
   Board& board;
   std::vector<char> chainsData;
   std::vector<Loc> walkStack;
   std::vector<Loc> initTerritory;
+  std::vector<Loc> firstPlaChainLocs;
+  std::vector<Loc> secondPlaChainLocs;
   std::vector<Loc> firstPlaMaybeCaptureLocs;
   std::vector<Loc> secondPlaMaybeCaptureLocs;
+  std::vector<ChainsInfo> firstPlaChainInfos;
+  std::vector<ChainsInfo> secondPlaChainInfos;
 };
