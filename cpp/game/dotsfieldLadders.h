@@ -84,6 +84,7 @@ public:
   }
 
   std::vector<LadderLocInfo> evaluate();
+
   [[nodiscard]] uint16_t getMovesCount() const { return movesCounter; }
   [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
   [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
@@ -91,15 +92,17 @@ public:
   void clearMaxDepth() { maxDepth = 0; }
 
 private:
-  bool isRelevantCapturing(const Board::MoveRecord& moveRecord, Loc initLoc, Player pla);
+  bool isRelevantCapturing(const Board::MoveRecord& moveRecord);
 
-  LadderLocInfo iterateForPlayer(Loc initLoc, Loc loc, Player pla);
+  LadderLocInfo startLadder(Loc newInitLoc, Player pla);
 
-  LadderLocInfo iterateAdjLocs(Loc initLoc, Loc loc, Player pla, bool requireAtLeastTwoUnconnectedDotsForLadder);
+  LadderLocInfo iterateForAttacker(Loc loc);
 
-  LadderLocInfo iterateForOpp(Loc initLoc, Loc loc, Player pla);
+  LadderLocInfo iterateForDefender(Loc loc);
 
-  void initializeOpponentChain(Player pla, const Board::MoveRecord& capturingMoveRecord);
+  LadderLocInfo iterateAdjLocsForAttacker(Loc loc, bool requireAtLeastTwoUnconnectedDotsForLadder);
+
+  void initializeDefenderChain(const Board::MoveRecord& capturingMoveRecord);
 
   Board::MoveRecord playAndExtendChain(const Loc loc, const Player pla) {
     const Board::MoveRecord moveRecord = play(loc, pla);
@@ -193,6 +196,10 @@ private:
 
   [[nodiscard]] std::string debugChainsData() const;
 
+  Player attacker{};
+  Player defender{};
+  Loc initLoc{};
+
   uint16_t currentDepth = 0;
   uint16_t maxDepth = 0;
   uint16_t movesCounter = 0;
@@ -207,10 +214,10 @@ private:
   std::vector<char> chainsData;
   std::vector<Loc> walkStack;
   std::vector<Loc> initTerritory;
-  std::vector<Loc> firstPlaChainLocs;
-  std::vector<Loc> secondPlaChainLocs;
-  std::vector<Loc> firstPlaMaybeCaptureLocs;
-  std::vector<Loc> secondPlaMaybeCaptureLocs;
-  std::vector<ChainsInfo> firstPlaChainInfos;
-  std::vector<ChainsInfo> secondPlaChainInfos;
+  std::vector<Loc> attackerChainLocs;
+  std::vector<Loc> defenderChainLocs;
+  std::vector<Loc> attackerMaybeCaptureLocs;
+  std::vector<Loc> defenderMaybeCaptureLocs;
+  std::vector<ChainsInfo> attackerChainInfos;
+  std::vector<ChainsInfo> defenderChainInfos;
 };
