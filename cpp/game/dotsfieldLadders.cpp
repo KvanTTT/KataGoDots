@@ -1,4 +1,7 @@
 #include "dotsfieldLadders.h"
+
+#include <iomanip>
+
 #include "board.h"
 
 using namespace std;
@@ -109,14 +112,17 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForDefender(con
   auto attackerLadderLocInfo = LadderLocInfo::createInfinity(attacker);
 
   // Try capturing part of pla surrounding at first.
-  const auto defenderCaptureLocs = extractCaptureLocs(defender);
-  for (const auto& defenderCaptureLoc : defenderCaptureLocs) {
+  const auto& defenderCurrentCaptureLocs = getDefenderCurrentCaptureLocs();
+  for (const auto& defenderCaptureLoc : defenderCurrentCaptureLocs) {
+    if (const Color colorAtDefenderCaptureLoc = board.getColor(defenderCaptureLoc); colorAtDefenderCaptureLoc != C_EMPTY) {
+      assert(colorAtDefenderCaptureLoc == attacker);
+      continue;
+    }
+
     const auto potentialDefendCaptureMoveRecord = play(defenderCaptureLoc, defender);
 
     for (const auto& defenderBase : potentialDefendCaptureMoveRecord.bases) {
-      assert(defenderBase.pla == defender);
-      if (defenderBase.type == Board::Base::Type::EMPTY) continue;
-      assert(defenderBase.type == Board::Base::Type::NORMAL);
+      if (defenderBase.type != Board::Base::Type::NORMAL) continue;
 
       const auto& defenderBaseStates = defenderBase.rollback_locs_states_captures;
       const bool potentialDefendCaptureMoveIsFound = std::any_of(defenderBaseStates.begin(), defenderBaseStates.end(),
@@ -200,7 +206,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateAdjLocsForAttac
 
   auto checkAndAddAdjacentLoc = [&](const Loc directlyAdjLoc, const Loc indirectlyAdjLoc) {
     // The adjacent loc should be empty and have at least one connection with the player chain (otherwise it can't create ladders).
-    if (const auto chainCaptureLocType = getChainCaptureLocType(directlyAdjLoc, attacker, requireAtLeastTwoUnconnectedDotsForLadder);
+    if (const auto chainCaptureLocType = getChainCaptureLocType(directlyAdjLoc, attacker, requireAtLeastTwoUnconnectedDotsForLadder, true);
       chainCaptureLocType == LADDER
     ) {
       actualLocs[actualLocsSize++] = make_pair(chainCaptureLocType, directlyAdjLoc);
@@ -226,7 +232,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateAdjLocsForAttac
     // Check the color of the direct adjacent loc at first because it's not safe to use locs outside the field borders + side locs.
     // If the color isn't empty, it's safe to calculate the non-directly adjacent loc because it means the directlyAdjLoc is always
     // within real borders and its adjacent locs are always legal.
-    if (board.getColor(directlyAdjLoc) == defender && maybeChainCaptureLoc(indirectlyAdjLoc, attacker)) {
+    if (board.getColor(directlyAdjLoc) == defender && maybeChainCaptureLoc(indirectlyAdjLoc, attacker, true)) {
       insertCaptureBeforeLadders(indirectlyAdjLoc);
     }
   };
@@ -295,18 +301,18 @@ bool DotsLaddersEvaluator::isRelevantCapturing(const Board::MoveRecord& moveReco
 }
 
 void DotsLaddersEvaluator::initializeDefenderChain(const Board::MoveRecord& capturingMoveRecord) {
-  vector<Loc> defenderChainLocs;
+  vector<Loc> defenderInitChainLocs;
   for (const auto& base : capturingMoveRecord.bases) {
     if (base.type == Board::Base::Type::EMPTY) continue;
     for (const auto& surrounding_loc : base.surrounding_locs) {
       board.forEachAdjacent(surrounding_loc, [&](const Loc adjLoc) {
         if (board.getColor(adjLoc) == defender) {
-          defenderChainLocs.push_back(adjLoc);
+          defenderInitChainLocs.push_back(adjLoc);
         }
       });
     }
   }
-  createAndPushChainInfo(defenderChainLocs, defender);
+  createAndPushChainInfo(defenderInitChainLocs, defender);
 }
 
 void DotsLaddersEvaluator::createAndPushChainInfo(const Loc loc, const Player pla) {
@@ -351,13 +357,17 @@ void DotsLaddersEvaluator::createAndPushChainInfo(const vector<Loc>& locs, const
   for (const Loc newChainLoc : newChainLocs) {
     for (const short adj_offset_for_adj_loc : board.adj_offsets) {
       if (const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset_for_adj_loc);
-        !alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla)
+        !alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla, false)
       ) {
         setMaybeCapturePlayer(adjLocForChainLoc, pla);
         maybeCaptureLocs.push_back(adjLocForChainLoc);
         newMaybeCaptureLocsCount++;
       }
     }
+  }
+
+  if (pla == defender) {
+    defenderCaptureLocs.push_back(extractCaptureLocs(pla));
   }
 }
 
@@ -385,6 +395,14 @@ void DotsLaddersEvaluator::popChainInfo(const Player pla) {
   maybeCaptureLocs.resize(maybeCaptureLocs.size() - newMaybeCaptureLocsCount);
 
   chainInfos.pop_back();
+
+  if (pla == defender) {
+    defenderCaptureLocs.pop_back();
+  }
+}
+
+std::vector<Loc>& DotsLaddersEvaluator::getDefenderCurrentCaptureLocs() {
+  return defenderCaptureLocs.back();
 }
 
 std::vector<Loc> DotsLaddersEvaluator::extractCaptureLocs(const Player pla) const {
@@ -393,7 +411,7 @@ std::vector<Loc> DotsLaddersEvaluator::extractCaptureLocs(const Player pla) cons
   vector<Loc> result;
   result.reserve(maybeCaptureLocs.size());
   for (const Loc maybeCaptureLoc : maybeCaptureLocs) {
-    if (maybeChainCaptureLoc(maybeCaptureLoc, pla)) {
+    if (maybeChainCaptureLoc(maybeCaptureLoc, pla, true)) {
       result.push_back(maybeCaptureLoc);
     }
   }
@@ -401,15 +419,20 @@ std::vector<Loc> DotsLaddersEvaluator::extractCaptureLocs(const Player pla) cons
 }
 
 DotsLaddersEvaluator::LadderMoveInfoType DotsLaddersEvaluator::getChainCaptureLocType(const Loc loc, const Player pla,
-                                                                                      const bool requireAtLeastTwoUnconnectedDotsForLadder) const {
+  const bool requireAtLeastTwoUnconnectedDotsForLadder, const bool ignoreEmptyBaseLocs) const {
   const State state = board.getState(loc);
   if (getActiveColor(state) != C_EMPTY) {
     return EMPTY;
   }
-  if (const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
-    emptyTerritoryColor == pla || (emptyTerritoryColor != C_EMPTY && !board.wouldBeCaptureDots(loc, pla))
-  ) {
-    return EMPTY;
+  if (ignoreEmptyBaseLocs) {
+    // We should consider moves into empty territory as legal in case of calculating maybe capturing locs.
+    // Because such locs might become useful (non-suicidal) after some sequence of moves.
+    // The maybe capturing locs is actually an iteratively calculated sequence of locs that could include false-positives.
+    if (const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
+      emptyTerritoryColor == pla || (emptyTerritoryColor != C_EMPTY && !board.wouldBeCaptureDots(loc, pla))
+    ) {
+      return EMPTY;
+    }
   }
 
   int unconnectedLocsSize = 0;
@@ -437,7 +460,19 @@ DotsLaddersEvaluator::LadderMoveInfoType DotsLaddersEvaluator::getChainCaptureLo
 std::string DotsLaddersEvaluator::debugChainsData() const {
   std::ostringstream stream;
   for (int y = 0; y < board.y_size; y++) {
+    if (y == 0) {
+      stream << "    ";
+      for (int x = 0; x < board.x_size; x++) {
+        stream << std::left << std::setw(4) << x;
+      }
+      stream << '\n';
+    }
+
     for (int x = 0; x < board.x_size; x++) {
+      if (x == 0) {
+        stream << std::left << std::setw(4) << y;
+      }
+
       const Loc loc = Location::getLoc(x, y, board.x_size);
 
       const Color chainColor = getChainColor(loc);
