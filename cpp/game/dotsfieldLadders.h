@@ -138,6 +138,8 @@ private:
 
   void popChainInfo(Player pla);
 
+  std::vector<Loc>& getDefenderCurrentCaptureLocs();
+
   [[nodiscard]] std::vector<Loc> extractCaptureLocs(Player pla) const;
 
   [[nodiscard]] Color getChainColor(const Loc loc) const {
@@ -188,11 +190,11 @@ private:
     return (chainsData[loc] & 0b10000) != 0;
   }
 
-  [[nodiscard]] bool maybeChainCaptureLoc(const Loc loc, const Player pla) const {
-    return getChainCaptureLocType(loc, pla, false) == CAPTURE;
+  [[nodiscard]] bool maybeChainCaptureLoc(const Loc loc, const Player pla, const bool ignoreEmptyBaseLocs) const {
+    return getChainCaptureLocType(loc, pla, false, ignoreEmptyBaseLocs) == CAPTURE;
   }
 
-  [[nodiscard]] LadderMoveInfoType getChainCaptureLocType(Loc loc, Player pla, bool requireAtLeastTwoUnconnectedDotsForLadder) const;
+  [[nodiscard]] LadderMoveInfoType getChainCaptureLocType(Loc loc, Player pla, bool requireAtLeastTwoUnconnectedDotsForLadder, bool ignoreEmptyBaseLocs) const;
 
   [[nodiscard]] std::string debugChainsData() const;
 
@@ -220,4 +222,5 @@ private:
   std::vector<Loc> defenderMaybeCaptureLocs;
   std::vector<ChainsInfo> attackerChainInfos;
   std::vector<ChainsInfo> defenderChainInfos;
+  std::vector<std::vector<Loc>> defenderCaptureLocs;
 };
