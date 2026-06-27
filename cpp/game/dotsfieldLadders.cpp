@@ -121,30 +121,28 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForDefender(con
 
     const auto potentialDefendCaptureMoveRecord = play(defenderCaptureLoc, defender);
 
+    bool potentialDefendCaptureMoveIsFound = false;
+
     for (const auto& defenderBase : potentialDefendCaptureMoveRecord.bases) {
       if (defenderBase.type != Board::Base::Type::NORMAL) continue;
-
       const auto& defenderBaseStates = defenderBase.rollback_locs_states_captures;
-      const bool potentialDefendCaptureMoveIsFound = std::any_of(defenderBaseStates.begin(), defenderBaseStates.end(),
+      potentialDefendCaptureMoveIsFound = std::any_of(defenderBaseStates.begin(), defenderBaseStates.end(),
         [&](const auto& state) {
           return getChainColor(state.getLoc()) == attacker;
       });
+      if (potentialDefendCaptureMoveIsFound) break;
+    }
 
-      if (potentialDefendCaptureMoveIsFound) {
-        createAndPushChainInfo(defenderCaptureLoc, defender);
+    if (potentialDefendCaptureMoveIsFound) {
+      createAndPushChainInfo(defenderCaptureLoc, defender);
 
-        // Try to continue the ladder (only captures or strictly connecting locs are relevant).
-        const auto defenderCapturingLadderLocInfo = iterateAdjLocsForAttacker(defenderCaptureLoc, true);
-        if (defenderCapturingLadderLocInfo.isWorseThan(attackerLadderLocInfo)) {
-          attackerLadderLocInfo = defenderCapturingLadderLocInfo;
-        }
-
-        popChainInfo(defender);
-
-        if (attackerLadderLocInfo.isZero()) {
-          break; // The successful capture by defender is found -> exit
-        }
+      // Try to continue the ladder (only captures or strictly connecting locs are relevant).
+      const auto defenderCapturingLadderLocInfo = iterateAdjLocsForAttacker(defenderCaptureLoc, true);
+      if (defenderCapturingLadderLocInfo.isWorseThan(attackerLadderLocInfo)) {
+        attackerLadderLocInfo = defenderCapturingLadderLocInfo;
       }
+
+      popChainInfo(defender);
     }
 
     undo(potentialDefendCaptureMoveRecord);
