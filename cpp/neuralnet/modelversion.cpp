@@ -21,6 +21,7 @@
 //14 = V7 features, Squared softplus for error variance predictions
 //15 = V7 features, Extra nonlinearity for pass output
 //16 = V7 features, Q value predictions in the policy head
+//17 = V7 features, dropped Q value predictions, introduced transformers and added guards to unused params
 
 static void fail(const int modelVersion, const bool dotsGame) {
   throw StringError("NNModelVersion: Model version not currently implemented or supported: " + Global::intToString(modelVersion) +
@@ -29,7 +30,7 @@ static void fail(const int modelVersion, const bool dotsGame) {
 
 static_assert(NNModelVersion::oldestModelVersionImplemented == 3);
 static_assert(NNModelVersion::oldestInputsVersionImplemented == 3);
-static_assert(NNModelVersion::latestModelVersionImplemented == 16);
+static_assert(NNModelVersion::latestModelVersionImplemented == 17);
 static_assert(NNModelVersion::latestInputsVersionImplemented == 7);
 
 int NNModelVersion::getInputsVersion(const int modelVersion, const bool dotsGame) {

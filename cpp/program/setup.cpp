@@ -189,20 +189,16 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
 
     string homeDataDirOverride = loadHomeDataDirOverride(cfg);
 
-    string openCLTunerFile = cfg.getOrDefaultString("openclTunerFile", "");
-    bool openCLReTunePerBoardSize = cfg.getOrDefaultBool("openclReTunePerBoardSize", false);
+    // Backend-specific options (e.g. openclTunerFile, cudaDisableGraphSDPA) are read directly by the
+    // relevant compute backend off of cfg (see createComputeContext). Because they follow the backend
+    // prefix convention, the getBackendPrefixes() loop above already marks them used for the backends
+    // that don't read them, so no explicit mark-used is needed here.
 
     enabled_t useFP16Mode = enabled_t::Auto;
     (void)(cfg.tryGetEnabled(backendPrefix+"UseFP16-"+idxStr, useFP16Mode) ||
       cfg.tryGetEnabled("useFP16-"+idxStr, useFP16Mode) ||
       cfg.tryGetEnabled(backendPrefix+"UseFP16", useFP16Mode) ||
       cfg.tryGetEnabled("UseFP16", useFP16Mode));
-
-    enabled_t useNHWCMode = enabled_t::Auto;
-    (void)(cfg.tryGetEnabled(backendPrefix+"UseNHWC"+idxStr, useNHWCMode) ||
-      cfg.tryGetEnabled("useNHWC"+idxStr, useNHWCMode) ||
-      cfg.tryGetEnabled(backendPrefix+"UseNHWC", useNHWCMode) ||
-      cfg.tryGetEnabled("useNHWC", useNHWCMode));
 
     int forcedSymmetry = -1;
     if (setupFor != SETUP_FOR_DISTRIBUTED) {
@@ -212,7 +208,6 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
     logger.write(
       "After dedups: nnModelFile" + idxStr + " = " + nnModelFile
       + " useFP16 " + useFP16Mode.toString()
-      + " useNHWC " + useNHWCMode.toString()
     );
 
     int nnCacheSizePowerOfTwo;
@@ -262,7 +257,12 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
     if(disableFP16)
       useFP16Mode = enabled_t::False;
 
+    //Pre-warm lazily-compiled backend graphs (e.g. cuDNN SDPA plans for transformer models) when each
+    //server thread's handle is created, so the first searches aren't stalled. On by default.
+    bool disableWarmup = cfg.getOrDefaultBool("cudaDisableWarmup", false);
+
     bool dotsGame = cfg.getOrDefaultBool(DOTS_KEY, false);
+
     NNEvaluator* nnEval = new NNEvaluator(
       nnModelName,
       nnModelFile,
@@ -276,16 +276,15 @@ vector<NNEvaluator*> Setup::initializeNNEvaluators(
       nnCacheSizePowerOfTwo,
       nnMutexPoolSizePowerOfTwo,
       debugSkipNeuralNet,
-      openCLTunerFile,
       homeDataDirOverride,
-      openCLReTunePerBoardSize,
       useFP16Mode,
-      useNHWCMode,
       numNNServerThreadsPerModel,
       gpuIdxByServerThread,
       nnRandSeed,
       (forcedSymmetry >= 0 ? false : nnRandomize),
       defaultSymmetry,
+      disableWarmup,
+      cfg,
       dotsGame
     );
 

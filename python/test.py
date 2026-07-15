@@ -44,6 +44,8 @@ if __name__ == "__main__":
     parser.add_argument('-gpu-idx', help='GPU idx', type=int, required=False)
     parser.add_argument('-print-norm', help='Names of outputs to print norms comma separated', type=str, required=False)
     parser.add_argument('-list-available-outputs', help='Print names of outputs available', action="store_true", required=False)
+    parser.add_argument('-no-compile', help='Do not torch.compile the model', action="store_true", required=False)
+    parser.add_argument('-no-tf32', help='Do not enable TF32 (high) float32 matmul precision', action="store_true", required=False)
     parser.add_argument('-games', help='Games to train: ' + ', '.join(e.name for e in Game) + ' (GO by default)', type=parse_game, nargs="+", required=False)
     parser.add_argument("-katago-git-rev", help='Git revision of katago executable', type=str, required=False)
     parser.add_argument("-katago-backend", help='Backend of katago executable (CUDA, TensorRT, Metal, OpenCL, Eigen, dummy)', type=str, required=False)
@@ -66,6 +68,8 @@ def main(args):
     max_batches = args["max_batches"]
     gpu_idx = args["gpu_idx"]
     list_available_outputs = args["list_available_outputs"]
+    no_compile = args["no_compile"]
+    no_tf32 = args["no_tf32"]
 
     norm_layer_names = []
     if args["print_norm"]:
@@ -108,6 +112,7 @@ def main(args):
 
     # LOAD MODEL ---------------------------------------------------------------------
 
+    swa_model = None
     if checkpoint_file is None:
         logging.info("Initializing new model since no checkpoint provided")
         assert (model_kind is None) != (config_file is None), "Must provide exactly one of -model-kind and -config if no checkpoint"
@@ -126,7 +131,21 @@ def main(args):
         model, swa_model, _ = load_model(checkpoint_file, use_swa, device=device, pos_len_x=pos_len_x, pos_len_y=pos_len_y, verbose=True)
         model_config = model.config
 
-    metrics_obj = Metrics(batch_size,world_size,model)
+    metrics_obj = Metrics(world_size,model)
+
+    # Raw model is always used for postprocessing/metrics
+    # Forward pass through the (optionally) torch.compile, and/or using SWA
+    raw_model = swa_model if swa_model is not None else model
+    if no_compile:
+        logging.info("torch.compile disabled by -no-compile flag")
+        forward_model = raw_model
+    else:
+        logging.info("Using torch.compile mode=default")
+        forward_model = torch.compile(raw_model, mode="default")
+
+    if not no_tf32:
+        torch.set_float32_matmul_precision('high')
+        logging.info("float32 matmul precision set to high (TF32)")
 
     # METRICS -----------------------------------------------------------------------------------
     def detensorify_metrics(metrics):
@@ -186,11 +205,13 @@ def main(args):
     val_files = [os.path.join(npzdir,fname) for fname in os.listdir(npzdir) if fname.endswith(".npz")]
     if len(val_files) == 0:
         raise Exception("No npz files in " + npzdir)
+    val_files = sorted(val_files)
 
     with torch.no_grad():
         model.eval()
         if swa_model is not None:
             swa_model.eval()
+        has_meta = raw_model.get_has_metadata_encoder()
         val_metric_sums = defaultdict(float)
         val_metric_weights = defaultdict(float)
         sum_norms = defaultdict(float)
@@ -198,11 +219,18 @@ def main(args):
         num_samples_tested = 0
         total_inference_time = 0.0
         is_first_batch = True
-        for batch in data_processing_pytorch.read_npz_training_data(val_files, batch_size, world_size, rank,
-                                                                    pos_len_x, pos_len_y,
-                                                                    device, randomize_symmetries=True,
-                                                                    include_meta=model.get_has_metadata_encoder(),
-                                                                    model_config=model_config):
+        for batch in data_processing_pytorch.read_npz_training_data(
+                val_files,
+                batch_size,
+                world_size,
+                rank,
+                pos_len_x,
+                pos_len_y,
+                device,
+                randomize_symmetries=False,
+                include_meta=has_meta,
+                model_config=model_config,
+        ):
             if max_batches is not None and num_batches_tested >= max_batches:
                 break
 
@@ -214,10 +242,12 @@ def main(args):
             #     extra_outputs.add_requested([MetadataEncoder.OUTMEAN_KEY,MetadataEncoder.OUTLOGVAR_KEY])
 
             start.record()
-            if swa_model is not None:
-                model_outputs = swa_model(batch["binaryInputNCHW"],batch["globalInputNC"],extra_outputs=extra_outputs)
-            else:
-                model_outputs = model(batch["binaryInputNCHW"],batch["globalInputNC"],extra_outputs=extra_outputs)
+            model_outputs = forward_model(
+                batch["binaryInputNCHW"],
+                batch["globalInputNC"],
+                input_meta=(batch["metadataInputNC"] if has_meta else None),
+                extra_outputs=extra_outputs,
+            )
             end.record()
             torch.cuda.synchronize()
             time_elapsed = start.elapsed_time(end) / 1000.0
@@ -227,9 +257,9 @@ def main(args):
                     logging.info(f"Available output: {available_output}")
                 list_available_outputs = False
 
-            postprocessed = model.postprocess_output(model_outputs)
+            postprocessed = raw_model.postprocess_output(model_outputs)
             metrics = metrics_obj.metrics_dict_batchwise(
-                model,
+                raw_model,
                 postprocessed,
                 extra_outputs,
                 batch,
@@ -247,6 +277,7 @@ def main(args):
             metrics = detensorify_metrics(metrics)
 
             # Ignore first batch, treat as a warmup so timings are a bit more accurate.
+            # (With torch.compile this first batch also absorbs the one-time compilation cost.)
             if is_first_batch:
                 is_first_batch = False
                 continue
