@@ -7,13 +7,13 @@
 #include "../dataio/trainingwrite.h"
 #include "../dataio/loadmodel.h"
 #include "../neuralnet/modelversion.h"
-#include "../search/asyncbot.h"
 #include "../program/setup.h"
 #include "../program/play.h"
 #include "../program/selfplaymanager.h"
 #include "../command/commandline.h"
 #include "../core/test.h"
 #include "../main.h"
+#include "../version.h"
 #include "../core/TimeStampHandler.h"
 
 #include <chrono>

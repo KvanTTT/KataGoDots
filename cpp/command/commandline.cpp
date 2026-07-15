@@ -2,11 +2,10 @@
 
 #include "../core/fileutils.h"
 #include "../core/test.h"
-#include "../core/os.h"
 #include "../core/logger.h"
 #include "../dataio/homedata.h"
 #include "../program/setup.h"
-#include "../main.h"
+#include "../version.h"
 
 using namespace std;
 

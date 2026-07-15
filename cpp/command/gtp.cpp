@@ -10,6 +10,7 @@
 #include "../core/timer.h"
 #include "../dataio/sgf.h"
 #include "../main.h"
+#include "../version.h"
 #include "../program/play.h"
 #include "../program/playutils.h"
 #include "../program/setup.h"

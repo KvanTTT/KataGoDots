@@ -1424,6 +1424,10 @@ Board::CapturesAndTerritoriesInfos Board::calculateCapturesAndTerritoriesColorsF
 vector<const Board::LadderMoveInfo*> Board::iterDotsLadders(LaddersCache& cachedLadderMoveInfos) {
   vector<const LadderMoveInfo*> result;
 
+  if (is_finished) {
+    return result; // Ladders are not relevant when the game is finished (by grounding or resignation)
+  }
+
   for (int y = 0; y < y_size; y++) {
     for (int x = 0; x < x_size; x++) {
       const Loc loc = Location::getLoc(x, y, x_size);
