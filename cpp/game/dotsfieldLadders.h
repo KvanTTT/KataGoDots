@@ -3,7 +3,7 @@
 
 #include "board.h"
 
-class DotsLaddersEvaluator {
+class DotsLaddersSolver {
 public:
   struct LadderLocInfo {
     static LadderLocInfo createZero(const Player pla) {
@@ -73,9 +73,9 @@ public:
     CAPTURE,
   };
 
-  explicit DotsLaddersEvaluator() = delete;
+  explicit DotsLaddersSolver() = delete;
 
-  explicit DotsLaddersEvaluator(Board& newBoard) : board(newBoard) {
+  explicit DotsLaddersSolver(Board& newBoard) : board(newBoard) {
     chainsData.resize(getMaxArrSize(newBoard.x_size, newBoard.y_size));
     initialWhiteScore = static_cast<short>(newBoard.numBlackCaptures - newBoard.numWhiteCaptures);
     // Reserve memory to get rid of excessive reallocations.
@@ -83,7 +83,7 @@ public:
     walkStack.reserve((newBoard.x_size + newBoard.y_size) * 2);
   }
 
-  std::vector<LadderLocInfo> evaluate();
+  std::vector<LadderLocInfo> solve();
 
   [[nodiscard]] uint16_t getMovesCount() const { return movesCounter; }
   [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
