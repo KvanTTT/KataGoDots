@@ -75,8 +75,8 @@ oox.ox...
  5 . X O O X X X X . . O X O . . X . . .
  4 . O . O X O O O X X X X . . X . O O .
  3 . O . O O X O O O O . X . . X O O X .
- 2 . O . O X . X O O X1X . . . . X X O O
- 1 . . O . . X .2X3. O . . . . . . . X .
+ 2 . O . O X . X O O X X . . . . X X O O
+ 1 . . O . . X . X . O . . . . . . . X .
 )%%");
   BoardHistory hist19Late(board19Late,P_BLACK,Rules(),0);
 
