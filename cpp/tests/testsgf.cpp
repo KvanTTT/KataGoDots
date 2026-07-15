@@ -29,19 +29,23 @@ void Tests::runSgfTests() {
     const BoardHistory hist = sgf->setupInitialBoardAndHist(rules, pla);
     const Board& board = hist.initialBoard;
 
-    bool randomized;
-    vector<Move> startPosMoves;
     vector<Move> remainingPlacementMoves;
-    const int recognizedStartPos = Rules::recognizeStartPos(sgf->placements, board.x_size, board.y_size, startPosMoves, randomized, &remainingPlacementMoves);
-    testAssert(recognizedStartPos == rules.startPos);
-    testAssert(randomized == rules.startPosIsRandom);
+    if (sgf->isDots) {
+      bool randomized = false;
+      vector<Move> startPosMoves;
+      const int recognizedStartPos = Rules::recognizeStartPos(sgf->placements, board.x_size, board.y_size, startPosMoves, randomized, &remainingPlacementMoves);
+      testAssert(recognizedStartPos == rules.startPos);
+      testAssert(randomized == rules.startPosIsRandom);
 
-    if (recognizedStartPos != Rules::START_POS_EMPTY) {
-      out << "startPos " << Rules::writeStartPosRule(recognizedStartPos);
-      if (randomized) {
-        out << " (randomized)";
+      if (recognizedStartPos != Rules::START_POS_EMPTY) {
+        out << "startPos " << Rules::writeStartPosRule(recognizedStartPos);
+        if (randomized) {
+          out << " (randomized)";
+        }
+        out << endl;
       }
-      out << endl;
+    } else {
+      remainingPlacementMoves = sgf->placements;
     }
 
     if (!remainingPlacementMoves.empty()) {
