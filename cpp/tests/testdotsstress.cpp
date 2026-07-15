@@ -1,23 +1,12 @@
 #include <chrono>
 
-#include "../main.h"
+#include "../version.h"
 #include "../tests/testdotsutils.h"
 #include "../tests/tests.h"
 
 using namespace std;
 using namespace std::chrono;
 using namespace TestCommon;
-
-static string moveRecordsToSgf(const Board& initialBoard, const vector<Board::MoveRecord>& moveRecords) {
-  Board boardCopy(initialBoard);
-  BoardHistory boardHistory(boardCopy, P_BLACK, boardCopy.rules, 0);
-  for (const Board::MoveRecord& moveRecord : moveRecords) {
-    boardHistory.makeBoardMoveAssumeLegal(boardCopy, moveRecord.loc, moveRecord.pla, nullptr);
-  }
-  std::ostringstream sgfStringStream;
-  WriteSgf::writeSgf(sgfStringStream, "blue", "red", boardHistory, {});
-  return sgfStringStream.str();
-}
 
 /**
  * Calculates the grounding and result captures without using the grounding flag and incremental calculations.
@@ -26,8 +15,7 @@ static string moveRecordsToSgf(const Board& initialBoard, const vector<Board::Mo
 static void validateGrounding(
   const Board& boardBeforeGrounding,
   const Board& boardAfterGrounding,
-  const Player pla,
-  const vector<Board::MoveRecord>& moveRecords) {
+  const Player pla) {
   unordered_set<Loc> visited_locs;
   testAssert(pla == P_BLACK || pla == P_WHITE);
 
@@ -84,7 +72,7 @@ static void validateGrounding(
             if (const State baseLocState = boardAfterGrounding.getState(baseLoc); !isGrounded(baseLocState)) {
               Global::fatalError("Loc (" + to_string(Location::getX(baseLoc, boardBeforeGrounding.x_size)) + "; " +
                  to_string(Location::getY(baseLoc, boardBeforeGrounding.x_size)) + ") " +
-                " should be grounded. Sgf: " + moveRecordsToSgf(boardBeforeGrounding, moveRecords));
+                " should be grounded.");
             }
 
             // If the territory is grounded, count dead dots of the opp player.
@@ -114,7 +102,7 @@ static void validateGrounding(
       " == board.numBlackCaptures (" + to_string(boardAfterGrounding.numBlackCaptures) + ")" +
       " && expectedNumWhiteCaptures (" + to_string(expectedNumWhiteCaptures) + ")" +
       " == board.numWhiteCaptures (" + to_string(boardAfterGrounding.numWhiteCaptures) + ")" +
-      " check is failed. Sgf: " + moveRecordsToSgf(boardBeforeGrounding, moveRecords));
+      " check is failed.");
   }
 }
 
@@ -156,13 +144,7 @@ static void validateStatesAndCaptures(const Board& board, const vector<Board::Mo
   testAssert(expectedNumWhiteCaptures == board.numWhiteCaptures);
 }
 
-enum CheckingMode {
-  REGULAR,
-  UNDO_AND_STATES,
-  CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE, // It's quite an expensive mode
-};
-
-static void runDotsStressTestsInternal(
+void Tests::runDotsStressTestsInternal(
   int x_size,
   int y_size,
   int gamesCount,
@@ -192,7 +174,8 @@ static void runDotsStressTestsInternal(
   switch (checkingMode) {
     case REGULAR: cout << "Regular"; break;
     case UNDO_AND_STATES: cout << "Undo and States"; break;
-    case CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE: cout << "Capture territory and ladders on each move"; break;
+    case CAPTURE_TERRITORY_ON_EACH_MOVE: cout << "Capture territory on each move"; break;
+    case LADDERS_ON_EACH_MOVE: cout << "Ladders on each move"; break;
     default: ASSERT_UNREACHABLE;
   }
   cout << endl;
@@ -239,7 +222,7 @@ static void runDotsStressTestsInternal(
     std::unique_ptr<BoardHistory> boardHistory;
     if (checkingMode == UNDO_AND_STATES) {
       initialBoard = std::make_unique<Board>(Board(board));
-    } else if (checkingMode == CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE) {
+    } else if (checkingMode == CAPTURE_TERRITORY_ON_EACH_MOVE) {
       boardHistory = std::make_unique<BoardHistory>(BoardHistory(board));
     }
 
@@ -258,13 +241,16 @@ static void runDotsStressTestsInternal(
         } else {
           board.playMoveAssumeLegal(lastLoc, pla);
 
-          if (checkingMode == CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE) {
+          if (checkingMode == CAPTURE_TERRITORY_ON_EACH_MOVE) {
             const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
             (void)boardHistory->getReasonableMoves(board, P_BLACK, Board::NULL_LOC, false, &capturesAndTerritoriesInfos);
             (void)boardHistory->getReasonableMoves(board, P_WHITE, Board::NULL_LOC, false, &capturesAndTerritoriesInfos);
 
             (void)boardHistory->whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfos);
+          } else if (checkingMode == LADDERS_ON_EACH_MOVE) {
+            Board::LaddersCache laddersCache;
+            (void)board.iterDotsLadders(laddersCache);
           }
         }
         currentGameMovesCount++;
@@ -293,7 +279,7 @@ static void runDotsStressTestsInternal(
       if (lastLoc == Board::PASS_LOC) {
         Board boardWithoutGrounding = board;
         boardWithoutGrounding.undo(moveRecords.back());
-        validateGrounding(boardWithoutGrounding, board, moveRecords.back().pla, moveRecords);
+        validateGrounding(boardWithoutGrounding, board, moveRecords.back().pla);
       }
 
       validateStatesAndCaptures(board, moveRecords);
@@ -374,7 +360,7 @@ void Tests::runDotsStressTests() {
     true,
     0.95f,
     1.0f,
-    CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE,
+    CAPTURE_TERRITORY_ON_EACH_MOVE,
     0
   );
   runDotsStressTestsInternal(
@@ -389,7 +375,7 @@ void Tests::runDotsStressTests() {
     true,
     0.95f,
     1.0f,
-    CAPTURE_TERRITORY_AND_LADDERS_ON_EACH_MOVE,
+    CAPTURE_TERRITORY_ON_EACH_MOVE,
     1
   );
 

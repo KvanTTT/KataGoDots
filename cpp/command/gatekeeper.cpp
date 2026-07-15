@@ -3,22 +3,20 @@
 #include "../core/fileutils.h"
 #include "../core/makedir.h"
 #include "../core/config_parser.h"
-#include "../core/timer.h"
 #include "../core/threadsafequeue.h"
 #include "../dataio/sgf.h"
 #include "../dataio/trainingwrite.h"
 #include "../dataio/loadmodel.h"
-#include "../search/asyncbot.h"
 #include "../program/setup.h"
 #include "../program/play.h"
 #include "../command/commandline.h"
 #include "../core/test.h"
 #include "../main.h"
+#include "../version.h"
 #include "../core/TimeStampHandler.h"
 
 #include <sstream>
 
-#include <cstdio>
 #include <chrono>
 #include <csignal>
 

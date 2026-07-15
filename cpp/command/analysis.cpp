@@ -1,8 +1,6 @@
 #include "../core/global.h"
 #include "../core/config_parser.h"
-#include "../core/timer.h"
 #include "../core/datetime.h"
-#include "../core/makedir.h"
 #include "../search/asyncbot.h"
 #include "../search/patternbonustable.h"
 #include "../program/setup.h"
@@ -11,6 +9,7 @@
 #include "../command/commandline.h"
 #include "../core/test.h"
 #include "../main.h"
+#include "../version.h"
 
 #include "../external/nlohmann_json/json.hpp"
 

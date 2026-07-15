@@ -4,7 +4,6 @@
 #include "../core/makedir.h"
 #include "../core/config_parser.h"
 #include "../core/parallel.h"
-#include "../core/timer.h"
 #include "../core/test.h"
 #include "../dataio/sgf.h"
 #include "../dataio/poswriter.h"
@@ -15,8 +14,8 @@
 #include "../program/play.h"
 #include "../command/commandline.h"
 #include "../main.h"
+#include "../version.h"
 
-#include <chrono>
 #include <csignal>
 
 #include "../program/signals.h"

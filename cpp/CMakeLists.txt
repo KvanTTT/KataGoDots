@@ -382,6 +382,7 @@ add_executable(katago
   command/tune.cpp
   command/writetrainingdata.cpp
   main.cpp
+  version.cpp
   )
 
 if(USE_BACKEND STREQUAL "CUDA")
@@ -755,8 +756,12 @@ add_executable(katago_tests
   # Test sources
   tests/testdotsladders.cpp
   tests/testdotsutils.cpp
+  tests/testdotsstress.cpp
 
   # Project sources needed by the tests
+  version.cpp
+  ${GIT_HEADER_FILE_ALWAYS_UPDATED}
+
   core/global.cpp
   core/bsearch.cpp
   core/hash.cpp

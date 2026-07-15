@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "testdotsutils.h"
+#include "tests.h"
 #include "game/board.h"
 
 using namespace std;
@@ -469,4 +470,22 @@ TEST(LadderTests, StressSimple) {
 
     cout << "Check capturing:" << endl;
     checkLadders(representationWithCapture, expectedLadder);
+}
+
+TEST(LaddersPerformanceTests, RandomGames) {
+    Tests::runDotsStressTestsInternal(
+      20,
+      20,
+      1,
+      true,
+      Rules::START_POS_CROSS,
+      false,
+      false,
+      0.0f,
+      true,
+      1.0f,
+      1.0f,
+      Tests::LADDERS_ON_EACH_MOVE,
+      0
+    );
 }
