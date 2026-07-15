@@ -71,7 +71,7 @@ static string generateBoardRepresentation(Board& board) {
     return generateBoardStateRepresentation(board, {}, {}, {}, {});
 }
 
-string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersEvaluator& laddersInfo,
+string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersSolver& solver,
     int& actualBlackScore, int& actualWhiteScore
     ) {
     if (const Loc moveLoc = Location::getLoc(move.x, move.y, board.x_size); moveLoc != Board::NULL_LOC) {
@@ -79,17 +79,17 @@ string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersEvalua
         EXPECT_TRUE(board.playMove(moveLoc, move.player, true));
     }
 
-    uint16_t previousMovesCount = laddersInfo.getMovesCount();
+    uint16_t previousMovesCount = solver.getMovesCount();
     bool firstIteration = previousMovesCount== 0;
-    laddersInfo.clearMaxDepth();
+    solver.clearMaxDepth();
 
-    const auto workingLadderLocInfos = laddersInfo.evaluate();
+    const auto workingLadderLocInfos = solver.solve();
 
-    cout << "Total moves count: " << laddersInfo.getMovesCount();
+    cout << "Total moves count: " << solver.getMovesCount();
     if (!firstIteration) {
-        cout << " (+" << laddersInfo.getMovesCount() - previousMovesCount << ")";
+        cout << " (+" << solver.getMovesCount() - previousMovesCount << ")";
     }
-    cout << ", max depth: " << laddersInfo.getMaxDepth();
+    cout << ", max depth: " << solver.getMaxDepth();
     cout << endl;
 
     std::unordered_set<Loc> blackWorkingLocs;
@@ -128,11 +128,11 @@ static void checkLadders(const string& fieldData, const optional<string>& expect
     const optional<int> expectedBlackScore = nullopt, const optional<int> expectedWhiteScore = nullopt
 ) {
     Board field = parseDotsFieldDefault(fieldData);
-    DotsLaddersEvaluator laddersInfo(field);
+    DotsLaddersSolver solver(field);
 
     int actualBlackScore = 0;
     int actualWhiteScore = 0;
-    const string actualFieldLadderInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), laddersInfo, actualBlackScore, actualWhiteScore);
+    const string actualFieldLadderInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), solver, actualBlackScore, actualWhiteScore);
 
     const string expectedLaddersInfoString = expectedLaddersInfo.has_value()
         ? expectedLaddersInfo.value()
@@ -296,11 +296,11 @@ static void checkLadders(const string& fieldDataWithLaddersInfo,
     const string expectedFieldLaddersInfo = generateBoardStateRepresentation(field,
         blackWorkingLocs, whiteWorkingLocs, blackCapturedLocs, whiteCapturedLocs);
 
-    DotsLaddersEvaluator laddersInfo(field);
+    DotsLaddersSolver solver(field);
 
     int actualBlackScore = 0;
     int actualWhiteScore = 0;
-    const string actualFieldLaddersInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), laddersInfo, actualBlackScore, actualWhiteScore);
+    const string actualFieldLaddersInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), solver, actualBlackScore, actualWhiteScore);
 
     EXPECT_EQ_TRIMMED(expectedFieldLaddersInfo, actualFieldLaddersInfo);
     if (expectedBlackScore.has_value()) {

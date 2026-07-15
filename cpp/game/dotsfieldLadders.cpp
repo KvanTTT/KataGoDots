@@ -6,7 +6,7 @@
 
 using namespace std;
 
-vector<DotsLaddersEvaluator::LadderLocInfo> DotsLaddersEvaluator::evaluate() {
+vector<DotsLaddersSolver::LadderLocInfo> DotsLaddersSolver::solve() {
   vector<LadderLocInfo> result;
 
   if (board.is_finished) {
@@ -42,7 +42,7 @@ vector<DotsLaddersEvaluator::LadderLocInfo> DotsLaddersEvaluator::evaluate() {
   return result;
 }
 
-DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::startLadder(const Loc newInitLoc, const Player pla) {
+DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::startLadder(const Loc newInitLoc, const Player pla) {
   initLoc = newInitLoc;
   attacker = pla;
   defender = getOpp(pla);
@@ -57,7 +57,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::startLadder(const Loc 
   return result;
 }
 
-DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForAttacker(const Loc loc) {
+DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc loc) {
   const auto moveRecordForLoc = play(loc, attacker);
 
   if (isRelevantCapturing(moveRecordForLoc)) {
@@ -108,7 +108,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForAttacker(con
   return ladderLocInfo;
 }
 
-DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForDefender(const Loc loc) {
+DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc loc) {
   auto attackerLadderLocInfo = LadderLocInfo::createInfinity(attacker);
 
   // Try capturing part of pla surrounding at first.
@@ -182,7 +182,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateForDefender(con
   return attackerLadderLocInfo;
 }
 
-DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateAdjLocsForAttacker(const Loc loc,
+DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateAdjLocsForAttacker(const Loc loc,
                                                                          const bool requireAtLeastTwoUnconnectedDotsForLadder
 ) {
   array<pair<LadderMoveInfoType, Loc>, 16> actualLocs{};
@@ -260,7 +260,7 @@ DotsLaddersEvaluator::LadderLocInfo DotsLaddersEvaluator::iterateAdjLocsForAttac
   return LadderLocInfo::createZero(attacker);
 }
 
-bool DotsLaddersEvaluator::isRelevantCapturing(const Board::MoveRecord& moveRecord) {
+bool DotsLaddersSolver::isRelevantCapturing(const Board::MoveRecord& moveRecord) {
   const int depth = getCurrentDepth();
   if (depth <= 1) {
     return false;
@@ -298,7 +298,7 @@ bool DotsLaddersEvaluator::isRelevantCapturing(const Board::MoveRecord& moveReco
   return result;
 }
 
-void DotsLaddersEvaluator::initializeDefenderChain(const Board::MoveRecord& capturingMoveRecord) {
+void DotsLaddersSolver::initializeDefenderChain(const Board::MoveRecord& capturingMoveRecord) {
   vector<Loc> defenderInitChainLocs;
   for (const auto& base : capturingMoveRecord.bases) {
     if (base.type == Board::Base::Type::EMPTY) continue;
@@ -313,13 +313,13 @@ void DotsLaddersEvaluator::initializeDefenderChain(const Board::MoveRecord& capt
   createAndPushChainInfo(defenderInitChainLocs, defender);
 }
 
-void DotsLaddersEvaluator::createAndPushChainInfo(const Loc loc, const Player pla) {
+void DotsLaddersSolver::createAndPushChainInfo(const Loc loc, const Player pla) {
   vector<Loc> locs(1);
   locs[0] = loc;
   createAndPushChainInfo(locs, pla);
 }
 
-void DotsLaddersEvaluator::createAndPushChainInfo(const vector<Loc>& locs, const Player pla) {
+void DotsLaddersSolver::createAndPushChainInfo(const vector<Loc>& locs, const Player pla) {
   vector<ChainsInfo>& chainInfos = pla == attacker ? attackerChainInfos : defenderChainInfos;
   vector<Loc>& chainLocs = pla == attacker ? attackerChainLocs : defenderChainLocs;
   vector<Loc>& maybeCaptureLocs = pla == attacker ? attackerMaybeCaptureLocs : defenderMaybeCaptureLocs;
@@ -369,7 +369,7 @@ void DotsLaddersEvaluator::createAndPushChainInfo(const vector<Loc>& locs, const
   }
 }
 
-void DotsLaddersEvaluator::popChainInfo(const Player pla) {
+void DotsLaddersSolver::popChainInfo(const Player pla) {
   vector<ChainsInfo>& chainInfos = pla == attacker ? attackerChainInfos : defenderChainInfos;
   vector<Loc>& chainLocs = pla == attacker ? attackerChainLocs : defenderChainLocs;
   vector<Loc>& maybeCaptureLocs = pla == attacker ? attackerMaybeCaptureLocs : defenderMaybeCaptureLocs;
@@ -399,11 +399,11 @@ void DotsLaddersEvaluator::popChainInfo(const Player pla) {
   }
 }
 
-std::vector<Loc>& DotsLaddersEvaluator::getDefenderCurrentCaptureLocs() {
+std::vector<Loc>& DotsLaddersSolver::getDefenderCurrentCaptureLocs() {
   return defenderCaptureLocs.back();
 }
 
-std::vector<Loc> DotsLaddersEvaluator::extractCaptureLocs(const Player pla) const {
+std::vector<Loc> DotsLaddersSolver::extractCaptureLocs(const Player pla) const {
   const vector<Loc>& maybeCaptureLocs = pla == attacker ? attackerMaybeCaptureLocs : defenderMaybeCaptureLocs;
 
   vector<Loc> result;
@@ -416,7 +416,7 @@ std::vector<Loc> DotsLaddersEvaluator::extractCaptureLocs(const Player pla) cons
   return result;
 }
 
-DotsLaddersEvaluator::LadderMoveInfoType DotsLaddersEvaluator::getChainCaptureLocType(const Loc loc, const Player pla,
+DotsLaddersSolver::LadderMoveInfoType DotsLaddersSolver::getChainCaptureLocType(const Loc loc, const Player pla,
   const bool requireAtLeastTwoUnconnectedDotsForLadder, const bool ignoreEmptyBaseLocs) const {
   const State state = board.getState(loc);
   if (getActiveColor(state) != C_EMPTY) {
@@ -455,7 +455,7 @@ DotsLaddersEvaluator::LadderMoveInfoType DotsLaddersEvaluator::getChainCaptureLo
            : EMPTY;
 }
 
-std::string DotsLaddersEvaluator::debugChainsData() const {
+std::string DotsLaddersSolver::debugChainsData() const {
   std::ostringstream stream;
   for (int y = 0; y < board.y_size; y++) {
     if (y == 0) {

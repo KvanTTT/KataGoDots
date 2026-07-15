@@ -250,8 +250,8 @@ void Tests::runDotsStressTestsInternal(
 
             (void)boardHistory->whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfos);
           } else if (checkingMode == LADDERS_ON_EACH_MOVE) {
-            DotsLaddersEvaluator laddersEvaluator(board);
-            (void)laddersEvaluator.evaluate();
+            DotsLaddersSolver laddersSolver(board);
+            (void)laddersSolver.solve();
           }
         }
         currentGameMovesCount++;
