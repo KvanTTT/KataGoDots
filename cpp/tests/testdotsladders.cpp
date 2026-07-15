@@ -605,6 +605,104 @@ TEST(LadderTests, RotationNotEnoughSpace) {
 )");
 }
 
+// TODO: Consider non-directly adjacent locs
+TEST(LadderTests, DISABLED_ConsiderDiagonalConnectedDotOnDefending) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  O' .  O' X  .
+.  O  .x .  .x O  .
+.  O  .  .  .  O  .
+.  .  .  .  .  .  .
+)");
+}
+
+// TODO: Consider non-directly adjacent locs
+TEST(LadderTests, DISABLED_ConsiderAdjLocsOfPreviousDotOnDefending) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  O  .  O' X  .
+X  O  O  .  .x O  .
+X  O  .  .  .  O  .
+.  X  .  .  .  .  .
+)");
+}
+
+// TODO: Consider non-directly adjacent locs
+TEST(LadderTests, DISABLED_ConsiderAdjLocsLevel2OfPreviousDotOnDefending) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  O  .  O' X  .
+.  X  O  .  .x O  .
+.  .  .  .  .  O  .
+.  .  .  .  .  .  .
+)");
+}
+
+// TODO: Consider non-directly adjacent locs
+TEST(LadderTests, DISABLED_ConsiderAdjLocsLevel2OfPreviousDotOnDefending2) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  O  .  O' X  .
+.  X  O  .  .x .  .
+.  X  O  .  .  .  .
+.  X  O  O  .  O  .
+.  .  X  X  .  .  .
+.  .  .  .  .  .  .
+)");
+}
+
+// TODO: Consider non-directly adjacent locs
+TEST(LadderTests, DISABLED_ConsiderAdjCornerLevel2OfPreviousDotOnDefending2) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .
+.  .  X  X  X  .  .
+.  X  O  .  O' X  .
+.  X  O  .  .x .  .
+.  X  O  .  .  .  .
+.  X  O  .  .  O  .
+.  .  X  .  .  .  .
+.  .  .  .  .  .  .
+)");
+}
+
+
+TEST(LadderTests, DISABLED_LadderCaptureOnOtherSideWhenOppCaptures) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .
+.  .  .  X  .  .  .
+.  .  X  .  X  .  .
+.  .  O  O  O  X  .
+.  X  .  .  X  O  .
+.  X  O  O  O  .  X
+.  .  X  X  X  X  .
+.  .  .  .  .  .  .
+)");
+}
+
+TEST(LadderTests, DISABLED_LadderCaptureOnOtherSideWhenOppCaptures2) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .
+.  .  .  X  .  .  .  .  .
+.  .  X  .  X  X  .  .  .
+.  .  O  O  O  .  .  .  .
+.  X  .  .  X  O  .  .  .
+.  X  O  O  O  X  X  .  .
+.  .  X  X  X  X  .  .  .
+.  .  .  .  .  .  .  .  .
+)");
+}
+
 TEST(LadderTests, NotWorkingLadderBecauseOfInternalCapturing) {
     checkLadders(
         R"(
