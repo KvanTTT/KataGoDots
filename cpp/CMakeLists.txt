@@ -16,6 +16,7 @@ if(NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 include_directories(external)
+include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 include_directories(SYSTEM external/tclap-1.2.5/include) #SYSTEM suppresses warnings from external library
 include_directories(SYSTEM external/filesystem-1.5.8/include) #SYSTEM suppresses a few warnings
 
@@ -395,8 +396,8 @@ if(USE_BACKEND STREQUAL "CUDA")
         COMPILE_OPTIONS /bigobj
     )
   endif()
-  target_compile_definitions(katago PRIVATE USE_CUDA_BACKEND)
-  target_compile_definitions(katago PRIVATE CUDA_TARGET_VERSION=${CMAKE_CUDA_COMPILER_VERSION})
+  add_compile_definitions(USE_CUDA_BACKEND)
+  add_compile_definitions(CUDA_TARGET_VERSION=${CMAKE_CUDA_COMPILER_VERSION})
   find_package(CUDAToolkit REQUIRED)
   find_path(CUDNN_INCLUDE_DIR cudnn.h HINTS ${CUDNN_ROOT_DIR} ${CUDAToolkit_INCLUDE_DIRS} PATH_SUFFIXES include)
   if((NOT CUDNN_INCLUDE_DIR))
@@ -409,7 +410,7 @@ if(USE_BACKEND STREQUAL "CUDA")
   # (we don't actually use those engines, but the references are pulled in by the header-only includes).
   target_link_libraries(katago CUDA::cublas ${CUDNN_LIBRARY} CUDA::nvrtc)
 elseif(USE_BACKEND STREQUAL "TENSORRT")
-  target_compile_definitions(katago PRIVATE USE_TENSORRT_BACKEND)
+  add_compile_definitions(USE_TENSORRT_BACKEND)
   find_package(CUDAToolkit REQUIRED)
   find_path(TENSORRT_INCLUDE_DIR NvInfer.h HINTS ${TENSORRT_ROOT_DIR} PATH_SUFFIXES include)
   if((NOT TENSORRT_INCLUDE_DIR))
@@ -498,7 +499,7 @@ elseif(USE_BACKEND STREQUAL "TENSORRT")
   endif()
   target_link_libraries(katago ${TENSORRT_ONNXPARSER_LIBRARY} ${Protobuf_LIBRARIES})
 elseif(USE_BACKEND STREQUAL "METAL")
-  target_compile_definitions(katago PRIVATE USE_METAL_BACKEND)
+  add_compile_definitions(USE_METAL_BACKEND)
   target_link_libraries(katago KataGoSwift katagocoreml
     ${KATAGOCOREML_DEP_LDFLAGS}
     "-framework MetalPerformanceShaders"
@@ -507,7 +508,7 @@ elseif(USE_BACKEND STREQUAL "METAL")
     message(WARNING "Metal backend may not work optimally on Intel. ARM64 architecture is recommended.")
   endif()
 elseif(USE_BACKEND STREQUAL "OPENCL")
-  target_compile_definitions(katago PRIVATE USE_OPENCL_BACKEND)
+  add_compile_definitions(USE_OPENCL_BACKEND)
   find_package(OpenCL)
   if(NOT OpenCL_FOUND)
     message(WARNING "OpenCL not found, attempting to see if CUDA exists and has OpenCL since sometimes CUDA may provide OpenCL where cmake can't find it.")
@@ -526,7 +527,7 @@ elseif(USE_BACKEND STREQUAL "OPENCL")
     target_link_libraries(katago ${OpenCL_LIBRARY})
   endif()
 elseif(USE_BACKEND STREQUAL "EIGEN")
-  target_compile_definitions(katago PRIVATE USE_EIGEN_BACKEND)
+  add_compile_definitions(USE_EIGEN_BACKEND)
   # Allow EIGEN3_INCLUDE_DIRS as a manual override (for users who downloaded
   # Eigen3 and just want to point at the unpacked directory).
   if(EIGEN3_INCLUDE_DIRS)
@@ -565,8 +566,8 @@ if(DOTS_GAME)
   if(NOT DEFINED COMPILE_MAX_BOARD_LEN_Y)
     set(COMPILE_MAX_BOARD_LEN_Y 39)
   endif()
-  target_compile_definitions(katago PRIVATE COMPILE_MAX_BOARD_LEN_X=${COMPILE_MAX_BOARD_LEN_X})
-  target_compile_definitions(katago PRIVATE COMPILE_MAX_BOARD_LEN_Y=${COMPILE_MAX_BOARD_LEN_Y})
+  add_compile_definitions(COMPILE_MAX_BOARD_LEN_X=${COMPILE_MAX_BOARD_LEN_X})
+  add_compile_definitions(COMPILE_MAX_BOARD_LEN_Y=${COMPILE_MAX_BOARD_LEN_Y})
   message(STATUS "Max size: ${COMPILE_MAX_BOARD_LEN_X} x ${COMPILE_MAX_BOARD_LEN_Y}")
   if(USE_BIGGER_BOARDS_EXPENSIVE)
     message(SEND_ERROR "USE_BIGGER_BOARDS_EXPENSIVE is not yet supported for Dots Game")
@@ -576,12 +577,12 @@ else()
     if(NOT DEFINED COMPILE_MAX_BOARD_LEN)
       set(COMPILE_MAX_BOARD_LEN 50)
     endif()
-    target_compile_definitions(katago PRIVATE COMPILE_MAX_BOARD_LEN=${COMPILE_MAX_BOARD_LEN})
+    add_compile_definitions(COMPILE_MAX_BOARD_LEN=${COMPILE_MAX_BOARD_LEN})
   endif()
 endif(DOTS_GAME)
 
 if(NO_GIT_REVISION AND (NOT BUILD_DISTRIBUTED))
-  target_compile_definitions(katago PRIVATE NO_GIT_REVISION)
+  add_compile_definitions(NO_GIT_REVISION)
 endif()
 
 find_package(ZLIB)
@@ -602,7 +603,7 @@ if((NOT LIBZIP_LIBRARY) OR (NOT LIBZIP_INCLUDE_DIR_ZIP) OR (NOT LIBZIP_INCLUDE_D
   if(BUILD_DISTRIBUTED)
     message(SEND_ERROR "${ColorBoldRed}WARNING: BUILD_DISTRIBUTED was requested but libzip library was NOT found. KataGo needs this for writing training data so libzip is required. On Linux, install through your normal package manager. On Windows, set LIBZIP_INCLUDE_DIR_ZIP to the directory that includes zip.h and other files, and LIBZIP_INCLUDE_DIR_ZIPCONF to the directory that includes zipconf.h and other files, and LIBZIP_LIBRARY to the libzip.lib or zip.lib file. ${ColorReset}")
   endif()
-  target_compile_definitions(katago PRIVATE NO_LIBZIP)
+  add_compile_definitions(NO_LIBZIP)
   message(WARNING "${ColorBoldRed}WARNING: libzip library was NOT found. KataGo should still work for GTP/matches/analysis if everything else is good, but selfplay for writing training data will not be possible.${ColorReset}")
   set(LIBZIP_INCLUDE_DIR_ZIP ${LIBZIP_INCLUDE_DIR_ZIP} CACHE PATH "Path to directory with zip.h and other header files")
   set(LIBZIP_INCLUDE_DIR_ZIPCONF ${LIBZIP_INCLUDE_DIR_ZIPCONF} CACHE PATH "Path to directory with zipconf.h and other header files")
@@ -620,7 +621,7 @@ endif(USE_TCMALLOC)
 
 if(BUILD_DISTRIBUTED)
   message(STATUS "-DBUILD_DISTRIBUTED=1 is set, compiling code and dependencies to contribute to distributed training")
-  target_compile_definitions(katago PRIVATE BUILD_DISTRIBUTED)
+  add_compile_definitions(BUILD_DISTRIBUTED)
   find_package(OpenSSL REQUIRED)
   target_link_libraries(katago ${OPENSSL_SSL_LIBRARIES} ${OPENSSL_CRYPTO_LIBRARIES})
   include_directories(${OPENSSL_INCLUDE_DIR})
@@ -633,10 +634,12 @@ if (WIN32) # handles both x86 and x64
   message(STATUS "Setting up build for Windows.")
   # Suppress min and max macros on windows
   # Also define a few other things
-  target_compile_definitions(katago PRIVATE NOMINMAX)
-  target_compile_definitions(katago PRIVATE BYTE_ORDER=1234)
-  target_compile_definitions(katago PRIVATE LITTLE_ENDIAN=1234)
-  target_compile_definitions(katago PRIVATE BIG_ENDIAN=4321)
+  add_compile_definitions(
+      NOMINMAX
+      BYTE_ORDER=1234
+      LITTLE_ENDIAN=1234
+      BIG_ENDIAN=4321
+  )
   # core/rand.cpp uses winsock for a gethostname
   target_link_libraries(katago ws2_32)
   if (MINGW)
@@ -661,7 +664,7 @@ if (WIN32) # handles both x86 and x64
     include(CheckTypeSize)
     check_type_size("long long" HAVE_LONG_LONG)
     if(HAVE_LONG_LONG)
-      target_compile_definitions(katago PRIVATE HAVE_LONG_LONG)
+      add_compile_definitions(HAVE_LONG_LONG)
     endif()
   endif()
 endif()
@@ -670,11 +673,11 @@ if(MSVC)
   message(STATUS "Setting up build for MSVC.")
   # Go ahead and suppress some MSVC warnings about sprintf and similar
   # things. They might be useful in some cases, but also are noisy.
-  target_compile_definitions(katago PRIVATE _CRT_SECURE_NO_WARNINGS)
+  add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
   if(USE_AVX2)
     set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} /arch:AVX2 -D__FMA__")
-    target_compile_definitions(katago PRIVATE USE_AVX2)
+    add_compile_definitions(USE_AVX2)
   endif()
 
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:8388608")
@@ -693,7 +696,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "C
     else()
       set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -mavx2 -mfma")
     endif ()
-    target_compile_definitions(katago PRIVATE USE_AVX2)
+    add_compile_definitions(USE_AVX2)
   endif()
 
   find_package (Threads REQUIRED)
@@ -730,8 +733,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "C
   endif()
 
 endif()
-
-target_include_directories(katago PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 if(NOT "${CMAKE_BINARY_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
   add_custom_command(TARGET katago POST_BUILD
@@ -786,6 +787,12 @@ add_executable(katago_tests
 target_include_directories(katago_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(katago_tests PRIVATE GTest::gtest_main)
 
+if (WIN32)
+  target_link_libraries(katago_tests PRIVATE ws2_32)
+  if (MINGW)
+    target_link_libraries(katago_tests PRIVATE shlwapi)
+  endif()
+endif()
+
 include(GoogleTest)
 gtest_discover_tests(katago_tests)
-
