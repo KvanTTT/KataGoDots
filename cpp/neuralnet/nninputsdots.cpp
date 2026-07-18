@@ -147,7 +147,8 @@ void NNInputs::fillRowV7Dots(
 
     // Unreasonable moves can exist in a real game (suicides, corners), but not during selfplay training.
     // Ignore them for refinement because NN wasn't trained on them.
-    if (!BoardHistory::isReasonableForDots(prevLoc, hist.getRecentBoard(i + 1), currentPla)) {
+    // Don't use calculateCapturesAndTerritoriesColorsForDots on each board because it's too expensive and makes little sense.
+    if (!BoardHistory::isReasonableForDotsNoCapturesAndTerritories(prevLoc, hist.getRecentBoard(i + 1), currentPla)) {
       assert(!selfplay && "Unreasonable move during selfplay game!");
       continue;
     }

@@ -151,7 +151,7 @@ struct BoardHistory {
     bool breakOnFirstReasonable = false,
     const Board::CapturesAndTerritoriesInfos* initializedCapturesAndTerritoriesInfos = nullptr) const;
   // Returns true if move is legal and reasonable (isn't immediately losing and could bring benefit in future)
-  static bool isReasonableForDots(Loc loc, const Board& board, Color currentPla) ;
+  static bool isReasonableForDotsNoCapturesAndTerritories(Loc loc, const Board& board, Color currentPla) ;
   //Check if passing right now would end the current phase of play, or the entire game
   bool passWouldEndPhase(const Board& board, Player movePla) const;
   bool passWouldEndGame(const Board& board, Player movePla) const;
