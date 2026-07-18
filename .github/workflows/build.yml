@@ -46,6 +46,11 @@ jobs:
       run: |
         ./katago runtests
 
+    - name: Run Google Tests
+      working-directory: cpp
+      run: |
+        ./katago_tests
+
     - name: Upload artifact
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
@@ -105,6 +110,10 @@ jobs:
         working-directory: cpp
         run: |
           ./katago runtests
+      - name: Run Google Tests
+        working-directory: cpp
+        run: |
+          ./katago_tests
       - name: Upload artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v4
@@ -166,6 +175,11 @@ jobs:
         working-directory: cpp
         run: |
           ./katago runtests
+
+      - name: Run Google Tests
+        working-directory: cpp
+        run: |
+          ./katago_tests
 
       - name: Upload artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -240,6 +254,11 @@ jobs:
       working-directory: cpp
       run: |
         Release/katago.exe runtests
+
+    - name: Run Google Tests
+      working-directory: cpp
+      run: |
+        Release/katago_tests.exe
 
     - name: Upload artifact
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
