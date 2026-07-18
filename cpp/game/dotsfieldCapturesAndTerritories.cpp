@@ -345,7 +345,7 @@ void Board::recalculateCapturesAndTerritories(
 }
 
 Board::CapturesAndTerritoriesInfos Board::calculateCapturesAndTerritoriesColorsForDots() const {
-  CapturesAndTerritoriesInfos capturesAndTerritoriesInfos((x_size + 1) * (y_size + 1));
+  CapturesAndTerritoriesInfos capturesAndTerritoriesInfos(getMaxArrSize(x_size, y_size));
 
   // Don't calculate anything if the game is already over (finished) because it doesn't look correct
   if (is_finished) {

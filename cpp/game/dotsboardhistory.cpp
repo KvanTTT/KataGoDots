@@ -77,7 +77,7 @@ void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const
   const int x_size = board.x_size;
   const int y_size = board.y_size;
 
-  vector<char> emptyTerritoryThatCanBeBrokenOrVisited((x_size + 1) * (y_size + 1));
+  vector<char> emptyTerritoryThatCanBeBrokenOrVisited(getMaxArrSize(x_size, y_size));
 
   // Firstly, filter out empty bases that can be broken
   // Store this info into marked vector (the `true` values prevent the wave from being propagated)
