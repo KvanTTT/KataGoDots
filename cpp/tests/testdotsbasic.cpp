@@ -1415,6 +1415,33 @@ x x x x x
   }
 
   {
+    // Check base-in-base of the same color (the surrounded dot should be accounted properly).
+    Board board = parseDotsFieldDefault(
+  R"(
+. . . x x x . . . .
+. . x . . . x . . .
+. x . . x . . x o o
+. x . x . x . . x .
+. x . . x . . x o o
+. . x . . . x . . .
+. . . x x x . . . .
+. . . . . . . . . .
+)", {XYMove(4, 3, P_WHITE)});
+
+    const auto boardHistory = BoardHistory(board);
+    testAssert(1 == board.numWhiteCaptures);
+    testAssert(0 == board.numBlackCaptures);
+
+    const auto capturesAndTerritoriesInfosBeforeAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(-1.0f == boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfosBeforeAtari));
+
+    board.playMoveAssumeLegal(Location::getLoc(9, 3, board.x_size), P_WHITE);
+
+    const auto capturesAndTerritoriesInfosAfterAtari = board.calculateCapturesAndTerritoriesColorsForDots();
+    testAssert(isnan(boardHistory.whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfosAfterAtari)));
+  }
+
+  {
     // Check combination of empty base, ungrounded dot and regular grounded unrelated base
     const Board board = parseDotsFieldDefault(
       R"(
