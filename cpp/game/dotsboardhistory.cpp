@@ -1,5 +1,7 @@
 #include "../game/boardhistory.h"
 
+#include "../core/test.h"
+
 using namespace std;
 
 int BoardHistory::countDotsScoreWhiteMinusBlack(const Board& board, Color area[Board::MAX_ARR_SIZE]) {
@@ -75,7 +77,7 @@ void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const
   const int x_size = board.x_size;
   const int y_size = board.y_size;
 
-  vector<char> marked((x_size + 1) * (y_size + 1));
+  vector<char> emptyTerritoryThatCanBeBrokenOrVisited((x_size + 1) * (y_size + 1));
 
   // Firstly, filter out empty bases that can be broken
   // Store this info into marked vector (the `true` values prevent the wave from being propagated)
@@ -94,8 +96,12 @@ void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const
       continue;
     }
 
-    // Find and handle empty territories adjacent to the capture location
-    marked[captureLoc] = true;
+    // Always mark the capture loc as a loc that can break an empty territory;
+    // it's legal because the loc always can form a NORMAL base.
+    emptyTerritoryThatCanBeBrokenOrVisited[captureLoc] = true;
+
+    // Handle adjacent locs as well because empty territory info is removed when a capture loc exist.
+    // So, we can't rely on empty base info at the current capture loc.
     board.forEachAdjacent(captureLoc, [&](const Loc adjLoc) {
       const auto* capturesAndTerritoriesInfoAtAdjLoc = capturesAndTerritoriesInfos->at(adjLoc);
       if (capturesAndTerritoriesInfoAtAdjLoc == nullptr) {
@@ -110,7 +116,7 @@ void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const
       assert(emptyBaseInfo->player == emptyTerritoryColorAtLoc);
 
       for (const Loc territoryLoc : emptyBaseInfo->territory) {
-        marked[territoryLoc] = true;
+        emptyTerritoryThatCanBeBrokenOrVisited[territoryLoc] = true;
       }
     });
   }
@@ -129,7 +135,7 @@ void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const
         continue;
       }
 
-      assert(!marked[loc]);
+      testAssert(!emptyTerritoryThatCanBeBrokenOrVisited[loc]);
       const Color activeColor = getActiveColor(state);
       assert(activeColor == C_BLACK || activeColor == C_WHITE);
 
@@ -139,17 +145,19 @@ void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const
         const Loc currentLoc = walkStack.back();
         walkStack.pop_back();
 
-        board.forEachAdjacent(currentLoc, [&](const Loc adjLoc) {
+        board.forEachAdjacent(currentLoc, [&](const Loc adjLoc) -> void {
           if (const State adjState = board.getState(adjLoc);
             !isGrounded(adjState) &&
             // The wave can propagate both through empty territory and active dots
             (getActiveColor(adjState) == activeColor || getEmptyTerritoryColor(adjState) == activeColor) &&
-            !marked[adjLoc]
+            !emptyTerritoryThatCanBeBrokenOrVisited[adjLoc]
           ) {
             walkStack.push_back(adjLoc);
-            marked[adjLoc] = true;
+            emptyTerritoryThatCanBeBrokenOrVisited[adjLoc] = true;
             // The only placed dots can affect score
             if (getPlacedDotColor(adjState) != C_EMPTY) {
+              // The using of active color instead of placed color provides correct normalization
+              // Treat freed dots as if they were placed by the active color
               groundedViaEmptyBasesDots.emplace_back(adjLoc, activeColor);
             }
           }
@@ -160,8 +168,7 @@ void BoardHistory::handleEffectivelyGroundedEmptyBases(const Board& board, const
 
   // Finally, normalize the score in case of grounding considering the dots collected above
   for (const Move& move : groundedViaEmptyBasesDots) {
-    const auto* capturesAndTerritoriesInfo = capturesAndTerritoriesInfos->at(move.loc);
-    if (const Player player = move.pla; capturesAndTerritoriesInfo == nullptr || !capturesAndTerritoriesInfo->hasAnyTerritory(getOpp(player))) {
+    if (const Player player = move.pla) {
       if (player == P_BLACK) {
         normWhiteScoreIfBlackGrounds--;
       } else {
