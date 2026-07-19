@@ -90,7 +90,7 @@ string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersSolver
         cout << " (+" << solver.getMovesCount() - previousMovesCount << ")";
     }
     cout << ", max depth: " << solver.getMaxDepth();
-    cout << endl;
+    cout << '\n';
 
     std::unordered_set<Loc> blackWorkingLocs;
     std::unordered_set<Loc> whiteWorkingLocs;
@@ -120,6 +120,10 @@ string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersSolver
         }
     }
 
+    if (solver.getStoreMovesTree()) {
+        cout << "SGF: " << solver.toSgf() << '\n';
+    }
+
     return generateBoardStateRepresentation(board, blackWorkingLocs, whiteWorkingLocs, blackCapturedLocs,
                                             whiteCapturedLocs);
 }
@@ -147,7 +151,8 @@ static void checkLadders(const string& fieldData, const optional<string>& expect
     }
 }
 
-static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool captureEmptyBases, const vector<XYMove>& extraMoves,
+static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool captureEmptyBases, const vector<XYMove>& extraMovesXY,
+    vector<Move>& initialMoves,
     unordered_set<Loc>& blackWorkingLocs,
     unordered_set<Loc>& whiteWorkingLocs,
     unordered_set<Loc>& blackCapturedLocs,
@@ -252,15 +257,14 @@ static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool c
         );
     auto field = Board(maxX + 1, y + 1, rules);
 
-    vector<Move> linearMoves;
-    linearMoves.reserve(moves.size());
+    initialMoves.reserve(moves.size());
 
     int x_size = maxX + 1;
 
     std::transform(
         moves.begin(),
         moves.end(),
-        std::back_inserter(linearMoves),
+        std::back_inserter(initialMoves),
         [x_size](const XYMove& item) {
             return item.toMove(x_size);
         }
@@ -276,9 +280,9 @@ static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool c
         capturedLocs.insert(capturedMove.toMove(x_size).loc);
     }
 
-    field.setStonesFailIfNoLibs(linearMoves);
+    field.setStonesFailIfNoLibs(initialMoves);
 
-    playXYMovesAssumeLegal(field, extraMoves);
+    playXYMovesAssumeLegal(field, extraMovesXY);
 
     return field;
 }
@@ -287,16 +291,32 @@ static void checkLadders(const string& fieldDataWithLaddersInfo,
     const optional<int> expectedBlackScore = nullopt,
     const optional<int> expectedWhiteScore = nullopt,
     const bool captureEmptyBases = Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
-    const vector<XYMove>& extraMoves = {}
+    const vector<XYMove>& extraMovesXY = {}
     ) {
+    vector<Move> initialMoves;
+    vector<Move> extraMoves;
 
-    unordered_set<Loc> blackWorkingLocs, whiteWorkingLocs, blackCapturedLocs, whiteCapturedLocs;
-    Board field = parseDotsFieldWithLaddersInfo(fieldDataWithLaddersInfo, captureEmptyBases, extraMoves,
+    unordered_set<Loc> blackWorkingLocs;
+    unordered_set<Loc> whiteWorkingLocs;
+    unordered_set<Loc> blackCapturedLocs;
+    unordered_set<Loc> whiteCapturedLocs;
+    Board field = parseDotsFieldWithLaddersInfo(fieldDataWithLaddersInfo, captureEmptyBases, extraMovesXY, initialMoves,
         blackWorkingLocs, whiteWorkingLocs, blackCapturedLocs, whiteCapturedLocs);
+
+    int x_size = field.x_size;
+    std::transform(
+        extraMovesXY.begin(),
+        extraMovesXY.end(),
+        std::back_inserter(extraMoves),
+        [x_size](const XYMove& item) -> Move {
+            return item.toMove(x_size);
+        }
+    );
+
     const string expectedFieldLaddersInfo = generateBoardStateRepresentation(field,
         blackWorkingLocs, whiteWorkingLocs, blackCapturedLocs, whiteCapturedLocs);
 
-    DotsLaddersSolver solver(field);
+    DotsLaddersSolver solver(field, false, initialMoves, extraMoves);
 
     int actualBlackScore = 0;
     int actualWhiteScore = 0;

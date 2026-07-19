@@ -62,7 +62,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
 
   if (isRelevantCapturing(moveRecordForLoc)) {
     const auto result = LadderLocInfo::create(loc, attacker, board, moveRecordForLoc, getInitialWhiteScore());
-    undo(moveRecordForLoc);
+    undo(moveRecordForLoc, LADDER_SUCCESS);
     return result;
   }
 
@@ -75,7 +75,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
   for (const Loc captureLoc : captureLocs) {
     const auto maybeCapturingMoveRecord = play(captureLoc, attacker);
     const bool ladderCapturingIsFound = isRelevantCapturing(maybeCapturingMoveRecord);
-    undo(maybeCapturingMoveRecord);
+    undo(maybeCapturingMoveRecord, CHECK_CAPTURE);
 
     if (ladderCapturingIsFound) {
       const bool initDefenderChain = getCurrentDepth() == 1;
@@ -145,7 +145,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc
       popChainInfo(defender);
     }
 
-    undo(potentialDefendCaptureMoveRecord);
+    undo(potentialDefendCaptureMoveRecord, DEFEND_CAPTURE);
 
     // Optimization:
     // At this site it's assumed that the defending capture is successful for defender player, and it breaks part of the pla ladder chain.
@@ -163,12 +163,12 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc
   if (!ladderLocInfoAfterDefending.isZero()) {
     // Optimization: don't run iteration over adjacent defender locs to calculate the worst capturing for pla considering defender ideal play.
     // Instead, assume that the failed defending loc is actually a capturing loc for pla.
-    // It should form the base(s) with the worst possible evaluation in terms of score and territory.
+    // It might form the base(s) with the worst possible evaluation in terms of score and territory.
     const auto maybeWorstSurroundMoveRecordForPla = play(loc, attacker);
     const auto maybeWorseResultIfConsiderIdealDefenderPlay = LadderLocInfo::create(
       loc, attacker, board, maybeWorstSurroundMoveRecordForPla, getInitialWhiteScore()
     );
-    undo(maybeWorstSurroundMoveRecordForPla);
+    undo(maybeWorstSurroundMoveRecordForPla, CHECK_WORST_CAPTURE);
 
     if (maybeWorseResultIfConsiderIdealDefenderPlay.isWorseThan(ladderLocInfoAfterDefending)) {
       ladderLocInfoAfterDefending = maybeWorseResultIfConsiderIdealDefenderPlay;
@@ -511,5 +511,99 @@ std::string DotsLaddersSolver::debugChainsData() const {
     stream << std::endl;
   }
   return stream.str();
+}
+
+// Same letter-coordinate convention as WriteSgf's SGF writer (dataio/sgf.cpp), reimplemented here to
+// avoid pulling that file's heavy transitive dependencies (program/search) into the lightweight
+// katago_tests target that dotsfieldLadders.cpp is built into.
+void DotsLaddersSolver::writeSgfCoord(std::ostream& out, const Loc loc, const int xSize) {
+  static constexpr char chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  out << chars[Location::getX(loc, xSize)] << chars[Location::getY(loc, xSize)];
+}
+
+void DotsLaddersSolver::writeMovesTreeSgf(std::ostream& out, const MoveTreeNode* node, const int xSize) {
+  if (node->loc != Board::NULL_LOC) {
+    out << ";" << PlayerIO::playerToStringShort(node->pla, false) << "[";
+    writeSgfCoord(out, node->loc, xSize);
+    out << "]";
+    if (node->moveType != REGULAR) {
+      out << "C[";
+      switch (node->moveType) {
+        case REGULAR:
+          break;
+        case CHECK_CAPTURE:
+          out << "check capture";
+          break;
+        case CHECK_WORST_CAPTURE:
+          out << "check worst capture";
+          break;
+        case DEFEND_CAPTURE:
+          out << "defend capture";
+          break;
+        case LADDER_SUCCESS:
+          out << "success";
+          break;
+        default:
+          ASSERT_UNREACHABLE;
+      }
+      out << "]";
+    }
+  }
+
+  if (node->children.size() == 1) {
+    writeMovesTreeSgf(out, node->children[0].get(), xSize);
+  } else {
+    for (const auto& child : node->children) {
+      out << "(";
+      writeMovesTreeSgf(out, child.get(), xSize);
+      out << ")";
+    }
+  }
+}
+
+std::string DotsLaddersSolver::toSgf() const {
+  std::ostringstream out;
+  out << "(;FF[4]AP[katago]GM[40]";
+  out << "SZ[" << board.x_size;
+  if (board.x_size != board.y_size) {
+    out << ":" << board.y_size;
+  }
+  out << "]";
+
+  bool hasAB = false;
+  for (const auto& move : initialMoves) {
+    if (move.pla != P_BLACK) continue;
+    if (!hasAB) {
+      out << "AB";
+      hasAB = true;
+    }
+    out << "[";
+    writeSgfCoord(out, move.loc, board.x_size);
+    out << "]";
+  }
+
+  bool hasAW = false;
+  for (const auto& move : initialMoves) {
+    if (move.pla != P_WHITE) continue;
+    if (!hasAW) {
+      out << "AW";
+      hasAW = true;
+    }
+    out << "[";
+    writeSgfCoord(out, move.loc, board.x_size);
+    out << "]";
+  }
+
+  for (const auto& extraMove : extraMoves) {
+    if (extraMove.loc != Board::NULL_LOC) {
+      out << ";" << PlayerIO::playerToStringShort(extraMove.pla, false) << "[";
+      writeSgfCoord(out, extraMove.loc, board.x_size);
+      out << "]";
+    }
+  }
+
+  writeMovesTreeSgf(out, movesTreeRoot.get(), board.x_size);
+  out << ")";
+  return out.str();
 }
 
