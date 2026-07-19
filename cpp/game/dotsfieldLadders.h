@@ -181,13 +181,25 @@ private:
     assert(currentDepth == 1);
     assert(!initTerritory.empty());
     for (const Loc loc : initTerritory) {
-      chainsData[loc] = static_cast<char>(chainsData[loc] & ~0b10000);
+      chainsData[loc] = static_cast<char>(chainsData[loc] & ~0b1'0000);
     }
     initTerritory.clear();
   }
 
   [[nodiscard]] bool isInitTerritory(const Loc loc) const {
-    return (chainsData[loc] & 0b10000) != 0;
+    return (chainsData[loc] & 0b1'0000) != 0;
+  }
+
+  void setVisited(const Loc loc) {
+    chainsData[loc] = static_cast<char>(chainsData[loc] | 0b1000'0000);
+  }
+
+  [[nodiscard]] bool isVisited(const Loc loc) {
+    return (chainsData[loc] & 0b1000'0000) != 0;
+  }
+
+  void resetVisited(const Loc loc) {
+    chainsData[loc] = static_cast<char>(chainsData[loc] & ~0b1000'0000);
   }
 
   [[nodiscard]] bool maybeChainCaptureLoc(const Loc loc, const Player pla, const bool ignoreEmptyBaseLocs) const {
