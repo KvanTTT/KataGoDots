@@ -353,16 +353,24 @@ void DotsLaddersSolver::createAndPushChainInfo(const vector<Loc>& locs, const Pl
   }
 
   for (const Loc newChainLoc : newChainLocs) {
-    for (const short adj_offset_for_adj_loc : board.adj_offsets) {
-      if (const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset_for_adj_loc);
-        !alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla, false)
-      ) {
-        setMaybeCapturePlayer(adjLocForChainLoc, pla);
-        maybeCaptureLocs.push_back(adjLocForChainLoc);
-        newMaybeCaptureLocsCount++;
+    for (const short adj_offset : board.adj_offsets) {
+      const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset);
+      if (!isVisited(adjLocForChainLoc)) {
+        if (!alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla, false)) {
+          setMaybeCapturePlayer(adjLocForChainLoc, pla);
+          maybeCaptureLocs.push_back(adjLocForChainLoc);
+          newMaybeCaptureLocsCount++;
+        }
+        setVisited(adjLocForChainLoc);
+        walkStack.push_back(adjLocForChainLoc);
       }
     }
   }
+
+  for (const Loc adjLocForChainLoc : walkStack) {
+    resetVisited(adjLocForChainLoc);
+  }
+  walkStack.clear();
 
   if (pla == defender) {
     defenderCaptureLocs.push_back(extractCaptureLocs(pla));
