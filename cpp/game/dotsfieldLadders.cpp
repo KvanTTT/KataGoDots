@@ -61,8 +61,8 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
   const auto moveRecordForLoc = play(loc, attacker);
 
   if (isRelevantCapturing(moveRecordForLoc)) {
-    const auto result = LadderLocInfo::create(loc, attacker, board, moveRecordForLoc, getInitialWhiteScore());
-    undo(moveRecordForLoc, LADDER_SUCCESS);
+    const auto result = LadderLocInfo::create(loc, attacker, moveRecordForLoc, getWhiteScoreDiff());
+    undo(moveRecordForLoc, LADDER_SUCCEEDED_STOP);
     return result;
   }
 
@@ -70,37 +70,50 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
   const auto captureLocs = extractCaptureLocs(attacker);
 
   auto ladderLocInfo = LadderLocInfo::createInfinity(attacker);
-  bool ladderLocInfoInitialized = false;
+  bool ladderSucceeded = false;
 
   for (const Loc captureLoc : captureLocs) {
-    const auto maybeCapturingMoveRecord = play(captureLoc, attacker);
-    const bool ladderCapturingIsFound = isRelevantCapturing(maybeCapturingMoveRecord);
-    undo(maybeCapturingMoveRecord, CHECK_CAPTURE);
+    if (const auto maybeCapturingMoveRecord = play(captureLoc, attacker); isRelevantCapturing(maybeCapturingMoveRecord)) {
+      int whiteScoreDiff = getWhiteScoreDiff();
 
-    if (ladderCapturingIsFound) {
+      undo(maybeCapturingMoveRecord, CAPTURE_FOUND);
+
       const bool initDefenderChain = getCurrentDepth() == 1;
 
       if (initDefenderChain) {
         initializeDefenderChain(maybeCapturingMoveRecord);
       }
 
-      if (const auto attackerLadderLocInfo = iterateForDefender(captureLoc);
-        attackerLadderLocInfo.isWorseThan(ladderLocInfo)
-      ) {
-        ladderLocInfo = attackerLadderLocInfo;
-        ladderLocInfoInitialized = true;
+      if (const auto ladderLocInfoAfterDefending = iterateForDefender(captureLoc); !ladderLocInfoAfterDefending.isZero()) {
+        // Optimization: don't run iteration over adjacent defender locs to calculate the worst capturing for pla considering defender ideal play.
+        // Instead, assume that the failed defending loc is actually a capturing loc for pla.
+        // It might form the base(s) with the worst possible evaluation in terms of score and territory.
+        const auto maybeWorstResultIfConsiderIdealDefenderPlay = LadderLocInfo::create(
+          captureLoc, attacker, maybeCapturingMoveRecord, whiteScoreDiff
+        );
+
+        if (maybeWorstResultIfConsiderIdealDefenderPlay.isWorseThan(ladderLocInfo)) {
+          ladderLocInfo = maybeWorstResultIfConsiderIdealDefenderPlay;
+          ladderSucceeded = true;
+        }
+        if (ladderLocInfoAfterDefending.isWorseThan(ladderLocInfo)) {
+          ladderLocInfo = ladderLocInfoAfterDefending;
+          ladderSucceeded = true;
+        }
       }
 
       if (initDefenderChain) {
         popChainInfo(defender);
         resetInitTerritory();
       }
+    } else {
+      undo(maybeCapturingMoveRecord, FALSE_CAPTURE);
     }
   }
 
-  reduceChainAndUndo(moveRecordForLoc);
+  reduceChainAndUndo(moveRecordForLoc, ladderSucceeded ? LADDER_SUCCEEDED : LADDER_FAILED);
 
-  if (!ladderLocInfoInitialized) {
+  if (!ladderSucceeded) {
     assert(ladderLocInfo.isInfinity());
     ladderLocInfo = LadderLocInfo::createZero(attacker);
   }
@@ -145,7 +158,9 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc
       popChainInfo(defender);
     }
 
-    undo(potentialDefendCaptureMoveRecord, DEFEND_CAPTURE);
+    undo(potentialDefendCaptureMoveRecord,
+      potentialDefendCaptureMoveIsFound ? DEFEND_CAPTURE : DEFEND_FALSE_CAPTURE
+    );
 
     // Optimization:
     // At this site it's assumed that the defending capture is successful for defender player, and it breaks part of the pla ladder chain.
@@ -158,25 +173,10 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc
   // Try defending at second
   const auto defendMove = playAndExtendChain(loc, defender);
   LadderLocInfo ladderLocInfoAfterDefending = iterateAdjLocsForAttacker(loc, false);
-  reduceChainAndUndo(defendMove);
-
-  if (!ladderLocInfoAfterDefending.isZero()) {
-    // Optimization: don't run iteration over adjacent defender locs to calculate the worst capturing for pla considering defender ideal play.
-    // Instead, assume that the failed defending loc is actually a capturing loc for pla.
-    // It might form the base(s) with the worst possible evaluation in terms of score and territory.
-    const auto maybeWorstSurroundMoveRecordForPla = play(loc, attacker);
-    const auto maybeWorseResultIfConsiderIdealDefenderPlay = LadderLocInfo::create(
-      loc, attacker, board, maybeWorstSurroundMoveRecordForPla, getInitialWhiteScore()
-    );
-    undo(maybeWorstSurroundMoveRecordForPla, CHECK_WORST_CAPTURE);
-
-    if (maybeWorseResultIfConsiderIdealDefenderPlay.isWorseThan(ladderLocInfoAfterDefending)) {
-      ladderLocInfoAfterDefending = maybeWorseResultIfConsiderIdealDefenderPlay;
-    }
-  }
+  reduceChainAndUndo(defendMove, DEFEND_MOVE);
 
   if (ladderLocInfoAfterDefending.isWorseThan(attackerLadderLocInfo)) {
-    attackerLadderLocInfo = ladderLocInfoAfterDefending;
+    attackerLadderLocInfo = std::move(ladderLocInfoAfterDefending);
   }
 
   return attackerLadderLocInfo;
@@ -526,28 +526,39 @@ void DotsLaddersSolver::writeMovesTreeSgf(std::ostream& out, const MoveTreeNode*
     out << ";" << PlayerIO::playerToStringShort(node->pla, false) << "[";
     writeSgfCoord(out, node->loc, xSize);
     out << "]";
-    if (node->moveType != REGULAR) {
-      out << "C[";
-      switch (node->moveType) {
-        case REGULAR:
-          break;
-        case CHECK_CAPTURE:
-          out << "check capture";
-          break;
-        case CHECK_WORST_CAPTURE:
-          out << "check worst capture";
-          break;
-        case DEFEND_CAPTURE:
-          out << "defend capture";
-          break;
-        case LADDER_SUCCESS:
-          out << "success";
-          break;
-        default:
-          ASSERT_UNREACHABLE;
-      }
-      out << "]";
+    out << "C[";
+    switch (node->moveType) {
+      case CAPTURE_FOUND:
+        out << "capture";
+        break;
+      case FALSE_CAPTURE:
+        out << "false capture";
+        break;
+      case DEFEND_CAPTURE:
+        out << "defend capture";
+        break;
+      case DEFEND_FALSE_CAPTURE:
+        out << "defend false capture";
+        break;
+      case DEFEND_MOVE:
+        out << "defend move";
+        break;
+      case LADDER_SUCCEEDED:
+        out << "ladder succeeded";
+        break;
+      case LADDER_FAILED:
+        out << "ladder failed";
+        break;
+      case LADDER_SUCCEEDED_STOP:
+        out << "ladder succeeded stop";
+        break;
+      case LADDER_FAILED_STOP:
+        out << "ladder failed stop";
+        break;
+      default:
+        ASSERT_UNREACHABLE;
     }
+    out << "]";
   }
 
   if (node->children.size() == 1) {

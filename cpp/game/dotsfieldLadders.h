@@ -9,15 +9,15 @@ class DotsLaddersSolver {
 public:
   struct LadderLocInfo {
     static LadderLocInfo createZero(const Player pla) {
-      return LadderLocInfo(Board::NULL_LOC, pla, nullptr, nullptr, 0);
+      return LadderLocInfo(Board::NULL_LOC, pla, nullptr, 0);
     }
 
     static LadderLocInfo createInfinity(const Player pla) {
-      return LadderLocInfo(Board::RESIGN_LOC, pla, nullptr, nullptr, 0);
+      return LadderLocInfo(Board::RESIGN_LOC, pla, nullptr, 0);
     }
 
-    static LadderLocInfo create(const Loc workingLoc, const Player pla, const Board& field, const Board::MoveRecord& moveRecord, const int initialWhiteScore) {
-      return LadderLocInfo(workingLoc, pla, &field, &moveRecord, initialWhiteScore);
+    static LadderLocInfo create(const Loc workingLoc, const Player pla, const Board::MoveRecord& moveRecord, const int whiteScoreDiff) {
+      return LadderLocInfo(workingLoc, pla, &moveRecord, whiteScoreDiff);
     }
 
     [[nodiscard]] bool isZero() const {
@@ -46,7 +46,7 @@ public:
     std::vector<Loc> territoryLocs;
 
   private:
-    explicit LadderLocInfo(const Loc workingLoc, const Player pla, const Board* field, const Board::MoveRecord* moveRecord, const int initialWhiteScore)
+    explicit LadderLocInfo(const Loc workingLoc, const Player pla, const Board::MoveRecord* moveRecord, const int whiteScoreDiff)
       : workingLoc(workingLoc), player(pla) {
       if (!isZero() && !isInfinity()) {
         assert(!moveRecord->bases.empty());
@@ -59,9 +59,7 @@ public:
         }
         // Consider the whole board score instead of scoring of the created bases.
         // It provides more refined evaluation.
-        score = static_cast<short>(pla == P_BLACK
-                 ? field->numWhiteCaptures - field->numBlackCaptures + initialWhiteScore
-                 : field->numBlackCaptures - field->numWhiteCaptures - initialWhiteScore);
+        score = static_cast<short>(pla == P_BLACK ? -whiteScoreDiff : whiteScoreDiff);
       } else {
         assert(nullptr == moveRecord);
         score = isInfinity() ? std::numeric_limits<short>::max() : 0;
@@ -76,11 +74,15 @@ public:
   };
 
   enum LadderMoveType : uint8_t {
-    REGULAR,
-    CHECK_CAPTURE,
-    CHECK_WORST_CAPTURE,
+    CAPTURE_FOUND,
+    FALSE_CAPTURE,
     DEFEND_CAPTURE,
-    LADDER_SUCCESS,
+    DEFEND_FALSE_CAPTURE,
+    DEFEND_MOVE,
+    LADDER_SUCCEEDED,
+    LADDER_FAILED,
+    LADDER_SUCCEEDED_STOP,
+    LADDER_FAILED_STOP,
   };
 
   explicit DotsLaddersSolver() = delete;
@@ -103,7 +105,7 @@ public:
   [[nodiscard]] uint16_t getMovesCount() const { return movesCounter; }
   [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
   [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
-  [[nodiscard]] short getInitialWhiteScore() const { return initialWhiteScore; }
+  [[nodiscard]] short getWhiteScoreDiff() const { return board.numBlackCaptures - board.numWhiteCaptures - initialWhiteScore; }
   void clearMaxDepth() { maxDepth = 0; }
   [[nodiscard]] bool getStoreMovesTree() const { return storeMovesTree; }
   [[nodiscard]] std::string toSgf() const;
@@ -149,12 +151,12 @@ private:
     return moveRecord;
   }
 
-  void reduceChainAndUndo(const Board::MoveRecord& moveRecord) {
+  void reduceChainAndUndo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType) {
     popChainInfo(moveRecord.pla);
-    undo(moveRecord);
+    undo(moveRecord, moveType);
   }
 
-  void undo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType = REGULAR) {
+  void undo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType) {
     board.undoDots(moveRecord);
 
     if (storeMovesTree) {
@@ -249,7 +251,7 @@ private:
   struct MoveTreeNode {
     Loc loc = Board::NULL_LOC;
     Player pla = C_EMPTY;
-    LadderMoveType moveType = REGULAR;
+    LadderMoveType moveType;
     std::vector<std::unique_ptr<MoveTreeNode>> children;
   };
 

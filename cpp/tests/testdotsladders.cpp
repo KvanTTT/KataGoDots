@@ -570,9 +570,9 @@ TEST(LadderTests, CapturingLocsAreNotDirectlyAdjacentToLastOppLoc) {
 .  X  .x X  .
 X  O' .' O' X
 X  O' .' O' X
-X  O' .  O' X
-.  X  O  X  .
-.  .  .  .  .
+X  O' .' O' X
+.  X  O' X  .
+.  .  .x .  .
 )");
 }
 
