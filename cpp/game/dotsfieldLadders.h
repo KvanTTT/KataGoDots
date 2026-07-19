@@ -1,4 +1,6 @@
 #pragma once
+#include <memory>
+#include <ostream>
 #include <utility>
 
 #include "board.h"
@@ -73,14 +75,27 @@ public:
     CAPTURE,
   };
 
+  enum LadderMoveType : uint8_t {
+    REGULAR,
+    CHECK_CAPTURE,
+    CHECK_WORST_CAPTURE,
+    DEFEND_CAPTURE,
+    LADDER_SUCCESS,
+  };
+
   explicit DotsLaddersSolver() = delete;
 
-  explicit DotsLaddersSolver(Board& newBoard) : board(newBoard) {
+  explicit DotsLaddersSolver(Board& newBoard, const bool newStoreMovesTree = false,
+    const std::vector<Move>& newInitialMoves = {}, const std::vector<Move>& newExtraMoves = {}) :
+      board(newBoard), storeMovesTree(newStoreMovesTree), initialMoves(newInitialMoves), extraMoves(newExtraMoves) {
     chainsData.resize(getMaxArrSize(newBoard.x_size, newBoard.y_size));
     initialWhiteScore = static_cast<short>(newBoard.numBlackCaptures - newBoard.numWhiteCaptures);
     // Reserve memory to get rid of excessive reallocations.
     // The field perimeter size should be enough for most cases.
     walkStack.reserve((newBoard.x_size + newBoard.y_size) * 2);
+
+    movesTreeRoot = std::make_unique<MoveTreeNode>();
+    currentMovesTreeNode = movesTreeRoot.get();
   }
 
   std::vector<LadderLocInfo> solve();
@@ -90,6 +105,8 @@ public:
   [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
   [[nodiscard]] short getInitialWhiteScore() const { return initialWhiteScore; }
   void clearMaxDepth() { maxDepth = 0; }
+  [[nodiscard]] bool getStoreMovesTree() const { return storeMovesTree; }
+  [[nodiscard]] std::string toSgf() const;
 
 private:
   bool isRelevantCapturing(const Board::MoveRecord& moveRecord);
@@ -119,6 +136,16 @@ private:
       maxDepth = currentDepth;
     }
 
+    if (storeMovesTree) {
+      auto child = std::make_unique<MoveTreeNode>();
+      child->loc = loc;
+      child->pla = pla;
+
+      movesTreeStack.push_back(currentMovesTreeNode);
+      currentMovesTreeNode->children.push_back(std::move(child));
+      currentMovesTreeNode = currentMovesTreeNode->children.back().get();
+    }
+
     return moveRecord;
   }
 
@@ -127,8 +154,15 @@ private:
     undo(moveRecord);
   }
 
-  void undo(const Board::MoveRecord& moveRecord) {
+  void undo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType = REGULAR) {
     board.undoDots(moveRecord);
+
+    if (storeMovesTree) {
+      currentMovesTreeNode->moveType = moveType;
+      currentMovesTreeNode = movesTreeStack.back();
+      movesTreeStack.pop_back();
+    }
+
     currentDepth--;
   }
 
@@ -210,6 +244,19 @@ private:
 
   [[nodiscard]] std::string debugChainsData() const;
 
+  // A node of the tree of explored moves, kept only when storeMovesTree is true.
+  // The root node (movesTreeRoot) is synthetic and has loc == Board::NULL_LOC.
+  struct MoveTreeNode {
+    Loc loc = Board::NULL_LOC;
+    Player pla = C_EMPTY;
+    LadderMoveType moveType = REGULAR;
+    std::vector<std::unique_ptr<MoveTreeNode>> children;
+  };
+
+  static void writeSgfCoord(std::ostream& out, Loc loc, int xSize);
+
+  static void writeMovesTreeSgf(std::ostream& out, const MoveTreeNode* node, int xSize);
+
   Player attacker{};
   Player defender{};
   Loc initLoc{};
@@ -225,6 +272,10 @@ private:
   };
 
   Board& board;
+  bool storeMovesTree;
+  std::vector<Move> initialMoves;
+  std::vector<Move> extraMoves;
+
   std::vector<char> chainsData;
   std::vector<Loc> walkStack;
   std::vector<Loc> initTerritory;
@@ -235,4 +286,11 @@ private:
   std::vector<ChainsInfo> attackerChainInfos;
   std::vector<ChainsInfo> defenderChainInfos;
   std::vector<std::vector<Loc>> defenderCaptureLocs;
+
+  // Tree of explored moves, kept only when storeMovesTree is true, for later dumping via toSgf().
+  // currentMovesTreeNode is the node for the current position; movesTreeStack holds its ancestors
+  // so that undo() can restore the cursor without discarding already-explored sibling branches.
+  std::unique_ptr<MoveTreeNode> movesTreeRoot;
+  std::vector<MoveTreeNode*> movesTreeStack;
+  MoveTreeNode* currentMovesTreeNode = nullptr;
 };
