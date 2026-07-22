@@ -74,6 +74,7 @@ public:
   };
 
   enum LadderMoveType : uint8_t {
+    INVALID,
     CAPTURE_FOUND,
     FALSE_CAPTURE,
     DEFEND_CAPTURE,
@@ -142,6 +143,7 @@ private:
       auto child = std::make_unique<MoveTreeNode>();
       child->loc = loc;
       child->pla = pla;
+      child->number = getMovesCount();
 
       movesTreeStack.push_back(currentMovesTreeNode);
       currentMovesTreeNode->children.push_back(std::move(child));
@@ -151,16 +153,20 @@ private:
     return moveRecord;
   }
 
-  void reduceChainAndUndo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType) {
+  void reduceChainAndUndo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType, const LadderLocInfo* result = nullptr) {
     popChainInfo(moveRecord.pla);
-    undo(moveRecord, moveType);
+    undo(moveRecord, moveType, result);
   }
 
-  void undo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType) {
+  void undo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType, const LadderLocInfo* result = nullptr) {
     board.undoDots(moveRecord);
 
     if (storeMovesTree) {
       currentMovesTreeNode->moveType = moveType;
+      if (result != nullptr) {
+        currentMovesTreeNode->score = result->score;
+        currentMovesTreeNode->territory = result->territoryLocs.size();
+      }
       currentMovesTreeNode = movesTreeStack.back();
       movesTreeStack.pop_back();
     }
@@ -251,7 +257,10 @@ private:
   struct MoveTreeNode {
     Loc loc = Board::NULL_LOC;
     Player pla = C_EMPTY;
-    LadderMoveType moveType;
+    LadderMoveType moveType = INVALID;
+    short score = 0;
+    short territory = 0;
+    int number = 0;
     std::vector<std::unique_ptr<MoveTreeNode>> children;
   };
 

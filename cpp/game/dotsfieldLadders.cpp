@@ -62,7 +62,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
 
   if (isRelevantCapturing(moveRecordForLoc)) {
     const auto result = LadderLocInfo::create(loc, attacker, moveRecordForLoc, getWhiteScoreDiff());
-    undo(moveRecordForLoc, LADDER_SUCCEEDED_STOP);
+    undo(moveRecordForLoc, LADDER_SUCCEEDED_STOP, &result);
     return result;
   }
 
@@ -75,7 +75,14 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
     if (const auto maybeCapturingMoveRecord = play(captureLoc, attacker); isRelevantCapturing(maybeCapturingMoveRecord)) {
       const int whiteScoreDiff = getWhiteScoreDiff();
 
-      undo(maybeCapturingMoveRecord, CAPTURE_FOUND);
+      unique_ptr<LadderLocInfo> captureLocInfo;
+      if (storeMovesTree) {
+        captureLocInfo = make_unique<LadderLocInfo>(LadderLocInfo::create(captureLoc, attacker, maybeCapturingMoveRecord, whiteScoreDiff));
+      } else {
+        captureLocInfo = nullptr;
+      }
+
+      undo(maybeCapturingMoveRecord, CAPTURE_FOUND, captureLocInfo.get());
 
       const bool initDefenderChain = getCurrentDepth() == 1;
 
@@ -110,7 +117,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
     }
   }
 
-  reduceChainAndUndo(moveRecordForLoc, !ladderLocInfo.isZero() ? LADDER_SUCCEEDED : LADDER_FAILED);
+  reduceChainAndUndo(moveRecordForLoc, !ladderLocInfo.isZero() ? LADDER_SUCCEEDED : LADDER_FAILED, &ladderLocInfo);
 
   return ladderLocInfo;
 }
@@ -551,6 +558,10 @@ void DotsLaddersSolver::writeMovesTreeSgf(std::ostream& out, const MoveTreeNode*
         break;
       default:
         ASSERT_UNREACHABLE;
+    }
+    out << "; # " << node->number << "; loc: " << node->loc;
+    if (node->moveType == LADDER_SUCCEEDED || node->moveType == LADDER_SUCCEEDED_STOP || node->moveType == CAPTURE_FOUND) {
+      out << "; score: " << node->score << "; territory: " << node->territory;
     }
     out << "]";
   }
