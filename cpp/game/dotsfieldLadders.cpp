@@ -69,12 +69,11 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
   createAndPushChainInfo(loc, attacker);
   const auto captureLocs = extractCaptureLocs(attacker);
 
-  auto ladderLocInfo = LadderLocInfo::createInfinity(attacker);
-  bool ladderSucceeded = false;
+  auto ladderLocInfo = LadderLocInfo::createZero(attacker);
 
   for (const Loc captureLoc : captureLocs) {
     if (const auto maybeCapturingMoveRecord = play(captureLoc, attacker); isRelevantCapturing(maybeCapturingMoveRecord)) {
-      int whiteScoreDiff = getWhiteScoreDiff();
+      const int whiteScoreDiff = getWhiteScoreDiff();
 
       undo(maybeCapturingMoveRecord, CAPTURE_FOUND);
 
@@ -84,7 +83,8 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
         initializeDefenderChain(maybeCapturingMoveRecord);
       }
 
-      if (const auto ladderLocInfoAfterDefending = iterateForDefender(captureLoc); !ladderLocInfoAfterDefending.isZero()) {
+      ladderLocInfo = iterateForDefender(captureLoc);
+      if (!ladderLocInfo.isZero()) {
         // Optimization: don't run iteration over adjacent defender locs to calculate the worst capturing for pla considering defender ideal play.
         // Instead, assume that the failed defending loc is actually a capturing loc for pla.
         // It might form the base(s) with the worst possible evaluation in terms of score and territory.
@@ -94,11 +94,6 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
 
         if (maybeWorstResultIfConsiderIdealDefenderPlay.isWorseThan(ladderLocInfo)) {
           ladderLocInfo = maybeWorstResultIfConsiderIdealDefenderPlay;
-          ladderSucceeded = true;
-        }
-        if (ladderLocInfoAfterDefending.isWorseThan(ladderLocInfo)) {
-          ladderLocInfo = ladderLocInfoAfterDefending;
-          ladderSucceeded = true;
         }
       }
 
@@ -106,17 +101,16 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
         popChainInfo(defender);
         resetInitTerritory();
       }
+
+      if (!ladderLocInfo.isZero()) {
+        break;
+      }
     } else {
       undo(maybeCapturingMoveRecord, FALSE_CAPTURE);
     }
   }
 
-  reduceChainAndUndo(moveRecordForLoc, ladderSucceeded ? LADDER_SUCCEEDED : LADDER_FAILED);
-
-  if (!ladderSucceeded) {
-    assert(ladderLocInfo.isInfinity());
-    ladderLocInfo = LadderLocInfo::createZero(attacker);
-  }
+  reduceChainAndUndo(moveRecordForLoc, !ladderLocInfo.isZero() ? LADDER_SUCCEEDED : LADDER_FAILED);
 
   return ladderLocInfo;
 }
