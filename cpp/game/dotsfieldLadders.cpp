@@ -125,12 +125,18 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
 DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc loc) {
   auto attackerLadderLocInfo = LadderLocInfo::createInfinity(attacker);
 
+  bool checkLoc = true;
+
   // Try capturing part of pla surrounding at first.
   const auto& defenderCurrentCaptureLocs = getDefenderCurrentCaptureLocs();
   for (const auto& defenderCaptureLoc : defenderCurrentCaptureLocs) {
     if (const Color colorAtDefenderCaptureLoc = board.getColor(defenderCaptureLoc); colorAtDefenderCaptureLoc != C_EMPTY) {
       assert(colorAtDefenderCaptureLoc == attacker);
       continue;
+    }
+
+    if (defenderCaptureLoc == loc) {
+      checkLoc = false;
     }
 
     const auto potentialDefendCaptureMoveRecord = play(defenderCaptureLoc, defender);
@@ -151,7 +157,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc
       createAndPushChainInfo(defenderCaptureLoc, defender);
 
       // Try to continue the ladder (only captures or strictly connecting locs are relevant).
-      const auto defenderCapturingLadderLocInfo = iterateAdjLocsForAttacker(defenderCaptureLoc, true);
+      const auto defenderCapturingLadderLocInfo = iterateAdjLocsForAttacker(defenderCaptureLoc, defenderCaptureLoc != loc);
       if (defenderCapturingLadderLocInfo.isWorseThan(attackerLadderLocInfo)) {
         attackerLadderLocInfo = defenderCapturingLadderLocInfo;
       }
@@ -171,13 +177,15 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc
     }
   }
 
-  // Try defending at second
-  const auto defendMove = playAndExtendChain(loc, defender);
-  LadderLocInfo ladderLocInfoAfterDefending = iterateAdjLocsForAttacker(loc, false);
-  reduceChainAndUndo(defendMove, DEFEND_MOVE);
+  if (checkLoc) {
+    // Try defending at second
+    const auto defendMove = playAndExtendChain(loc, defender);
+    LadderLocInfo ladderLocInfoAfterDefending = iterateAdjLocsForAttacker(loc, false);
+    reduceChainAndUndo(defendMove, DEFEND_MOVE);
 
-  if (ladderLocInfoAfterDefending.isWorseThan(attackerLadderLocInfo)) {
-    attackerLadderLocInfo = std::move(ladderLocInfoAfterDefending);
+    if (ladderLocInfoAfterDefending.isWorseThan(attackerLadderLocInfo)) {
+      attackerLadderLocInfo = std::move(ladderLocInfoAfterDefending);
+    }
   }
 
   return attackerLadderLocInfo;
