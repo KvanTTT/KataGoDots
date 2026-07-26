@@ -737,6 +737,21 @@ TEST(LadderTests, LadderCaptureOnOtherSideWhenOppCapturesWithLadder) {
 )");
 }
 
+TEST(LadderTests, EmptyBaseAdjacentToRegular) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .
+.  .  .  X  O  .  .  .  .
+.  .  X  O  X  .  .  .  .
+.  .  .  .  O  .  O  .  .
+.  .  .  X  .  O  X  .  .
+.  .  .  .  X  X  .  .  .
+.  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .
+)");
+}
+
 TEST(LadderTests, NotWorkingLadderBecauseOfInternalCapturing) {
     checkLadders(
         R"(
