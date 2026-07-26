@@ -60,6 +60,11 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::startLadder(const Loc newIni
 DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc loc) {
   const auto moveRecordForLoc = play(loc, attacker);
 
+  if (!moveRecordForLoc.bases.empty() && moveRecordForLoc.bases[0].type == Board::Base::Type::SUICIDAL) {
+    undo(moveRecordForLoc, LADDER_FAILED);
+    return zero();
+  }
+
   if (isRelevantCapturing(moveRecordForLoc)) {
     const auto result = LadderLocInfo::create(loc, attacker, moveRecordForLoc, getWhiteScoreDiff());
     undo(moveRecordForLoc, LADDER_SUCCEEDED_STOP, &result);
