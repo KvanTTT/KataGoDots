@@ -461,7 +461,7 @@ TEST(LadderTests, EmptyTerritoryIsNotAccountable) {
 )");
 }
 
-TEST(LadderTests, TwoLaddersAndTworWorkingMoves) {
+TEST(LadderTests, TwoLaddersAndTwoWorkingMoves) {
     checkLadders(
         R"(
 .  .  .  .  .  .  .  .
@@ -695,29 +695,43 @@ TEST(LadderTests, DISABLED_ConsiderAdjCornerLevel2OfPreviousDotOnDefending2) {
 }
 
 
-TEST(LadderTests, DISABLED_LadderCaptureOnOtherSideWhenOppCaptures) {
+TEST(LadderTests, LadderCaptureOnOtherSideWhenOppCaptures) {
     checkLadders(
         R"(
 .  .  .  .  .  .  .
 .  .  .  X  .  .  .
-.  .  X  .  X  .  .
-.  .  O  O  O  X  .
-.  X  .  .  X  O  .
-.  X  O  O  O  .  X
+.  .  X  .' X  .  .
+.  .x O' O' O' X  .
+.  X  .' .' X  O' X
+.  X  O' O' O' .  .
 .  .  X  X  X  X  .
 .  .  .  .  .  .  .
 )");
 }
 
-TEST(LadderTests, DISABLED_LadderCaptureOnOtherSideWhenOppCaptures2) {
+TEST(LadderTests, DISABLED_LadderCaptureOnOtherSideWhenOppCapturesOnDiagonal) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .
+.  .  .  X  .  .  .
+.  .  X  .' X  .  .
+.  .x O' O' O' X  .
+.  X  .' .' X  O  .
+.  X  O' O' O' .  X
+.  .  X  X  X  X  .
+.  .  .  .  .  .  .
+)");
+}
+
+TEST(LadderTests, LadderCaptureOnOtherSideWhenOppCapturesWithLadder) {
     checkLadders(
         R"(
 .  .  .  .  .  .  .  .  .
 .  .  .  X  .  .  .  .  .
-.  .  X  .  X  X  .  .  .
-.  .  O  O  O  .  .  .  .
-.  X  .  .  X  O  .  .  .
-.  X  O  O  O  X  X  .  .
+.  .  X  .' X  X  .  .  .
+.  .x O' O' O' .  .  .  .
+.  X  .' .' X  O  .  .  .
+.  X  O' O' O' X  X  .  .
 .  .  X  X  X  X  .  .  .
 .  .  .  .  .  .  .  .  .
 )");
