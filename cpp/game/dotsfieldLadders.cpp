@@ -69,7 +69,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
   createAndPushChainInfo(loc, attacker);
   const auto captureLocs = extractCaptureLocs(attacker);
 
-  auto ladderLocInfo = LadderLocInfo::createZero(attacker);
+  LadderLocInfo ladderLocInfo = zero();
 
   for (const Loc captureLoc : captureLocs) {
     if (const auto maybeCapturingMoveRecord = play(captureLoc, attacker); isRelevantCapturing(maybeCapturingMoveRecord)) {
@@ -123,9 +123,12 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
 }
 
 DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc loc) {
-  auto attackerLadderLocInfo = LadderLocInfo::createInfinity(attacker);
+  LadderLocInfo finalAttackerLadderLocInfo = zero();
 
-  bool checkLoc = true;
+  vector<pair<LadderMoveInfoType, Loc>> attackerLocsToCheckAfterDefending;
+  appendAttackerLocsToCheck(attackerLocsToCheckAfterDefending, loc, false);
+
+  bool defenderCaptureLocMatchesLoc = false; // Allows getting rid of redundant solving in case of locs hit.
 
   // Try capturing part of pla surrounding at first.
   const auto& defenderCurrentCaptureLocs = getDefenderCurrentCaptureLocs();
@@ -135,90 +138,119 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc
       continue;
     }
 
-    if (defenderCaptureLoc == loc) {
-      checkLoc = false;
-    }
-
-    const auto potentialDefendCaptureMoveRecord = play(defenderCaptureLoc, defender);
-
-    bool potentialDefendCaptureMoveIsFound = false;
-
-    for (const auto& defenderBase : potentialDefendCaptureMoveRecord.bases) {
-      if (defenderBase.type != Board::Base::Type::NORMAL) continue;
-      const auto& defenderBaseStates = defenderBase.rollback_locs_states_captures;
-      potentialDefendCaptureMoveIsFound = std::any_of(defenderBaseStates.begin(), defenderBaseStates.end(),
-        [&](const auto& state) {
-          return getChainColor(state.getLoc()) == attacker;
-      });
-      if (potentialDefendCaptureMoveIsFound) break;
-    }
-
-    if (potentialDefendCaptureMoveIsFound) {
+    if (const auto potentialDefendCaptureMoveRecord = play(defenderCaptureLoc, defender); isDefendCapture(potentialDefendCaptureMoveRecord)) {
       createAndPushChainInfo(defenderCaptureLoc, defender);
 
-      // Try to continue the ladder (only captures or strictly connecting locs are relevant).
-      const auto defenderCapturingLadderLocInfo = iterateAdjLocsForAttacker(defenderCaptureLoc, defenderCaptureLoc != loc);
-      if (defenderCapturingLadderLocInfo.isWorseThan(attackerLadderLocInfo)) {
-        attackerLadderLocInfo = defenderCapturingLadderLocInfo;
+      size_t previousSize = attackerLocsToCheckAfterDefending.size();
+
+      if (defenderCaptureLoc == loc) {
+        defenderCaptureLocMatchesLoc = true;
+      } else {
+        appendAttackerLocsToCheck(attackerLocsToCheckAfterDefending, defenderCaptureLoc, true);
       }
 
+      LadderLocInfo ladderLocInfoAfterDefending = iterateAttackerLocsAfterDefending(attackerLocsToCheckAfterDefending);
+
+      attackerLocsToCheckAfterDefending.resize(previousSize);
       popChainInfo(defender);
-    }
+      undo(potentialDefendCaptureMoveRecord, DEFEND_CAPTURE);
 
-    undo(potentialDefendCaptureMoveRecord,
-      potentialDefendCaptureMoveIsFound ? DEFEND_CAPTURE : DEFEND_FALSE_CAPTURE
-    );
+      if (ladderLocInfoAfterDefending.isZero()) {
+        return ladderLocInfoAfterDefending;
+      }
 
-    // Optimization:
-    // At this site it's assumed that the defending capture is successful for defender player, and it breaks part of the pla ladder chain.
-    // It means it doesn't make sense to continue the ladder because it's already broken.
-    if (attackerLadderLocInfo.isZero()) {
-      return attackerLadderLocInfo;
+      if (finalAttackerLadderLocInfo.isZero() || ladderLocInfoAfterDefending.isWorseThan(finalAttackerLadderLocInfo)) {
+        finalAttackerLadderLocInfo = ladderLocInfoAfterDefending;
+      }
+    } else {
+      undo(potentialDefendCaptureMoveRecord, DEFEND_FALSE_CAPTURE);
     }
   }
 
-  if (checkLoc) {
-    // Try defending at second
+  // Try defending at second
+  if (!defenderCaptureLocMatchesLoc) {
     const auto defendMove = playAndExtendChain(loc, defender);
-    LadderLocInfo ladderLocInfoAfterDefending = iterateAdjLocsForAttacker(loc, false);
+
+    LadderLocInfo ladderLocInfoAfterDefending = iterateAttackerLocsAfterDefending(attackerLocsToCheckAfterDefending);
+
     reduceChainAndUndo(defendMove, DEFEND_MOVE);
 
-    if (ladderLocInfoAfterDefending.isWorseThan(attackerLadderLocInfo)) {
-      attackerLadderLocInfo = std::move(ladderLocInfoAfterDefending);
+    if (ladderLocInfoAfterDefending.isZero()) {
+      return ladderLocInfoAfterDefending;
+    }
+
+    if (finalAttackerLadderLocInfo.isZero() || ladderLocInfoAfterDefending.isWorseThan(finalAttackerLadderLocInfo)) {
+      finalAttackerLadderLocInfo = std::move(ladderLocInfoAfterDefending);
     }
   }
 
-  return attackerLadderLocInfo;
+  return finalAttackerLadderLocInfo;
 }
 
-DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateAdjLocsForAttacker(const Loc loc,
-                                                                         const bool requireAtLeastTwoUnconnectedDotsForLadder
-) {
-  array<pair<LadderMoveInfoType, Loc>, 16> actualLocs{};
-  int actualLocsSize = 0;
+DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateAttackerLocsAfterDefending(const vector<pair<LadderMoveInfoType, Loc>>& attackerLocsToCheckAfterDefending) {
+  // Heuristics: iterate over potential captures at first and over potential ladders at second.
+  for (auto [attackerLocType, attackerLoc] : attackerLocsToCheckAfterDefending) {
+    if (attackerLocType != CAPTURE) {
+      continue;
+    }
 
-  // Prioritize captures to get rid of calculating useless ladders if a capture move found.
-  auto insertCaptureBeforeLadders = [&](const Loc captureLoc) {
-    const auto end = actualLocs.begin() + actualLocsSize;
-    const auto insertPos = std::find_if(actualLocs.begin(), end, [](const auto& item) {
-      return item.first == LADDER;
-    });
-    std::move_backward(insertPos, end, end + 1);
-    *insertPos = make_pair(CAPTURE, captureLoc);
-    actualLocsSize++;
+    if (const Color colorAtAttackerLoc = board.getColor(attackerLoc); colorAtAttackerLoc != C_EMPTY) {
+      assert(colorAtAttackerLoc == defender);
+      continue;
+    }
+
+    if (const auto ladderLocInfoAfterDefending = iterateForAttacker(attackerLoc); !ladderLocInfoAfterDefending.isZero()) {
+      return ladderLocInfoAfterDefending;
+    }
+  }
+
+  for (auto [attackerLocType, attackerLoc] : attackerLocsToCheckAfterDefending) {
+    if (attackerLocType != LADDER) {
+      continue;
+    }
+
+    if (const Color colorAtAttackerLoc = board.getColor(attackerLoc); colorAtAttackerLoc != C_EMPTY) {
+      assert(colorAtAttackerLoc == defender);
+      continue;
+    }
+
+    if (const auto ladderLocInfoAfterDefending = iterateForAttacker(attackerLoc); !ladderLocInfoAfterDefending.isZero()) {
+      return ladderLocInfoAfterDefending;
+    }
+  }
+
+  return zero();
+}
+
+void DotsLaddersSolver::appendAttackerLocsToCheck(vector<pair<LadderMoveInfoType, Loc>>& attackerLocsToCheck,
+                                                  const Loc defenderLastMoveLoc,
+                                                  const bool defenderCapture
+) const {
+  auto checkLoc = [&](const Loc loc) -> bool {
+    return std::find_if(
+      attackerLocsToCheck.begin(),
+      attackerLocsToCheck.end(),
+      [loc](const auto& item) -> auto {
+        return item.second == loc;
+      }
+    ) == attackerLocsToCheck.end();
   };
 
-  // Make sure the color of the last location is defender to traverse its strongly and indirectly adjacent locs to find maybe capture ladder pla locs.
-  assert(board.getColor(loc) == defender);
+  if (!defenderCapture) {
+    attackerLocsToCheck.emplace_back(LADDER, defenderLastMoveLoc);
+  } else {
+    // Make sure the color of the last location is defender to traverse its strongly and indirectly adjacent locs to find maybe capture ladder pla locs.
+    assert(board.getColor(defenderLastMoveLoc) == defender);
+  }
 
   auto checkAndAddAdjacentLoc = [&](const Loc directlyAdjLoc, const Loc indirectlyAdjLoc) {
-    // The adjacent loc should be empty and have at least one connection with the player chain (otherwise it can't create ladders).
-    if (const auto chainCaptureLocType = getChainCaptureLocType(directlyAdjLoc, attacker, requireAtLeastTwoUnconnectedDotsForLadder, true);
-      chainCaptureLocType == LADDER
-    ) {
-      actualLocs[actualLocsSize++] = make_pair(chainCaptureLocType, directlyAdjLoc);
-    } else if (chainCaptureLocType == CAPTURE) {
-      insertCaptureBeforeLadders(directlyAdjLoc);
+    if (checkLoc(directlyAdjLoc)) {
+      // The adjacent loc should be empty and have at least one connection with the player chain (otherwise it can't create ladders).
+      bool requireAtLeastTwoUnconnectedDotsForLadder = defenderCapture;
+      if (const auto chainCaptureLocType = getChainCaptureLocType(directlyAdjLoc, attacker, requireAtLeastTwoUnconnectedDotsForLadder, true);
+        chainCaptureLocType != EMPTY) {
+        attackerLocsToCheck.emplace_back(chainCaptureLocType, directlyAdjLoc);
+      }
     }
 
     // Handle special cases when the capturing loc isn't directly adjacent to last defender loc:
@@ -239,34 +271,40 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateAdjLocsForAttacker(co
     // Check the color of the direct adjacent loc at first because it's not safe to use locs outside the field borders + side locs.
     // If the color isn't empty, it's safe to calculate the non-directly adjacent loc because it means the directlyAdjLoc is always
     // within real borders and its adjacent locs are always legal.
-    if (board.getColor(directlyAdjLoc) == defender && maybeChainCaptureLoc(indirectlyAdjLoc, attacker, true)) {
-      insertCaptureBeforeLadders(indirectlyAdjLoc);
+    if (checkLoc(indirectlyAdjLoc)) {
+      if (board.getColor(directlyAdjLoc) == defender && maybeChainCaptureLoc(indirectlyAdjLoc, attacker, true)) {
+        attackerLocsToCheck.emplace_back(CAPTURE, indirectlyAdjLoc);
+      }
     }
   };
 
-  const Loc xm1yLoc = Location::xm1y(loc);
+  const Loc xm1yLoc = Location::xm1y(defenderLastMoveLoc);
   checkAndAddAdjacentLoc(xm1yLoc, Location::xm1y(xm1yLoc));
 
-  const Loc xym1Loc = Location::xym1(loc, board.x_size);
+  const Loc xym1Loc = Location::xym1(defenderLastMoveLoc, board.x_size);
   checkAndAddAdjacentLoc(xym1Loc, Location::xym1(xym1Loc, board.x_size));
 
-  const Loc xp1yLoc = Location::xp1y(loc);
+  const Loc xp1yLoc = Location::xp1y(defenderLastMoveLoc);
   checkAndAddAdjacentLoc(xp1yLoc, Location::xp1y(xp1yLoc));
 
-  const Loc xyp1Loc = Location::xyp1(loc, board.x_size);
+  const Loc xyp1Loc = Location::xyp1(defenderLastMoveLoc, board.x_size);
   checkAndAddAdjacentLoc(xyp1Loc, Location::xyp1(xyp1Loc, board.x_size));
+}
 
-  for (int i = 0; i < actualLocsSize; i++) {
-    const Loc actualLoc = actualLocs[i].second;
-    if (const auto ladderLocInfo = iterateForAttacker(actualLoc); !ladderLocInfo.isZero()) {
-      // Optimization: returns capturing as soon as it's found.
-      // However, it's not completely clear if it makes sense to continue bypassing (at least on strictly capturing locs)
-      // and maximize the result.
-      return ladderLocInfo;
+bool DotsLaddersSolver::isDefendCapture(const Board::MoveRecord& potentialDefendCaptureMoveRecord) {
+  for (const auto& defenderBase : potentialDefendCaptureMoveRecord.bases) {
+    if (defenderBase.type != Board::Base::Type::NORMAL) {
+      continue;
+    }
+    const auto& defenderBaseStates = defenderBase.rollback_locs_states_captures;
+
+    for (const auto& state : defenderBaseStates) {
+      if (getChainColor(state.getLoc()) == attacker) {
+        return true;
+      }
     }
   }
-
-  return LadderLocInfo::createZero(attacker);
+  return false;
 }
 
 bool DotsLaddersSolver::isRelevantCapturing(const Board::MoveRecord& moveRecord) {

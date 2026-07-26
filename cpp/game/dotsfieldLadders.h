@@ -12,20 +12,12 @@ public:
       return LadderLocInfo(Board::NULL_LOC, pla, nullptr, 0);
     }
 
-    static LadderLocInfo createInfinity(const Player pla) {
-      return LadderLocInfo(Board::RESIGN_LOC, pla, nullptr, 0);
-    }
-
     static LadderLocInfo create(const Loc workingLoc, const Player pla, const Board::MoveRecord& moveRecord, const int whiteScoreDiff) {
       return LadderLocInfo(workingLoc, pla, &moveRecord, whiteScoreDiff);
     }
 
     [[nodiscard]] bool isZero() const {
       return workingLoc == Board::NULL_LOC;
-    }
-
-    [[nodiscard]] bool isInfinity() const {
-      return workingLoc == Board::RESIGN_LOC;
     }
 
     // Prioritize the score over territory.
@@ -48,7 +40,7 @@ public:
   private:
     explicit LadderLocInfo(const Loc workingLoc, const Player pla, const Board::MoveRecord* moveRecord, const int whiteScoreDiff)
       : workingLoc(workingLoc), player(pla) {
-      if (!isZero() && !isInfinity()) {
+      if (!isZero()) {
         assert(!moveRecord->bases.empty());
         for (const auto& base : moveRecord->bases) {
           assert(base.pla == pla);
@@ -62,7 +54,7 @@ public:
         score = static_cast<short>(pla == P_BLACK ? -whiteScoreDiff : whiteScoreDiff);
       } else {
         assert(nullptr == moveRecord);
-        score = isInfinity() ? std::numeric_limits<short>::max() : 0;
+        score = 0;
       }
     }
   };
@@ -103,6 +95,10 @@ public:
 
   std::vector<LadderLocInfo> solve();
 
+  [[nodiscard]] const LadderLocInfo& zero() const {
+    return attacker == P_BLACK ? zeroBlack : zeroWhite;
+  }
+
   [[nodiscard]] uint16_t getMovesCount() const { return movesCounter; }
   [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
   [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
@@ -118,9 +114,16 @@ private:
 
   LadderLocInfo iterateForAttacker(Loc loc);
 
+  LadderLocInfo iterateAttackerLocsAfterDefending(
+    const std::vector<std::pair<LadderMoveInfoType, Loc>>& attackerLocsToCheckAfterDefending);
+
+  // Returns true if the passed move record surrounds an attacker loc
+  bool isDefendCapture(const Board::MoveRecord& potentialDefendCaptureMoveRecord);
+
   LadderLocInfo iterateForDefender(Loc loc);
 
-  LadderLocInfo iterateAdjLocsForAttacker(Loc loc, bool requireAtLeastTwoUnconnectedDotsForLadder);
+  void appendAttackerLocsToCheck(std::vector<std::pair<LadderMoveInfoType, Loc>>& attackerLocsToCheck,
+                                 Loc defenderLastMoveLoc, bool defenderCapture) const;
 
   void initializeDefenderChain(const Board::MoveRecord& capturingMoveRecord);
 
@@ -131,6 +134,7 @@ private:
   }
 
   Board::MoveRecord play(const Loc loc, const Player pla) {
+    assert(board.getColor(loc) == C_EMPTY);
     const auto moveRecord = board.playMoveRecordedDots(loc, pla);
 
     movesCounter++;
@@ -283,6 +287,8 @@ private:
   };
 
   Board& board;
+  LadderLocInfo zeroBlack = LadderLocInfo::createZero(P_BLACK);
+  LadderLocInfo zeroWhite = LadderLocInfo::createZero(P_WHITE);
   bool storeMovesTree;
   std::vector<Move> initialMoves;
   std::vector<Move> extraMoves;
