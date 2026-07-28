@@ -385,6 +385,13 @@ add_executable(katago
   )
 
 if(USE_BACKEND STREQUAL "CUDA")
+  if(MSVC)
+    set_source_files_properties(
+        neuralnet/cudabackend.cpp
+        PROPERTIES
+        COMPILE_OPTIONS /bigobj
+    )
+  endif()
   target_compile_definitions(katago PRIVATE USE_CUDA_BACKEND)
   target_compile_definitions(katago PRIVATE CUDA_TARGET_VERSION=${CMAKE_CUDA_COMPILER_VERSION})
   find_package(CUDAToolkit REQUIRED)
