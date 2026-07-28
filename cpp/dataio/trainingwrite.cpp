@@ -525,7 +525,8 @@ void TrainingWriteBuffers::addRow(
       inputsUseNHWC,
       rowBin,
       rowGlobal,
-      selfplay);
+      selfplay
+    );
 
     // Pack bools bitwise into uint8_t
     uint8_t* rowBinPacked = binaryInputNCHWPacked.data + curRows * numBinaryChannels * packedBoardArea;
