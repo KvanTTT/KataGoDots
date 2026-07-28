@@ -445,19 +445,9 @@ void NNEvaluator::fillRowBufs(
   if(buf.rowMetaBuf.size() < rowMetaLen)
     buf.rowMetaBuf.resize(rowMetaLen);
 
-  static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
-  if(inputsVersion == 3)
-    NNInputs::fillRowV3(board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
-  else if(inputsVersion == 4)
-    NNInputs::fillRowV4(board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
-  else if(inputsVersion == 5)
-    NNInputs::fillRowV5(board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
-  else if(inputsVersion == 6)
-    NNInputs::fillRowV6(board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
-  else if(inputsVersion == 7)
-    NNInputs::fillRowV7(board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
-  else
-    ASSERT_UNREACHABLE;
+  static_assert(NNModelVersion::latestInputsVersionImplemented == 7);
+  // TODO: it makes sense to pass correct `selfplay` value here
+  NNInputs::fillRowVN(inputsVersion, board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data(), false);
 
   if(rowMetaLen > 0) {
     if(sgfMeta == NULL)
