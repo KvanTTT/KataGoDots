@@ -631,7 +631,8 @@ struct Board
     Loc addLoc1,
     Loc addLoc2) const;
   Color getColorsOfPotentialCapturing(Loc loc) const;
-  void tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
+  // Returns true if a closure (inner or outer) is found, or if the search terminates early (e.g. it hits a wall).
+  bool tryGetCounterClockwiseClosure(Loc initialLoc, Loc startLoc, Player pla) const;
   void getTerritoryLocations(Player pla, Loc firstLoc, bool grounding, int &numCapturedDots, int &numFreedDots) const;
   void updateStatesAndAppendBase(
     std::vector<Base> &bases,

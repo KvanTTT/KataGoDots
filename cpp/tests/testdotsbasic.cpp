@@ -146,6 +146,21 @@ x . x o . o
     testAssert(Board::Base::Type::SUICIDAL == moveRecords.back().bases.back().type);
 });
 
+  checkDotsField("Single unconnected dot in case of suicidal move",
+  R"(
+. . x . .
+. x x x .
+x x . x x
+. x x x .
+. . x . .
+)", [](const BoardWithMoveRecords& boardWithMoveRecords) {
+  const auto& moveRecords = boardWithMoveRecords.moveRecords;
+
+  boardWithMoveRecords.playMove(2, 2, P_WHITE);
+  testAssert(1 == boardWithMoveRecords.board.numWhiteCaptures);
+  testAssert(Board::Base::Type::SUICIDAL == moveRecords.back().bases.back().type);
+});
+
   checkDotsField("Empty base creation",
   R"(
 . x . . o .
@@ -359,6 +374,33 @@ x . x . . x
 
     testAssert(getActiveColor(boardWithMoveRecords.getState(2, 1)) == P_BLACK);
     testAssert(getActiveColor(boardWithMoveRecords.getState(3, 1)) == P_BLACK);
+});
+
+  checkDotsField("Cutting of tails", R"(
+. . . . . . .
+. x x . x . .
+. . . . x x .
+. . . . . . .
+. . . . . . .
+. o o . o o .
+. . o . . . .
+. . . . . . .
+)", [](const BoardWithMoveRecords& boardWithMoveRecords) {
+  boardWithMoveRecords.playMove(3, 1, P_BLACK);
+  testAssert(0 == boardWithMoveRecords.getBlackScore());
+  boardWithMoveRecords.undo();
+
+  boardWithMoveRecords.playMove(3, 2, P_BLACK);
+  testAssert(0 == boardWithMoveRecords.getBlackScore());
+  boardWithMoveRecords.undo();
+
+  boardWithMoveRecords.playMove(3, 5, P_WHITE);
+  testAssert(0 == boardWithMoveRecords.getBlackScore());
+  boardWithMoveRecords.undo();
+
+  boardWithMoveRecords.playMove(3, 6, P_WHITE);
+  testAssert(0 == boardWithMoveRecords.getBlackScore());
+  boardWithMoveRecords.undo();
 });
 }
 
