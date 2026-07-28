@@ -744,16 +744,34 @@ void TrainingWriteBuffers::addRow(
     //Fill score vector "onehot"-like
     for(int i = 0; i<scoreDistrLen; i++)
       rowScoreDistr[i] = 0;
-    int centerScore = (int)round(score);
-    int lowerIdx = centerScore+scoreDistrMid-1;
-    int upperIdx = centerScore+scoreDistrMid;
+    // lowerIdx/upperIdx are the two adjacent buckets that get nonzero weight, and frac is the weight (in
+    // [0,1]) assigned to upperIdx, the rest going to lowerIdx.
+    int lowerIdx;
+    int upperIdx;
+    float frac;
+    if(hist.rules.isDots) {
+      // Dots scores are integral under the common (zero, integer) komi settings, unlike Go where fractional
+      // komi is the norm. So unlike below, split proportionally between the two nearest integer scores
+      // (floor and ceil) rather than always splitting around the nearest integer - this way an exact
+      // integer score (the common case) lands as a clean one-hot instead of a forced 50/50 split, while
+      // self-play configured with non-integer komi still gets a proportional split.
+      int floorScore = static_cast<int>(floor(score));
+      lowerIdx = floorScore+scoreDistrMid;
+      upperIdx = floorScore+scoreDistrMid+1;
+      frac = score - floorScore;
+    }
+    else {
+      int centerScore = (int)round(score);
+      lowerIdx = centerScore+scoreDistrMid-1;
+      upperIdx = centerScore+scoreDistrMid;
+      frac = score - (centerScore-0.5f);
+    }
     if(upperIdx <= 0)
       rowScoreDistr[0] = 100;
     else if(lowerIdx >= scoreDistrLen-1)
       rowScoreDistr[scoreDistrLen-1] = 100;
     else {
-      float lambda = score - (centerScore-0.5f);
-      int upperProp = (int)round(lambda*100.0f);
+      int upperProp = (int)round(frac*100.0f);
       rowScoreDistr[lowerIdx] = 100-upperProp;
       rowScoreDistr[upperIdx] = upperProp;
     }
