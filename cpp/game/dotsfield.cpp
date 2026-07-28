@@ -246,7 +246,7 @@ bool Board::isSuicideDots(const Loc loc, const Player pla) const {
 
 bool Board::wouldBeCaptureDots(const Loc loc, const Player pla) const {
   // TODO: optimize and get rid of `const_cast`
-  auto moveRecord = const_cast<Board*>(this)->tryPlayMoveRecordedDots(loc, pla, false);
+  const auto moveRecord = const_cast<Board*>(this)->tryPlayMoveRecordedDots(loc, pla, false);
 
   bool result = false;
 
@@ -580,18 +580,27 @@ void Board::tryCapture(
   const bool isSuicidal) {
   auto currentClosures = vector<vector<Loc>>();
 
+  bool hasAnyClosure = false;
+
   for (int index = 0; index < unconnectedLocationsSize; index++) {
+    // Optimization: it doesn't make sense to check the latest unconnected loc because it always forms a tail instead of a real surrounding
+    // if all previous searches ended up with tails.
+    // But we should handle a case when there is only a single unconnected loc.
+    if (index > 0 && index == unconnectedLocationsSize - 1 && !hasAnyClosure) {
+      break;
+    }
+
     const Loc unconnectedLoc = unconnectedLocations[index];
 
     // Optimization: it doesn't make sense to check the latest unconnected dot
     // when all previous connections form minimal bases
-    // because the latest always forms a base with maximal square that should be dropped
+    // because the latest one always forms a base with maximal square that should be dropped
     if (const size_t closuresSize = currentClosures.size();
        closuresSize > 0 && closuresSize == unconnectedLocations.size() - 1) {
       break;
     }
 
-    tryGetCounterClockwiseClosure(loc, unconnectedLoc, pla);
+    hasAnyClosure |= tryGetCounterClockwiseClosure(loc, unconnectedLoc, pla);
 
     // Sort the given closures in ascending order
     if (!closureOrInvalidateLocsBuffer.empty()) {
@@ -749,7 +758,7 @@ Color Board::getColorsOfPotentialCapturing(const Loc loc) const {
   return result;
 }
 
-void Board::tryGetCounterClockwiseClosure(const Loc initialLoc, const Loc startLoc, const Player pla) const {
+bool Board::tryGetCounterClockwiseClosure(const Loc initialLoc, const Loc startLoc, const Player pla) const {
   closureOrInvalidateLocsBuffer.clear();
   closureOrInvalidateLocsBuffer.push_back(initialLoc);
   setVisited(initialLoc);
@@ -811,7 +820,9 @@ void Board::tryGetCounterClockwiseClosure(const Loc initialLoc, const Loc startL
   if (loc != initialLoc || closureOrInvalidateLocsBuffer.size() < 4) {
     clearVisited(closureOrInvalidateLocsBuffer);
     closureOrInvalidateLocsBuffer.clear();
-    return;
+    // Actually it should be `false` but we break the traversal when hits a wall (optimization).
+    // So, we should treat the preliminary break in a special way.
+    return loc != initialLoc;
   }
 
   int square = 0;
@@ -819,23 +830,61 @@ void Board::tryGetCounterClockwiseClosure(const Loc initialLoc, const Loc startL
 
   const Loc prevLoc = closureOrInvalidateLocsBuffer.back();
   // Store the previously calculated coordinates because division is an expensive operation
-  int prevX = prevLoc % stride;
-  int prevY = prevLoc / stride;
+  int lastX = prevLoc % stride;
+  int lastY = prevLoc / stride;
 
-  for (const Loc& l : closureOrInvalidateLocsBuffer) {
+  int firstX = 0;
+  int firstY = 0;
+
+  for (int i = 0; i < closureOrInvalidateLocsBuffer.size(); i++) {
+    const Loc l = closureOrInvalidateLocsBuffer[i];
     const int x = l % stride;
     const int y = l / stride;
 
-    square += prevY * x - y * prevX;
+    if (i == 1) {
+      firstX = x;
+      firstY = y;
+    }
 
-    prevX = x;
-    prevY = y;
+    square += lastY * x - y * lastX;
+
+    lastX = x;
+    lastY = y;
     clearVisited(l);
   }
 
   if (square <= 0) {
     closureOrInvalidateLocsBuffer.clear();
+
+    // Returns `false` for the following case (it's just a tail but not a real closure), the squared distance is 1:
+    // . . . . . .
+    // . ! x . . .
+    // . . x x x .
+    // . . . . . .
+    //
+    // Also `false` with squared distance == 2, still no real closure:
+    // . . . .
+    // . ! x .
+    // . x x .
+    // . . . .
+    //
+    // Returns `true`, the squared distance is 4
+    // . . x .
+    // . ! . .
+    // . . x .
+    //
+    // Here we have squared distance == 5, the outer/inner closure exists:
+    // . x . .
+    // . ! . .
+    // . . x .
+    int dx = lastX - firstX;
+    int dy = lastY - firstY;
+    const int squaredDistanceBetweenNeighbours = dx * dx + dy * dy;
+    return squaredDistanceBetweenNeighbours >= 4;
   }
+
+  // Closure always exists and always valid.
+  return true;
 }
 
 void Board::getTerritoryLocations(const Player pla,
