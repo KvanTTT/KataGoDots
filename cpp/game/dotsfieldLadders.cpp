@@ -6,11 +6,9 @@
 
 using namespace std;
 
-vector<DotsLaddersSolver::LadderLocInfo> DotsLaddersSolver::solve() {
-  vector<LadderLocInfo> result;
-
+void DotsLaddersSolver::solve() {
   if (board.is_finished) {
-    return result; // Ladders are not relevant when the game is finished (by grounding or resignation)
+    return; // Ladders are not relevant when the game is finished (by grounding or resignation)
   }
 
   for (int y = 0; y < board.y_size; y++) {
@@ -29,32 +27,28 @@ vector<DotsLaddersSolver::LadderLocInfo> DotsLaddersSolver::solve() {
           return;
         }
 
-        if (const auto ladderLocInfo = startLadder(loc, pla); !ladderLocInfo.isZero()) {
-          result.push_back(ladderLocInfo);
-        }
+        startLadder(loc, pla);
       };
 
       addLadderMoveInfo(P_BLACK);
       //addLadderMoveInfo(P_WHITE); TODO: uncomment after current tests suite with single color become robust
     }
   }
-
-  return result;
 }
 
-DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::startLadder(const Loc newInitLoc, const Player pla) {
+void DotsLaddersSolver::startLadder(const Loc newInitLoc, const Player pla) {
   initLoc = newInitLoc;
   attacker = pla;
   defender = getOpp(pla);
-  auto result = iterateForAttacker(initLoc);
-  if (!result.isZero()) {
-    // Finally, we are interested in the loc that starts the ladder but not in the loc that forms the final capture.
-    result.workingLoc = initLoc;
+  if (const auto result = iterateForAttacker(initLoc); !result.isZero()) {
+    for (const auto& loc : result.territoryLocs) {
+      setCapturedPlayer(loc, attacker);
+    }
+    setWorkingLocPlayer(initLoc, attacker);
   }
   initLoc = Board::NULL_LOC;
   attacker = C_EMPTY;
   defender = C_EMPTY;
-  return result;
 }
 
 DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc loc) {

@@ -84,7 +84,9 @@ public:
     const std::vector<Move>& newInitialMoves = {}, const std::vector<Move>& newExtraMoves = {},
     const uint16_t newMaxMovesCount = 65535U) :
       maxMovesCount(newMaxMovesCount), board(newBoard), storeMovesTree(newStoreMovesTree), initialMoves(newInitialMoves), extraMoves(newExtraMoves) {
-    chainsData.resize(getMaxArrSize(newBoard.x_size, newBoard.y_size));
+    const int maxArraySize = getMaxArrSize(newBoard.x_size, newBoard.y_size);
+    chainsData.resize(maxArraySize);
+    resultData.resize(maxArraySize);
     initialWhiteScore = static_cast<short>(newBoard.numBlackCaptures - newBoard.numWhiteCaptures);
     // Reserve memory to get rid of excessive reallocations.
     // The field perimeter size should be enough for most cases.
@@ -93,7 +95,15 @@ public:
     currentMovesTreeNode = movesTreeRoot.get();
   }
 
-  std::vector<LadderLocInfo> solve();
+  void solve();
+
+  Color getCapturedColor(const Loc loc) const {
+    return static_cast<Color>(resultData[loc] & 0b11);
+  }
+
+  Color getWorkingColor(const Loc loc) const {
+    return static_cast<Color>((resultData[loc] >> 2) & 0b11);
+  }
 
   [[nodiscard]] const LadderLocInfo& zero() const {
     return attacker == P_BLACK ? zeroBlack : zeroWhite;
@@ -110,7 +120,7 @@ public:
 private:
   bool isRelevantCapturing(const Board::MoveRecord& moveRecord);
 
-  LadderLocInfo startLadder(Loc newInitLoc, Player pla);
+  void startLadder(Loc newInitLoc, Player pla);
 
   LadderLocInfo iterateForAttacker(Loc loc);
 
@@ -221,7 +231,7 @@ private:
   }
 
   void setInitTerritory(const Loc loc) {
-    chainsData[loc] = static_cast<char>(chainsData[loc] | 0b10000);
+    chainsData[loc] = static_cast<char>(chainsData[loc] | 0b1'0000);
     initTerritory.push_back(loc);
   }
 
@@ -248,6 +258,14 @@ private:
 
   void resetVisited(const Loc loc) {
     chainsData[loc] = static_cast<char>(chainsData[loc] & ~0b1000'0000);
+  }
+
+  void setCapturedPlayer(const Loc loc, const Player pla) {
+    resultData[loc] = static_cast<char>(resultData[loc] | static_cast<char>(pla));
+  }
+
+  void setWorkingLocPlayer(const Loc loc, const Player pla) {
+    resultData[loc] = static_cast<char>(resultData[loc] | static_cast<char>(pla << 2));
   }
 
   [[nodiscard]] bool maybeChainCaptureLoc(const Loc loc, const Player pla, const bool ignoreEmptyBaseLocs) const {
@@ -297,6 +315,7 @@ private:
   std::vector<Move> extraMoves;
 
   std::vector<char> chainsData;
+  std::vector<char> resultData;
   std::vector<Loc> walkStack;
   std::vector<Loc> initTerritory;
   std::vector<Loc> attackerChainLocs;
