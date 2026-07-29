@@ -871,16 +871,21 @@ TEST(LadderTests, IndirectlyAdjacentLocIsLadderButNotCapture) {
 )");
 }
 
-// TODO: implement support of dotsCaptureEmptyBases mode
-TEST(LadderTests, DISABLED_LadderWhenCaptureEmptyBaseIsEnabled) {
+TEST(LadderTests, LadderWhenCaptureEmptyBaseIsEnabled) {
     checkLadders(
         R"(
+.  .x .x .
+X  .' .' X
+.  X  X  .
+)", 0, 0, true);
+
+    checkLadders(
+    R"(
 .  .  .  .  .
-.  .  .  .  X
-X  .  .  X  .
+.  .x O  .  X
+X  .' .  X  .
 .  X  X  .  .
-)",
-        true);
+)", 0, 0, true);
 }
 
 TEST(LadderTests, StressSimple) {

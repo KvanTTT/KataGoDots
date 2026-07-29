@@ -437,7 +437,7 @@ void DotsLaddersSolver::popChainInfo(const Player pla) {
   vector<Loc>& maybeCaptureLocs = pla == attacker ? attackerMaybeCaptureLocs : defenderMaybeCaptureLocs;
   const auto& [newChainLocsCount, newMaybeCaptureLocsCount] = chainInfos.back();
 
-  assert(newChainLocsCount > 0);
+  assert(newChainLocsCount > 0 || board.rules.dotsCaptureEmptyBases);
   const int chainLocsSize = static_cast<int>(chainLocs.size());
   for (int i = chainLocsSize - 1; i >= chainLocsSize - newChainLocsCount; i--) {
     const Loc chainLoc = chainLocs[i];
