@@ -58,6 +58,12 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::startLadder(const Loc newIni
 }
 
 DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc loc) {
+  if (movesCounter >= maxMovesCount) {
+    // We should break only on attackers's turn because false negative (when ladder exists but isn't detected)
+    // is far better than false positive (when ladder is breakable but is detected as succeeded).
+    return zero();
+  }
+
   const auto moveRecordForLoc = play(loc, attacker);
 
   if (!moveRecordForLoc.bases.empty() && moveRecordForLoc.bases[0].type == Board::Base::Type::SUICIDAL) {
