@@ -250,8 +250,10 @@ void Tests::runDotsStressTestsInternal(
 
             (void)boardHistory->whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfos);
           } else if (checkingMode == LADDERS_ON_EACH_MOVE) {
+            Board boardCopy = board;
             DotsLaddersSolver laddersSolver(board);
             (void)laddersSolver.solve();
+            testAssert(boardCopy.isEqualForTesting(board));
           }
         }
         currentGameMovesCount++;

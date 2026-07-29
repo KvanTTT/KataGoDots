@@ -83,7 +83,9 @@ string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersSolver
     bool firstIteration = previousMovesCount== 0;
     solver.clearMaxDepth();
 
+    Board fieldCopy = board;
     const auto workingLadderLocInfos = solver.solve();
+    testAssert(fieldCopy.isEqualForTesting(board));
 
     cout << "Total moves count: " << solver.getMovesCount();
     if (!firstIteration) {

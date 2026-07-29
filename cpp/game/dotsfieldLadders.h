@@ -80,7 +80,7 @@ public:
 
   explicit DotsLaddersSolver() = delete;
 
-  explicit DotsLaddersSolver(Board& newBoard, const bool newStoreMovesTree = false,
+  explicit DotsLaddersSolver(const Board& newBoard, const bool newStoreMovesTree = false,
     const std::vector<Move>& newInitialMoves = {}, const std::vector<Move>& newExtraMoves = {},
     const uint16_t newMaxMovesCount = 65535U) :
       maxMovesCount(newMaxMovesCount), board(newBoard), storeMovesTree(newStoreMovesTree), initialMoves(newInitialMoves), extraMoves(newExtraMoves) {
@@ -135,7 +135,9 @@ private:
 
   Board::MoveRecord play(const Loc loc, const Player pla) {
     assert(board.getColor(loc) == C_EMPTY);
-    const auto moveRecord = board.playMoveRecordedDots(loc, pla);
+    // It should be safe to call the mutable `play` because it always ends up with a respective `undo` call.
+    // The board state remains unchanged after the ladder solving is performed.
+    const auto moveRecord = const_cast<Board&>(board).playMoveRecordedDots(loc, pla);
 
     movesCounter++;
     currentDepth++;
@@ -163,7 +165,7 @@ private:
   }
 
   void undo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType, const LadderLocInfo* result = nullptr) {
-    board.undoDots(moveRecord);
+    const_cast<Board&>(board).undoDots(moveRecord);
 
     if (storeMovesTree) {
       currentMovesTreeNode->moveType = moveType;
@@ -287,7 +289,7 @@ private:
     uint16_t newMaybeCaptureLocsCount;
   };
 
-  Board& board;
+  const Board& board;
   LadderLocInfo zeroBlack = LadderLocInfo::createZero(P_BLACK);
   LadderLocInfo zeroWhite = LadderLocInfo::createZero(P_WHITE);
   bool storeMovesTree;
