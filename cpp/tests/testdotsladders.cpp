@@ -858,6 +858,19 @@ TEST(LadderTests, DISABLED_WorkingMoveCreatesTwoLadders) {
 )");
 }
 
+TEST(LadderTests, IndirectlyAdjacentLocIsLadderButNotCapture) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .
+.  .  .  .  .  .  .
+.  .  .x O  .  X  .
+.  X  O' .  X  .  .
+.  X  O' O' X  .  .
+.  .  X  X  .  .  .
+.  .  .  .  .  .  .
+)");
+}
+
 // TODO: implement support of dotsCaptureEmptyBases mode
 TEST(LadderTests, DISABLED_LadderWhenCaptureEmptyBaseIsEnabled) {
     checkLadders(
