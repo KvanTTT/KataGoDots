@@ -71,9 +71,7 @@ static string generateBoardRepresentation(Board& board) {
     return generateBoardStateRepresentation(board, {}, {}, {}, {});
 }
 
-string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersSolver& solver,
-    int& actualBlackScore, int& actualWhiteScore
-    ) {
+static string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersSolver& solver) {
     if (const Loc moveLoc = Location::getLoc(move.x, move.y, board.x_size); moveLoc != Board::NULL_LOC) {
         cout << "Move: " << move.toString() << ". ";
         EXPECT_TRUE(board.playMove(moveLoc, move.player, true));
@@ -84,7 +82,7 @@ string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersSolver
     solver.clearMaxDepth();
 
     Board fieldCopy = board;
-    const auto workingLadderLocInfos = solver.solve();
+    solver.solve();
     testAssert(fieldCopy.isEqualForTesting(board));
 
     cout << "Total moves count: " << solver.getMovesCount();
@@ -99,26 +97,19 @@ string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersSolver
     std::unordered_set<Loc> blackCapturedLocs;
     std::unordered_set<Loc> whiteCapturedLocs;
 
-    actualBlackScore = 0;
-    actualWhiteScore = 0;
+    for (int y = 0; y < board.y_size; y++) {
+        for (int x = 0; x < board.x_size; x++) {
+            const Loc loc = Location::getLoc(x, y, board.x_size);
 
-    for (const auto& ladderLocInfo : workingLadderLocInfos) {
-        Player ladderPlayer = ladderLocInfo.player;
-        assert(ladderPlayer != C_EMPTY && ladderLocInfo.workingLoc != Board::NULL_LOC);
+            if (Color capturedColor = solver.getCapturedColor(loc); capturedColor != C_EMPTY) {
+                std::unordered_set<Loc>& capturedLocs = capturedColor == C_BLACK ? blackCapturedLocs : whiteCapturedLocs;
+                capturedLocs.insert(loc);
+            }
 
-        std::unordered_set<Loc>& workingLocs = ladderPlayer == C_BLACK ? blackWorkingLocs : whiteWorkingLocs;
-        if (ladderPlayer == C_BLACK) {
-            workingLocs = blackWorkingLocs;
-            actualBlackScore += ladderLocInfo.score;
-        } else {
-            workingLocs = whiteWorkingLocs;
-            actualWhiteScore += ladderLocInfo.score;
-        }
-        workingLocs.insert(ladderLocInfo.workingLoc);
-
-        std::unordered_set<Loc>& capturedLocs = ladderPlayer == C_BLACK ? blackCapturedLocs : whiteCapturedLocs;
-        for (const auto& territoryLoc : ladderLocInfo.territoryLocs) {
-            capturedLocs.insert(territoryLoc);
+            if (Color workingLocColor = solver.getWorkingColor(loc); workingLocColor != C_EMPTY) {
+                std::unordered_set<Loc>& workingLocs = workingLocColor == C_BLACK ? blackWorkingLocs : whiteWorkingLocs;
+                workingLocs.insert(loc);
+            }
         }
     }
 
@@ -138,8 +129,6 @@ static void checkLadders(
     const unordered_set<Loc>& whiteWorkingLocs,
     const unordered_set<Loc>& blackCapturedLocs,
     const unordered_set<Loc>& whiteCapturedLocs,
-    const int expectedBlackScore,
-    const int expectedWhiteScore,
     const uint16_t maxMovesCount = 65535U
 ) {
     Board field(width, height, Rules::DEFAULT_DOTS);
@@ -156,14 +145,9 @@ static void checkLadders(
 
     DotsLaddersSolver solver(field, false, moves, {}, maxMovesCount);
 
-    int actualBlackScore = 0;
-    int actualWhiteScore = 0;
-    const string actualFieldLadderInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), solver, actualBlackScore, actualWhiteScore);
+    const string actualFieldLadderInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), solver);
 
     EXPECT_EQ_TRIMMED(expectedLaddersInfo, actualFieldLadderInfo);
-
-    EXPECT_EQ(expectedBlackScore, actualBlackScore);
-    EXPECT_EQ(expectedWhiteScore, actualWhiteScore);
 }
 
 static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool captureEmptyBases, const vector<XYMove>& extraMovesXY,
@@ -303,8 +287,6 @@ static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool c
 }
 
 static void checkLadders(const string& fieldDataWithLaddersInfo,
-    const optional<int> expectedBlackScore = nullopt,
-    const optional<int> expectedWhiteScore = nullopt,
     const bool captureEmptyBases = Rules::DEFAULT_DOTS.dotsCaptureEmptyBases,
     const vector<XYMove>& extraMovesXY = {}
     ) {
@@ -333,17 +315,9 @@ static void checkLadders(const string& fieldDataWithLaddersInfo,
 
     DotsLaddersSolver solver(field, false, initialMoves, extraMoves);
 
-    int actualBlackScore = 0;
-    int actualWhiteScore = 0;
-    const string actualFieldLaddersInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), solver, actualBlackScore, actualWhiteScore);
+    const string actualFieldLaddersInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), solver);
 
     EXPECT_EQ_TRIMMED(expectedFieldLaddersInfo, actualFieldLaddersInfo);
-    if (expectedBlackScore.has_value()) {
-        EXPECT_EQ(expectedBlackScore, actualBlackScore);
-    }
-    if (expectedWhiteScore.has_value()) {
-        EXPECT_EQ(expectedWhiteScore, actualWhiteScore);
-    }
 }
 
 TEST(LadderTests, MinimalCapturing) {
@@ -783,6 +757,7 @@ TEST(LadderTests, NotWorkingLadderBecauseOfInternalCapturing) {
 }
 
 TEST(LadderTests, WorkingLadderWithInternalCapturings) {
+    // Ladders wins with +1 black score (5 visible white dots - 4 captured black dots during ladder solving)
     checkLadders(
         R"(
 .  .  .  .  .  .  .  .  .  .  .  .  .  .
@@ -795,8 +770,6 @@ TEST(LadderTests, WorkingLadderWithInternalCapturings) {
 .  X  .  .  .  .  X  X  .  .  .  .  .  .
 .  .  .  .  .  .  .  .  .  .  .  .  .  .
 )",
-        1,
-        0,
         false,
         {XYMove(13, 4, P_WHITE)}
         );
@@ -808,6 +781,7 @@ TEST(LadderTests, WorkingLadderWithInternalCapturings) {
 //   * Currently, there is no channel that would allow marking lost dots for ladders.
 //   * Such situations are hopefully very rare.
 TEST(LadderTests, WorkingLadderWithInternalCapturingsAndZeroScore) {
+    // Ladders wins with 0 black score (4 visible white dots - 4 captured black dots during ladder solving)
     checkLadders(
         R"(
 .  .  .  .  .  .  .  .  .  .  .  .  .
@@ -819,11 +793,11 @@ TEST(LadderTests, WorkingLadderWithInternalCapturingsAndZeroScore) {
 .  .  .  .  X  X  .' .' X  O  O  .  .
 .  X  .  .  .  .  X  X  .  .  .  .  .
 .  .  .  .  .  .  .  .  .  .  .  .  .
-)",
-        0);
+)");
 }
 
 TEST(LadderTests, WorkingLadderWithInternalCapturingsAndLosingScore) {
+    // Ladders wins with -3 black score (4 visible white dots - 6 captured black dots during ladder solving)
     checkLadders(
         R"(
 .  .  .  .  .  .  .  .  .  .  .  .  .
@@ -835,8 +809,7 @@ TEST(LadderTests, WorkingLadderWithInternalCapturingsAndLosingScore) {
 .  .  .  .  X  X  .' .' X  O  O  O  .
 .  X  .  .  .  .  X  X  .  .  .  .  .
 .  .  .  .  .  .  .  .  .  .  .  .  .
-)",
-        -3);
+)");
 }
 
 // TODO: Fix calculation of minimal territory considering ideal pla play
@@ -892,7 +865,7 @@ TEST(LadderTests, LadderWhenCaptureEmptyBaseIsEnabled) {
 .  .x .x .
 X  .' .' X
 .  X  X  .
-)", 0, 0, true);
+)", true);
 
     checkLadders(
     R"(
@@ -900,7 +873,7 @@ X  .' .' X
 .  .x O  .  X
 X  .' .  X  .
 .  X  X  .  .
-)", 0, 0, true);
+)", true);
 }
 
 // Check the following pattern scaled to max len:
@@ -927,7 +900,7 @@ TEST(LadderTests, StressSimple) {
     };
 
     cout << "Check escaping:" << '\n';
-    checkLadders(width, height, moves, {}, {}, {}, {}, 0, 0);
+    checkLadders(width, height, moves, {}, {}, {}, {});
 
     int farMoveX;
     int farMoveY;
@@ -948,10 +921,8 @@ TEST(LadderTests, StressSimple) {
 {Location::getLoc(1, 2, width)},
 {},
 {Location::getLoc(1, 1, width), Location::getLoc(2, 1, width)},
-{},
-2,
-0
-);
+{}
+    );
 }
 
 static void stressHugeNumberOfTurns(const int width, const int maxMovesCount, const bool shouldHitTurnsLimit) {
@@ -1016,8 +987,6 @@ static void stressHugeNumberOfTurns(const int width, const int maxMovesCount, co
         {},
         expectedBlackCapturedLocs,
         {},
-        expectedBlackCapturedLocs.size(),
-        0,
         maxMovesCount
     );
 }

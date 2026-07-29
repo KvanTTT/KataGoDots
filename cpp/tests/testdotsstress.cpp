@@ -252,7 +252,7 @@ void Tests::runDotsStressTestsInternal(
           } else if (checkingMode == LADDERS_ON_EACH_MOVE) {
             Board boardCopy = board;
             DotsLaddersSolver laddersSolver(board);
-            (void)laddersSolver.solve();
+            laddersSolver.solve();
             testAssert(boardCopy.isEqualForTesting(board));
           }
         }
