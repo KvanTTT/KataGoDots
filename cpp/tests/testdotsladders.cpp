@@ -128,27 +128,40 @@ string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersSolver
                                             whiteCapturedLocs);
 }
 
-static void checkLadders(const string& fieldData, const optional<string>& expectedLaddersInfo,
-    const optional<int> expectedBlackScore = nullopt, const optional<int> expectedWhiteScore = nullopt
+static void checkLadders(
+    const int width,
+    const int height,
+    const vector<Move>& moves,
+    const unordered_set<Loc>& blackWorkingLocs,
+    const unordered_set<Loc>& whiteWorkingLocs,
+    const unordered_set<Loc>& blackCapturedLocs,
+    const unordered_set<Loc>& whiteCapturedLocs,
+    const int expectedBlackScore,
+    const int expectedWhiteScore,
+    const uint16_t maxMovesCount = 65535U
 ) {
-    Board field = parseDotsFieldDefault(fieldData);
-    DotsLaddersSolver solver(field);
+    Board field(width, height, Rules::DEFAULT_DOTS);
+    for (const Move& move : moves) {
+        field.playMove(move.loc, move.pla, true);
+    }
+
+    const string expectedLaddersInfo = generateBoardStateRepresentation(field,
+     blackWorkingLocs,
+     whiteWorkingLocs,
+     blackCapturedLocs,
+     whiteCapturedLocs
+     );
+
+    DotsLaddersSolver solver(field, false, moves, {}, maxMovesCount);
 
     int actualBlackScore = 0;
     int actualWhiteScore = 0;
     const string actualFieldLadderInfo = playAndDumpLaddersInfo(field, XYMove::getNullMove(), solver, actualBlackScore, actualWhiteScore);
 
-    const string expectedLaddersInfoString = expectedLaddersInfo.has_value()
-        ? expectedLaddersInfo.value()
-        : generateBoardRepresentation(field);
+    EXPECT_EQ_TRIMMED(expectedLaddersInfo, actualFieldLadderInfo);
 
-    EXPECT_EQ_TRIMMED(expectedLaddersInfoString, actualFieldLadderInfo);
-    if (expectedBlackScore.has_value()) {
-        EXPECT_EQ(expectedBlackScore, actualBlackScore);
-    }
-    if (expectedWhiteScore.has_value()) {
-        EXPECT_EQ(expectedWhiteScore, actualWhiteScore);
-    }
+    EXPECT_EQ(expectedBlackScore, actualBlackScore);
+    EXPECT_EQ(expectedWhiteScore, actualWhiteScore);
 }
 
 static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool captureEmptyBases, const vector<XYMove>& extraMovesXY,
@@ -888,25 +901,31 @@ X  .' .  X  .
 )", 0, 0, true);
 }
 
+// Check the following pattern scaled to max len:
+//      0  1  2  3  4  .....  MAX
+//   0  .  X  X  .  .      .  .
+//   1  X  O' O' X  .      .  .
+//   2  .  .x .  .  .      .  .
+//                    ...
+//      .  .  .  .  .      .  .
+// MAX  .  .  .  .  .      X  .
 TEST(LadderTests, StressSimple) {
     constexpr int width = Board::MAX_LEN_X;
     constexpr int height = Board::MAX_LEN_Y;
 
-    cout << "Size: " << width << " x " << height << endl;
-    Board board(width, height, Rules::DEFAULT_DOTS);
-
+    cout << "Size: " << width << " x " << height << '\n';
     // Ladder start
-    board.playMove(Location::getLoc(0, 1, width), P_BLACK, true);
-    board.playMove(Location::getLoc(1, 1, width), P_WHITE, true);
-    board.playMove(Location::getLoc(1, 0, width), P_BLACK, true);
-    board.playMove(Location::getLoc(2, 1, width), P_WHITE, true);
-    board.playMove(Location::getLoc(2, 0, width), P_BLACK, true);
-    board.playMove(Location::getLoc(3, 1, width), P_BLACK, true);
+    vector moves = {
+        Move(Location::getLoc(0, 1, width), P_BLACK),
+        Move(Location::getLoc(1, 1, width), P_WHITE),
+        Move(Location::getLoc(1, 0, width), P_BLACK),
+        Move(Location::getLoc(2, 1, width), P_WHITE),
+        Move(Location::getLoc(2, 0, width), P_BLACK),
+        Move(Location::getLoc(3, 1, width), P_BLACK),
+    };
 
-    const string representationWithEscape = generateBoardRepresentation(board);
-
-    cout << "Check escaping:" << endl;
-    checkLadders(representationWithEscape, 0, 0);
+    cout << "Check escaping:" << '\n';
+    checkLadders(width, height, moves, {}, {}, {}, {}, 0, 0);
 
     int farMoveX;
     int farMoveY;
@@ -920,18 +939,102 @@ TEST(LadderTests, StressSimple) {
     }
     farMoveX = width - 2;
     farMoveY = height - 1;
-    board.playMove(Location::getLoc(farMoveX, farMoveY, width), P_BLACK, true);
+    moves.emplace_back(Location::getLoc(farMoveX, farMoveY, width), P_BLACK);
 
-    const string representationWithCapture = generateBoardRepresentation(board);
+    cout << "Check capturing:" << '\n';
+    checkLadders(width, height, moves,
+{Location::getLoc(1, 2, width)},
+{},
+{Location::getLoc(1, 1, width), Location::getLoc(2, 1, width)},
+{},
+2,
+0
+);
+}
 
-    const string expectedLadder = generateBoardStateRepresentation(board,
-        {Location::getLoc(1, 2, width)},
+static void stressHugeNumberOfTurns(const int width, const int maxMovesCount, const bool shouldHitTurnsLimit) {
+    constexpr int height = Board::MAX_LEN_Y;
+
+    cout << "Size: " << width << " x " << height << '\n';
+    vector<Move> moves;
+
+    unordered_set<Loc> expectedBlackCapturedLocs;
+
+    for (int x = 0; x < width; x++) {
+        if (x > 0 && x < width - 2) {
+            moves.emplace_back(Location::getLoc(x, 0, width), P_BLACK);
+        }
+
+        Color secondLineColor;
+        if (x > 0 && x < width - 2) {
+            secondLineColor = P_WHITE;
+        } else if (x == 0 || x == width - 2) {
+            secondLineColor = P_BLACK;
+        } else {
+            secondLineColor = C_EMPTY;
+        }
+        if (secondLineColor != C_EMPTY) {
+            moves.emplace_back(Location::getLoc(x, 1, width), secondLineColor);
+            if (secondLineColor == P_WHITE && !shouldHitTurnsLimit) {
+                expectedBlackCapturedLocs.insert(Location::getLoc(x, 1, width));
+            }
+        }
+
+        Color thirdLineColor;
+        if (x < width - 2) {
+            thirdLineColor = x % 2 == 0 ? P_BLACK : P_WHITE;
+        } else if (x == width - 2) {
+            thirdLineColor = C_EMPTY;
+        } else {
+            thirdLineColor = P_BLACK;
+        }
+        if (thirdLineColor != C_EMPTY) {
+            moves.emplace_back(Location::getLoc(x, 2, width), thirdLineColor);
+            if (thirdLineColor == P_WHITE && !shouldHitTurnsLimit) {
+                expectedBlackCapturedLocs.insert(Location::getLoc(x, 2, width));
+            }
+        }
+
+        if (x < width - 3 && x % 2 == 1) {
+            moves.emplace_back(Location::getLoc(x, 3, width), P_BLACK);
+        }
+    }
+
+    unordered_set<Loc> expectedBlackWorkingLocs;
+    if (!shouldHitTurnsLimit) {
+        expectedBlackWorkingLocs.insert(Location::getLoc(width - 3, 3, width));
+    }
+
+    cout << "Check " << (shouldHitTurnsLimit ? "turns limit" : "capturing") << ":\n";
+    checkLadders(
+        width,
+        height,
+        moves,
+        expectedBlackWorkingLocs,
         {},
-        {Location::getLoc(1, 1, width), Location::getLoc(2, 1, width)},
-        {});
+        expectedBlackCapturedLocs,
+        {},
+        expectedBlackCapturedLocs.size(),
+        0,
+        maxMovesCount
+    );
+}
 
-    cout << "Check capturing:" << endl;
-    checkLadders(representationWithCapture, expectedLadder, 2, 0);
+// Check the following pattern scaled to max len:
+//      0  1  2  3                   MAX
+//   0  .  X  X  X  ...  X  X  X  .  .
+//   1  X  O  O  O  ...  O  O  O  X  .
+//   2  X  O  X  O  ...  O  X  O  .  X
+//   3  .  X  .  X  ...  X  .  .  .  .
+//   4  .  .  .  .  ...  .  .  .  .  .
+//                  ...
+// MAX  .  .  .  .  ...  .  .  .  .  .
+//
+// That's ended up with big triangular capture if turns limit isn't hit.
+TEST(LadderTests, StressHitsMaxTurnsLimit) {
+    stressHugeNumberOfTurns(10, 100, true);
+    stressHugeNumberOfTurns(10, 10000, false);
+    stressHugeNumberOfTurns(30, std::numeric_limits<uint16_t>::max(), true);
 }
 
 TEST(LaddersPerformanceTests, RandomGames) {

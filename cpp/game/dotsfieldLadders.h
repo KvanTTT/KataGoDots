@@ -81,14 +81,14 @@ public:
   explicit DotsLaddersSolver() = delete;
 
   explicit DotsLaddersSolver(Board& newBoard, const bool newStoreMovesTree = false,
-    const std::vector<Move>& newInitialMoves = {}, const std::vector<Move>& newExtraMoves = {}) :
-      board(newBoard), storeMovesTree(newStoreMovesTree), initialMoves(newInitialMoves), extraMoves(newExtraMoves) {
+    const std::vector<Move>& newInitialMoves = {}, const std::vector<Move>& newExtraMoves = {},
+    const uint16_t newMaxMovesCount = 65535U) :
+      maxMovesCount(newMaxMovesCount), board(newBoard), storeMovesTree(newStoreMovesTree), initialMoves(newInitialMoves), extraMoves(newExtraMoves) {
     chainsData.resize(getMaxArrSize(newBoard.x_size, newBoard.y_size));
     initialWhiteScore = static_cast<short>(newBoard.numBlackCaptures - newBoard.numWhiteCaptures);
     // Reserve memory to get rid of excessive reallocations.
     // The field perimeter size should be enough for most cases.
     walkStack.reserve((newBoard.x_size + newBoard.y_size) * 2);
-
     movesTreeRoot = std::make_unique<MoveTreeNode>();
     currentMovesTreeNode = movesTreeRoot.get();
   }
@@ -99,7 +99,7 @@ public:
     return attacker == P_BLACK ? zeroBlack : zeroWhite;
   }
 
-  [[nodiscard]] uint16_t getMovesCount() const { return movesCounter; }
+  [[nodiscard]] uint32_t getMovesCount() const { return movesCounter; }
   [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
   [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
   [[nodiscard]] short getWhiteScoreDiff() const { return board.numBlackCaptures - board.numWhiteCaptures - initialWhiteScore; }
@@ -278,7 +278,8 @@ private:
 
   uint16_t currentDepth = 0;
   uint16_t maxDepth = 0;
-  uint16_t movesCounter = 0;
+  uint32_t movesCounter = 0;
+  uint16_t maxMovesCount;
   short initialWhiteScore = 0;
 
   struct ChainsInfo {
