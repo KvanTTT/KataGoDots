@@ -241,6 +241,8 @@ void DotsLaddersSolver::appendAttackerLocsToCheck(vector<pair<LadderMoveInfoType
     ) == attackerLocsToCheck.end();
   };
 
+  bool requireAtLeastTwoUnconnectedDotsForLadder = defenderCapture;
+
   if (!defenderCapture) {
     attackerLocsToCheck.emplace_back(LADDER, defenderLastMoveLoc);
   } else {
@@ -251,14 +253,13 @@ void DotsLaddersSolver::appendAttackerLocsToCheck(vector<pair<LadderMoveInfoType
   auto checkAndAddAdjacentLoc = [&](const Loc directlyAdjLoc, const Loc indirectlyAdjLoc) {
     if (checkLoc(directlyAdjLoc)) {
       // The adjacent loc should be empty and have at least one connection with the player chain (otherwise it can't create ladders).
-      bool requireAtLeastTwoUnconnectedDotsForLadder = defenderCapture;
       if (const auto chainCaptureLocType = getChainCaptureLocType(directlyAdjLoc, attacker, requireAtLeastTwoUnconnectedDotsForLadder, true);
         chainCaptureLocType != EMPTY) {
         attackerLocsToCheck.emplace_back(chainCaptureLocType, directlyAdjLoc);
       }
     }
 
-    // Handle special cases when the capturing loc isn't directly adjacent to last defender loc:
+    // Handle special cases when the capture/ladder loc isn't directly adjacent to last defender loc:
     //
     // .  X  X  X  .
     // X  O' O' O' X
@@ -273,13 +274,14 @@ void DotsLaddersSolver::appendAttackerLocsToCheck(vector<pair<LadderMoveInfoType
     // .  X  O  X  .
     // .  .  .  .  .
     //
-    // Check the color of the direct adjacent loc at first because it's not safe to use locs outside the field borders + side locs.
+    // Check the color of the direct adjacent loc at first because it's not safe to use locs outside of the field borders + side locs.
     // If the color isn't empty, it's safe to calculate the non-directly adjacent loc because it means the directlyAdjLoc is always
     // within real borders and its adjacent locs are always legal.
-    if (checkLoc(indirectlyAdjLoc)) {
-      if (board.getColor(directlyAdjLoc) == defender && maybeChainCaptureLoc(indirectlyAdjLoc, attacker, true)) {
-        attackerLocsToCheck.emplace_back(CAPTURE, indirectlyAdjLoc);
-      }
+    if (checkLoc(indirectlyAdjLoc) && board.getColor(directlyAdjLoc) == defender) {
+      if (const auto chainCaptureLocType = getChainCaptureLocType(indirectlyAdjLoc, attacker, requireAtLeastTwoUnconnectedDotsForLadder, true);
+        chainCaptureLocType != EMPTY) {
+              attackerLocsToCheck.emplace_back(chainCaptureLocType, indirectlyAdjLoc);
+        }
     }
   };
 
