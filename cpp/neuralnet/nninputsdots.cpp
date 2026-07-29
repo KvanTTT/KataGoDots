@@ -1,5 +1,7 @@
 #include "../neuralnet/nninputs.h"
 
+#include "../core/test.h"
+
 using namespace std;
 
 void NNInputs::fillRowV7Dots(
@@ -112,7 +114,7 @@ void NNInputs::fillRowV7Dots(
     }
   }
 
-  assert(deadDotsCount == board.numBlackCaptures + board.numWhiteCaptures);
+  testAssert(deadDotsCount == board.numBlackCaptures + board.numWhiteCaptures);
 
   int maxTurnsOfHistoryToInclude = 5;
   const vector<Move>& moveHistory = hist.moveHistory;
@@ -122,7 +124,7 @@ void NNInputs::fillRowV7Dots(
   }
   const int amountOfHistoryToTryToUse = std::min(maxTurnsOfHistoryToInclude, hist.numApproxValidTurnsThisPhase);
   const int moveHistoryLen = static_cast<int>(moveHistory.size());
-  assert(moveHistoryLen >= hist.numApproxValidTurnsThisPhase);
+  testAssert(moveHistoryLen >= hist.numApproxValidTurnsThisPhase);
 
   bool groundIsEncountered = false;
   Player currentPla = opp;
@@ -149,12 +151,12 @@ void NNInputs::fillRowV7Dots(
     // Ignore them for refinement because NN wasn't trained on them.
     // Don't use calculateCapturesAndTerritoriesColorsForDots on each board because it's too expensive and makes little sense.
     if (!BoardHistory::isReasonableForDotsNoCapturesAndTerritories(prevLoc, hist.getRecentBoard(i + 1), currentPla)) {
-      assert(!selfplay && "Unreasonable move during selfplay game!");
+      testAssert(!selfplay && "Unreasonable move during selfplay game!");
       continue;
     }
 
     if (prevLoc == Board::PASS_LOC) {
-      assert(!groundIsEncountered); // Since the grounding is always ending mode, it could be only single one
+      testAssert(!groundIsEncountered); // Since the grounding is always ending mode, it could be only single one
       setGlobal(DotsGlobalFeature::HistoryGroundLoc_0);
       groundIsEncountered = true;
     } else {
