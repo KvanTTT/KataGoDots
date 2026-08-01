@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 #include "testdotsutils.h"
 #include "tests.h"
 #include "game/board.h"
@@ -27,48 +29,53 @@ static string generateBoardStateRepresentation(Board& board,
     unordered_set<Loc> blackCapturedLocs,
     unordered_set<Loc> whiteCapturedLocs
     ) {
-    std::ostringstream stream;
+
+    vector<string> items;
+    int maxItemLength = 2;
 
     for (int y = 0; y < board.y_size; y++) {
         for (int x = 0; x < board.x_size; x++) {
             const Loc loc = Location::getLoc(x, y, board.x_size);
 
+            std::ostringstream stream;
             stream << PlayerIO::stateToChar(board.getState(loc), true);
 
-            int extraStatusCounter = 0;
-            if (blackCapturedLocs.find(loc) != blackCapturedLocs.end()) {
-                stream << '\'';
-                extraStatusCounter++;
-            }
-            if (whiteCapturedLocs.find(loc) != whiteCapturedLocs.end()) {
-                stream << '\'';
-                extraStatusCounter++;
-            }
+            int itemLength = 1;
             if (blackWorkingLocs.find(loc) != blackWorkingLocs.end()) {
                 stream << 'x';
-                extraStatusCounter++;
+                itemLength++;
             }
             if (whiteWorkingLocs.find(loc) != whiteWorkingLocs.end()) {
                 stream << 'o';
-                extraStatusCounter++;
+                itemLength++;
             }
-            //assert(extraStatusCounter <= 1);
-
-            if (extraStatusCounter == 0) {
-                stream << ' ';
+            if (blackCapturedLocs.find(loc) != blackCapturedLocs.end()) {
+                stream << '\'';
+                itemLength++;
+            }
+            if (whiteCapturedLocs.find(loc) != whiteCapturedLocs.end()) {
+                stream << '\'';
+                itemLength++;
             }
 
-            stream << ' ';
+            maxItemLength = std::max(itemLength, maxItemLength);
+
+            items.emplace_back(stream.str());
         }
-
-        stream << endl;
     }
 
-    return stream.str();
-}
+    std::ostringstream result;
+    for (int i = 0; i < items.size(); i++) {
+        const auto& item = items[i];
+        result << item;
+        if (int x = i % board.x_size; x < board.x_size - 1) {
+            result << string(static_cast<int>(maxItemLength - item.length() + 1), ' ');
+        } else {
+            result << '\n';
+        }
+    }
 
-static string generateBoardRepresentation(Board& board) {
-    return generateBoardStateRepresentation(board, {}, {}, {}, {});
+    return result.str();
 }
 
 static string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLaddersSolver& solver) {
@@ -101,14 +108,20 @@ static string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLadder
         for (int x = 0; x < board.x_size; x++) {
             const Loc loc = Location::getLoc(x, y, board.x_size);
 
-            if (Color capturedColor = solver.getCapturedColor(loc); capturedColor != C_EMPTY) {
-                std::unordered_set<Loc>& capturedLocs = capturedColor == C_BLACK ? blackCapturedLocs : whiteCapturedLocs;
-                capturedLocs.insert(loc);
+            Color capturedColor = solver.getCapturedColor(loc);
+            if (capturedColor & C_BLACK) {
+                blackCapturedLocs.insert(loc);
+            }
+            if (capturedColor & C_WHITE) {
+                whiteCapturedLocs.insert(loc);
             }
 
-            if (Color workingLocColor = solver.getWorkingColor(loc); workingLocColor != C_EMPTY) {
-                std::unordered_set<Loc>& workingLocs = workingLocColor == C_BLACK ? blackWorkingLocs : whiteWorkingLocs;
-                workingLocs.insert(loc);
+            Color workingLocColor = solver.getWorkingColor(loc);
+            if (workingLocColor & C_BLACK) {
+                blackWorkingLocs.insert(loc);
+            }
+            if (workingLocColor & C_WHITE) {
+                whiteWorkingLocs.insert(loc);
             }
         }
     }
@@ -180,36 +193,37 @@ static Board parseDotsFieldWithLaddersInfo(const string& boardData, const bool c
                     x = 0;
                 }
                 continue;
-            case '.':
-                if (i < boardData.size() - 1) {
-                    switch (boardData[i + 1]) {
-                        case '\n':
-                            break;
-                        case ' ': // Empty loc
-                            i++;
-                            break;
-                        case FIRST_PLA_LOWER:
-                            // First player working move
-                            workingMoves.emplace_back(x, y, P_BLACK);
-                            i++;
-                            break;
-                        case SECOND_PLA_LOWER:
-                            // Second player working move
-                            workingMoves.emplace_back(x, y, P_WHITE);
-                            i++;
-                            break;
-                        case '\'':
-                            // Captured loc. Currently, it's not possible to detect the captured color reliably
-                            // Use P_BLACK as default
-                            capturedMoves.emplace_back(x, y, P_BLACK);
-                            i++;
-                            break;
-                        default:
-                            throw StringError(string("Unexpected ladder loc type: ") + boardData[i + 1]);
+            case '.': {
+                bool markerEnd = false;
+                while (!markerEnd) {
+                    if (i < boardData.size() - 1) {
+                        switch (const char nextChar = boardData[i + 1]) {
+                            case '\n':
+                                markerEnd = true;
+                                break;
+                            case ' ': // Empty loc
+                                i++;
+                                markerEnd = true;
+                                break;
+                            case FIRST_PLA_LOWER:
+                            case SECOND_PLA_LOWER:
+                                workingMoves.emplace_back(x, y, nextChar == FIRST_PLA_LOWER ? P_BLACK : P_WHITE);
+                                i++;
+                                break;
+                            case '\'':
+                                // Captured loc. Currently, it's not possible to detect the captured color reliably
+                                // Use P_BLACK as default
+                                capturedMoves.emplace_back(x, y, P_BLACK);
+                                i++;
+                                break;
+                            default:
+                                throw StringError(string("Unexpected ladder loc type: ") + boardData[i + 1]);
+                        }
                     }
                 }
                 x++;
                 break;
+            }
             case FIRST_PLA_UPPER:
             case SECOND_PLA_UPPER: {
                 const Color color = c == FIRST_PLA_UPPER ? C_BLACK : C_WHITE;
@@ -494,11 +508,11 @@ TEST(LadderTests, NotLadderBecauseOfOppAtari2) {
 .  .  .  .  .  .  .  X  .  .
 .  .  .  .  .  .  .  .  .  .
 .  .  .  .  .  .  .  .  .  .
-.  .  .  X  X  .  .  .  .  .
-.  O  X  O  O  O  .  .  .  .
-.  .  .  X  O  O  X  .  .  .
-.  O  X  O  O  X  .  .  .  .
-.  .  .  X  X  .  .  .  .  .
+.  .  .o X  X  .  .  .  .  .
+.  O  X' O  O  O  .  .  .  .
+.  .  .  X' O  O  X  .  .  .
+.  O  X' O  O  X  .  .  .  .
+.  .  .o X  X  .  .  .  .  .
 )");
 }
 
@@ -509,9 +523,9 @@ TEST(LadderTests, NoLadderBecauseOfOppFarAtari) {
 .  .  .  .  .  .  X  .  .  .
 .  .  .  .  .  .  .  .  .  .
 .  .  .  .  .  O  X  .  .  .
-.  .  .  .  O  X  O  O  .  .
-.  X  O  O  X  X  .  .  O  .
-.  .  X  X  O  .  .  .  .  .
+.  .  .  .  O  X' O  O  .  .
+.  X  O  O  X' X' .' .o O  .
+.  .  X  X  O  .' .o .  .  .
 .  .  .  .  .  O  O  .  .  .
 .  .  .  .  .  .  .  .  .  .
 )"
@@ -683,6 +697,22 @@ TEST(LadderTests, DISABLED_ConsiderAdjCornerLevel2OfPreviousDotOnDefending2) {
 )");
 }
 
+// TODO: Consider non-directly adjacent locs
+TEST(LadderTests, DISABLED_ConsiderAdjCornerLoc) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  X  X  X  X  .  .  .  .  .
+.  .  X  O  O  .  O' X  .  .  .  .
+.  .  X  O  .  .  .x .  .  .  .  .
+.  .  X  O  .  .  .  .  .  .  .  .
+.  .  X  O  .  .  .  .  .  .  .  .
+.  .  .  X  .  .  .  .  .  X  .  .
+.  .  .  .  .  .  .  .  .  .  .  .
+.  .  .  .  .  .  .  .  .  .  .  .
+)");
+}
 
 TEST(LadderTests, LadderCaptureOnOtherSideWhenOppCaptures) {
     checkLadders(
@@ -856,6 +886,76 @@ TEST(LadderTests, IndirectlyAdjacentLocIsLadderButNotCapture) {
 .  X  O' O' X  .  .
 .  .  X  X  .  .  .
 .  .  .  .  .  .  .
+)");
+}
+
+TEST(LadderTests, TwoColorsSimple) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .
+.  .  X  X  O  O  .  .
+.  X  O' O' X' X' O  .
+.  .  .  .x .o .  .  .
+.  X  .  .  .  .  O  .
+.  .  .  .  .  .  .  .
+)"
+        );
+}
+
+TEST(LadderTests, IgnoreWorkingMovesWhenTheyHitCaptureLocations) {
+    checkLadders(
+        R"(
+.  X  X  X  X  .
+X  .' .' .' .' .x
+X  O' .' .' .' .x
+.  X  X  X  X  .
+        )");
+
+    checkLadders(
+R"(
+.  X  X  X  X  .
+.x .' .' .' .' X
+.x .' .' .' O' X
+.  X  X  X  X  .
+    )");
+
+    checkLadders(
+    R"(
+.  .  .  .  .x .  .  .
+.  X  X  X  .' X  X  .
+X  .' .' .' .' O' .' X
+X  O' .' .' .' .' .' X
+.  X  X  X  .x X  X  .
+        )");
+
+    checkLadders(
+R"(
+.   X   X   .   O   O   .
+X   .'  .'  .xo .'  X'  O
+X   O'  .'  .xo .'  .'  O
+.   X   X   .   O   O   .
+        )");
+
+    checkLadders(
+R"(
+.   X   X   O   O   O   .
+X   .'  .o' .x' .'  X'  O
+X   O'  .o' .x' .'  .'  O
+.   X   X   O   O   O   .
+)");
+
+    checkLadders(
+    R"(
+.   .   .   .   .   .   .   .   .   .   .   .
+.   .   .   .   .   .   .   .   .   .   .   .
+.   .   .   O   O   O   X   X   X   .   .   .
+.   .   O   .'  .'  X'  O'  .'  .'  X   .   .
+.   .   .   O   .'  .'  O'  .'  X   .   .   .
+.   .   .   O   .'  X'  .o' .'  X   .   .   .
+.   .   .   O   .'  .'  .xo .'  X   .   .   .
+.   .   .   .   O   O   .   X   .   .   .   .
+.   .   .   .   .   .   .   .   .   .   .   .
+.   .   .   .   .   .   .   .   .   .   .   .
 )");
 }
 
