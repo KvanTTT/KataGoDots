@@ -27,11 +27,17 @@ void DotsLaddersSolver::solve() {
           return;
         }
 
+        if (getCapturedColor(loc) == pla) {
+          // A potential surrounding is always superseded by a bigger one.
+          // Filter out such locations to minimize noise.
+          return;
+        }
+
         startLadder(loc, pla);
       };
 
       addLadderMoveInfo(P_BLACK);
-      //addLadderMoveInfo(P_WHITE); TODO: uncomment after current tests suite with single color become robust
+      addLadderMoveInfo(P_WHITE);
     }
   }
 }
@@ -43,7 +49,9 @@ void DotsLaddersSolver::startLadder(const Loc newInitLoc, const Player pla) {
   if (const auto result = iterateForAttacker(initLoc); !result.isZero()) {
     for (const auto& loc : result.territoryLocs) {
       setCapturedPlayer(loc, attacker);
+      resetWorkingLocPlayer(loc, attacker); // Filter out working locs that hit capture locs to minimize noise.
     }
+    assert(getCapturedColor(initLoc) != attacker);
     setWorkingLocPlayer(initLoc, attacker);
   }
   initLoc = Board::NULL_LOC;

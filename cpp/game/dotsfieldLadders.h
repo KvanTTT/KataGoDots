@@ -268,6 +268,10 @@ private:
     resultData[loc] = static_cast<char>(resultData[loc] | static_cast<char>(pla << 2));
   }
 
+  void resetWorkingLocPlayer(const Loc loc, const Player pla) {
+    resultData[loc] = static_cast<char>(resultData[loc] & ~(pla << 2));
+  }
+
   [[nodiscard]] bool maybeChainCaptureLoc(const Loc loc, const Player pla, const bool ignoreEmptyBaseLocs) const {
     return getChainCaptureLocType(loc, pla, false, ignoreEmptyBaseLocs) == CAPTURE;
   }
