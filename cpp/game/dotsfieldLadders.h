@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <ostream>
+#include <unordered_map>
 #include <utility>
 
 #include "board.h"
@@ -110,7 +111,9 @@ public:
   }
 
   [[nodiscard]] uint32_t getMovesCount() const { return movesCounter; }
+  [[nodiscard]] uint32_t getCacheHitsCount() const { return cacheHitsCounter; }
   [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
+  [[nodiscard]] uint32_t getCacheSize() const { return attackerResultsCache.size(); }
   [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
   [[nodiscard]] short getWhiteScoreDiff() const { return board.numBlackCaptures - board.numWhiteCaptures - initialWhiteScore; }
   void clearMaxDepth() { maxDepth = 0; }
@@ -174,11 +177,16 @@ private:
     undo(moveRecord, moveType, result);
   }
 
-  void undo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType, const LadderLocInfo* result = nullptr) {
+  void undo(const Board::MoveRecord& moveRecord, const LadderMoveType moveType, const LadderLocInfo* result = nullptr, const bool cacheHit = false) {
     const_cast<Board&>(board).undoDots(moveRecord);
+
+    if (cacheHit) {
+      cacheHitsCounter++;
+    }
 
     if (storeMovesTree) {
       currentMovesTreeNode->moveType = moveType;
+      currentMovesTreeNode->cacheHit = cacheHit;
       if (result != nullptr) {
         currentMovesTreeNode->score = result->score;
         currentMovesTreeNode->territory = result->territoryLocs.size();
@@ -283,12 +291,13 @@ private:
   // A node of the tree of explored moves, kept only when storeMovesTree is true.
   // The root node (movesTreeRoot) is synthetic and has loc == Board::NULL_LOC.
   struct MoveTreeNode {
-    Loc loc = Board::NULL_LOC;
     Player pla = C_EMPTY;
     LadderMoveType moveType = INVALID;
+    Loc loc = Board::NULL_LOC;
     short score = 0;
     short territory = 0;
     int number = 0;
+    bool cacheHit = false;
     std::vector<std::unique_ptr<MoveTreeNode>> children;
   };
 
@@ -303,6 +312,7 @@ private:
   uint16_t currentDepth = 0;
   uint16_t maxDepth = 0;
   uint32_t movesCounter = 0;
+  uint32_t cacheHitsCounter = 0;
   uint16_t maxMovesCount;
   short initialWhiteScore = 0;
 
@@ -329,6 +339,9 @@ private:
   std::vector<ChainsInfo> attackerChainInfos;
   std::vector<ChainsInfo> defenderChainInfos;
   std::vector<std::vector<Loc>> defenderCaptureLocs;
+
+  // Transposition cache for iterateForAttacker(), keyed by the board position hash combined with the current player.
+  std::unordered_map<Hash128, LadderLocInfo, Hash128Hash> attackerResultsCache;
 
   // Tree of explored moves, kept only when storeMovesTree is true, for later dumping via toSgf().
   // currentMovesTreeNode is the node for the current position; movesTreeStack holds its ancestors
