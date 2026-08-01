@@ -6,7 +6,7 @@
 
 using namespace std;
 
-void DotsLaddersSolver::solve() {
+void DotsLaddersSolver::solve(const Board::CapturesAndTerritoriesInfos& capturesAndTerritoriesInfos) {
   if (board.is_finished) {
     return; // Ladders are not relevant when the game is finished (by grounding or resignation)
   }
@@ -23,13 +23,20 @@ void DotsLaddersSolver::solve() {
       const Color colorsOfPotentialCapturing = board.getColorsOfPotentialCapturing(loc, 1);
 
       const auto addLadderMoveInfo = [&](const Player pla) {
-        if (!(colorsOfPotentialCapturing & pla) || emptyTerritoryColor == pla || (emptyTerritoryColor != C_EMPTY && !board.wouldBeCaptureDots(loc, pla))) {
+        // Skip placing into own empty territory. The reasonability of placing into opp empty territory is being checked
+        // using `capturesAndTerritoriesInfos` (sometimes it can be a capture).
+        if (!(colorsOfPotentialCapturing & pla) || emptyTerritoryColor == pla) {
           return;
         }
 
         if (getCapturedColor(loc) == pla) {
           // A potential surrounding is always superseded by a bigger one.
           // Filter out such locations to minimize noise.
+          return;
+        }
+
+        if (const auto* capturesAndTerritoriesInfo = capturesAndTerritoriesInfos.at(loc);
+          capturesAndTerritoriesInfo != nullptr && !capturesAndTerritoriesInfo->isReasonableMove(pla)) {
           return;
         }
 
@@ -445,7 +452,6 @@ void DotsLaddersSolver::popChainInfo(const Player pla) {
   vector<Loc>& maybeCaptureLocs = pla == attacker ? attackerMaybeCaptureLocs : defenderMaybeCaptureLocs;
   const auto& [newChainLocsCount, newMaybeCaptureLocsCount] = chainInfos.back();
 
-  assert(newChainLocsCount > 0 || board.rules.dotsCaptureEmptyBases);
   const int chainLocsSize = static_cast<int>(chainLocs.size());
   for (int i = chainLocsSize - 1; i >= chainLocsSize - newChainLocsCount; i--) {
     const Loc chainLoc = chainLocs[i];
