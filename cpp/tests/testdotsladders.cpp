@@ -97,6 +97,7 @@ static string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLadder
         cout << " (+" << solver.getMovesCount() - previousMovesCount << ")";
     }
     cout << ", max depth: " << solver.getMaxDepth();
+    cout << ", cache hits: " << solver.getCacheHitsCount() << ", cache size: " << solver.getCacheSize();
     cout << '\n';
 
     std::unordered_set<Loc> blackWorkingLocs;

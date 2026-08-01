@@ -75,15 +75,22 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
 
   const auto moveRecordForLoc = play(loc, attacker);
 
+  const Hash128 cacheKey = board.pos_hash ^ Board::ZOBRIST_PLAYER_HASH[attacker];
+  if (const auto cacheIt = attackerResultsCache.find(cacheKey); cacheIt != attackerResultsCache.end()) {
+    const LadderLocInfo& cachedResult = cacheIt->second;
+    undo(moveRecordForLoc, cachedResult.isZero() ? LADDER_FAILED : LADDER_SUCCEEDED, &cachedResult, true);
+    return cachedResult;
+  }
+
   if (!moveRecordForLoc.bases.empty() && moveRecordForLoc.bases[0].type == Board::Base::Type::SUICIDAL) {
     undo(moveRecordForLoc, LADDER_FAILED);
-    return zero();
+    return attackerResultsCache.emplace(cacheKey, zero()).first->second;
   }
 
   if (isRelevantCapturing(moveRecordForLoc)) {
     const auto result = LadderLocInfo::create(loc, attacker, moveRecordForLoc, getWhiteScoreDiff());
     undo(moveRecordForLoc, LADDER_SUCCEEDED_STOP, &result);
-    return result;
+    return attackerResultsCache.emplace(cacheKey, result).first->second;
   }
 
   createAndPushChainInfo(loc, attacker);
@@ -139,7 +146,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
 
   reduceChainAndUndo(moveRecordForLoc, !ladderLocInfo.isZero() ? LADDER_SUCCEEDED : LADDER_FAILED, &ladderLocInfo);
 
-  return ladderLocInfo;
+  return attackerResultsCache.emplace(cacheKey, std::move(ladderLocInfo)).first->second;
 }
 
 DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc loc) {
@@ -627,6 +634,9 @@ void DotsLaddersSolver::writeMovesTreeSgf(std::ostream& out, const MoveTreeNode*
         ASSERT_UNREACHABLE;
     }
     out << "; # " << node->number << "; loc: " << node->loc;
+    if (node->cacheHit) {
+      out << "; cache hit";
+    }
     if (node->moveType == LADDER_SUCCEEDED || node->moveType == LADDER_SUCCEEDED_STOP || node->moveType == CAPTURE_FOUND) {
       out << "; score: " << node->score << "; territory: " << node->territory;
     }
