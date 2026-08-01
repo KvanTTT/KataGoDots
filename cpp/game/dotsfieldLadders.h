@@ -95,7 +95,7 @@ public:
     currentMovesTreeNode = movesTreeRoot.get();
   }
 
-  void solve();
+  void solve(const Board::CapturesAndTerritoriesInfos& capturesAndTerritoriesInfos);
 
   Color getCapturedColor(const Loc loc) const {
     return static_cast<Color>(resultData[loc] & 0b11);

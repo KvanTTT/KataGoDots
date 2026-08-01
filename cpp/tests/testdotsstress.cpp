@@ -242,18 +242,19 @@ void Tests::runDotsStressTestsInternal(
         } else {
           board.playMoveAssumeLegal(lastLoc, pla);
 
-          if (checkingMode == CAPTURE_TERRITORY_ON_EACH_MOVE) {
+          if (checkingMode != REGULAR) {
             const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+            if (checkingMode == CAPTURE_TERRITORY_ON_EACH_MOVE) {
+              (void)boardHistory->getReasonableMoves(board, P_BLACK, Board::NULL_LOC, false, &capturesAndTerritoriesInfos);
+              (void)boardHistory->getReasonableMoves(board, P_WHITE, Board::NULL_LOC, false, &capturesAndTerritoriesInfos);
 
-            (void)boardHistory->getReasonableMoves(board, P_BLACK, Board::NULL_LOC, false, &capturesAndTerritoriesInfos);
-            (void)boardHistory->getReasonableMoves(board, P_WHITE, Board::NULL_LOC, false, &capturesAndTerritoriesInfos);
-
-            (void)boardHistory->whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfos);
-          } else if (checkingMode == LADDERS_ON_EACH_MOVE) {
-            Board boardCopy = board;
-            DotsLaddersSolver laddersSolver(board);
-            laddersSolver.solve();
-            testAssert(boardCopy.isEqualForTesting(board));
+              (void)boardHistory->whiteScoreIfGroundingAlive(board, C_EMPTY, &capturesAndTerritoriesInfos);
+            } else if (checkingMode == LADDERS_ON_EACH_MOVE) {
+              Board boardCopy = board;
+              DotsLaddersSolver laddersSolver(board);
+              laddersSolver.solve(capturesAndTerritoriesInfos);
+              testAssert(boardCopy.isEqualForTesting(board));
+            }
           }
         }
         currentGameMovesCount++;

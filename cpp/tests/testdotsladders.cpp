@@ -89,7 +89,7 @@ static string playAndDumpLaddersInfo(Board& board, const XYMove move, DotsLadder
     solver.clearMaxDepth();
 
     Board fieldCopy = board;
-    solver.solve();
+    solver.solve(board.calculateCapturesAndTerritoriesColorsForDots());
     testAssert(fieldCopy.isEqualForTesting(board));
 
     cout << "Total moves count: " << solver.getMovesCount();
@@ -441,6 +441,19 @@ TEST(LadderTests, WorkingMoveIsAlsoCapturingMove) {
 )");
 }
 
+TEST(LadderTests, CapturingMoveInEmptyTerritory) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .
+.  .  X  .  X  .  .  .
+.  X  .' .  O  .  .  .
+.  X  O' O' .x O  O  .
+.  .  X  X  O  X  .  .
+.  .  .  .  X  .  .  .
+.  .  .  .  .  .  .  .
+)");
+}
+
 TEST(LadderTests, OneWorkingMoveIsAlsoUnrelatedCapturing) {
     checkLadders(
         R"(
@@ -523,9 +536,9 @@ TEST(LadderTests, NoLadderBecauseOfOppFarAtari) {
 .  .  .  .  .  .  X  .  .  .
 .  .  .  .  .  .  .  .  .  .
 .  .  .  .  .  O  X  .  .  .
-.  .  .  .  O  X' O  O  .  .
-.  X  O  O  X' X' .' .o O  .
-.  .  X  X  O  .' .o .  .  .
+.  .  .  .  O  X  O  O  .  .
+.  X  O  O  X  X  .  .  O  .
+.  .  X  X  O  .  .  .  .  .
 .  .  .  .  .  O  O  .  .  .
 .  .  .  .  .  .  .  .  .  .
 )"
@@ -956,6 +969,84 @@ X   O'  .o' .x' .'  .'  O
 .   .   .   .   O   O   .   X   .   .   .   .
 .   .   .   .   .   .   .   .   .   .   .   .
 .   .   .   .   .   .   .   .   .   .   .   .
+)");
+
+    checkLadders(
+R"(
+.  .  .  .  .x .x .  .  .  .
+.  .  .  X  .' .' X  .  .  .
+.  .  X  .' .' .' .' X  .  .
+.  X  .' .' .' .' .' .' X  .
+.  X  .' X' O' O' X' .' X  .
+.  X  .' .' X' X' .' .' X  .
+.  .  X  .' .' .' .' X  .  .
+.  .  .  X  X  X  X  .  .  .
+)");
+
+    checkLadders(
+R"(
+.  .  .  X  X  X  X  .  .  .
+.  .  X  .' .' .' .' X  .  .
+.  X  .' .' .' .' .' .' X  .
+.  X  .' X' O' O' X' .' X  .
+.  X  .' .' X' X' .' .' X  .
+.  .  X  .' .' .' .' X  .  .
+.  .  .  X  .' .' X  .  .  .
+.  .  .  .  .x .x .  .  .  .
+)");
+}
+
+TEST(LadderTests, IgnoreLaddersUnderOneMoveCapturing) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .  .  .
+.  .  .  X  X  .  X  .  .  .
+.  .  X  .  .  .  .  X  .  .
+.  X  .  .  .  .  .  .  X  .
+.  X  .  X  O  O  X  .  X  .
+.  X  .  .  X  X  .  .  X  .
+.  .  X  .  .  .  .  X  .  .
+.  .  .  X  X  X  X  .  .  .
+.  .  .  .  .  .  .  .  .  .
+)");
+
+    checkLadders(
+    R"(
+.  .  .  .  .  .  .  .  .  .
+.  .  .  X  X  X  X  .  .  .
+.  .  X  .  .  .  .  X  .  .
+.  X  .  .  .  .  .  .  X  .
+.  X  .  X  O  O  X  .  X  .
+.  X  .  .  X  X  .  .  X  .
+.  .  X  .  .  .  .  X  .  .
+.  .  .  X  X  .  X  .  .  .
+.  .  .  .  .  .  .  .  .  .
+)");
+
+    checkLadders(
+    R"(
+.  .  .  .  .  .  .  .  .  .
+.  .  .  O  O  .  O  .  .  .
+.  .  O  .  .  .  .  O  .  .
+.  O  .  .  .  .  .  .  O  .
+.  O  .  X  O  O  X  .  O  .
+.  O  .  .  X  X  .  .  O  .
+.  .  O  .  .  .  .  O  .  .
+.  .  .  O  O  O  O  .  .  .
+.  .  .  .  .  .  .  .  .  .
+)");
+
+    checkLadders(
+    R"(
+.  .  .  .  .  .  .  .  .  .
+.  .  .  O  O  O  O  .  .  .
+.  .  O  .  .  .  .  O  .  .
+.  O  .  .  .  .  .  .  O  .
+.  O  .  X  O  O  X  .  O  .
+.  O  .  .  X  X  .  .  O  .
+.  .  O  .  .  .  .  O  .  .
+.  .  .  O  O  .  O  .  .  .
+.  .  .  .  .  .  .  .  .  .
 )");
 }
 
