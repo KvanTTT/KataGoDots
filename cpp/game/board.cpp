@@ -2876,7 +2876,8 @@ void Board::printBoard(
   const Loc markLoc,
   const vector<Move>* hist,
   const bool printHash,
-  const bool startFromLeftTopZero
+  const bool startFromLeftTopZero,
+  bool onlyActiveColor
   ) {
   if(hist != nullptr)
     out << "MoveNum: " << hist->size() << " ";
@@ -2910,12 +2911,12 @@ void Board::printBoard(
     }
     for(int x = 0; x < board.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, board.x_size);
-      const State state = board.getState(loc);
-      const char s = PlayerIO::stateToChar(state, board.rules.isDots);
-      if(getActiveColor(state) == C_EMPTY && markLoc == loc)
+      const Color activeColor = board.getColor(loc);
+      if(activeColor == C_EMPTY && markLoc == loc) {
         out << '@';
-      else
-        out << s;
+      } else {
+        out << (onlyActiveColor ? PlayerIO::colorToChar(activeColor) : PlayerIO::stateToChar(board.getState(loc), board.rules.isDots));
+      }
 
       bool histMarked = false;
       if(hist != nullptr) {
@@ -3027,9 +3028,9 @@ Board Board::parseBoard(const int xSize, const int ySize, const string& s, const
   return board;
 }
 
-std::string Board::toString(const bool startFromLeftTopZero) const {
+std::string Board::toString() const {
   std::ostringstream oss;
-  printBoard(oss, *this, NULL_LOC, nullptr, true, startFromLeftTopZero);
+  printBoard(oss, *this, NULL_LOC, nullptr, false, true, true);
   return oss.str();
 }
 
