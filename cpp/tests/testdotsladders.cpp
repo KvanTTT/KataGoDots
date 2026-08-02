@@ -455,7 +455,7 @@ TEST(LadderTests, CapturingMoveInEmptyTerritory) {
 )");
 }
 
-TEST(LadderTests, OneWorkingMoveIsAlsoUnrelatedCapturing) {
+TEST(LadderTests, WorkingMoveBecomesCapturedDuringLadderSolving) {
     checkLadders(
         R"(
 .  .  X  .  .  .  .  .
@@ -785,7 +785,7 @@ TEST(LadderTests, EmptyBaseAdjacentToRegular) {
 )");
 }
 
-TEST(LadderTests, NotWorkingLadderBecauseOfInternalCapturing) {
+TEST(LadderTests, NotRobustLadderBecauseOfInternalCapturing) {
     checkLadders(
         R"(
 .  .  .  .  .  .  .  .  .  .  .
@@ -800,7 +800,7 @@ TEST(LadderTests, NotWorkingLadderBecauseOfInternalCapturing) {
 )");
 }
 
-TEST(LadderTests, WorkingLadderWithInternalCapturings) {
+TEST(LadderTests, RobustLadderWithInternalCapturings) {
     // Ladders wins with +1 black score (5 visible white dots - 4 captured black dots during ladder solving)
     checkLadders(
         R"(
@@ -824,7 +824,7 @@ TEST(LadderTests, WorkingLadderWithInternalCapturings) {
 //   * Hopefully, NN will be able to estimate the losing score by itself because the capturing territory is provided and calculated as minimal.
 //   * Currently, there is no channel that would allow marking lost dots for ladders.
 //   * Such situations are hopefully very rare.
-TEST(LadderTests, WorkingLadderWithInternalCapturingsAndZeroScore) {
+TEST(LadderTests, RobustLadderWithInternalCapturingsAndZeroScore) {
     // Ladders wins with 0 black score (4 visible white dots - 4 captured black dots during ladder solving)
     checkLadders(
         R"(
@@ -840,7 +840,7 @@ TEST(LadderTests, WorkingLadderWithInternalCapturingsAndZeroScore) {
 )");
 }
 
-TEST(LadderTests, WorkingLadderWithInternalCapturingsAndLosingScore) {
+TEST(LadderTests, RobustLadderWithInternalCapturingsAndLosingScore) {
     // Ladders wins with -3 black score (4 visible white dots - 6 captured black dots during ladder solving)
     checkLadders(
         R"(
