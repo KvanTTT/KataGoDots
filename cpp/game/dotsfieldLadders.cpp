@@ -96,7 +96,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
   createAndPushChainInfo(loc, attacker);
   const auto captureLocs = extractCaptureLocs(attacker);
 
-  LadderLocInfo ladderLocInfo = zero();
+  LadderLocInfo finalLadderLocInfo = zero();
 
   for (const Loc captureLoc : captureLocs) {
     if (const auto maybeCapturingMoveRecord = play(captureLoc, attacker); isRelevantCapturing(maybeCapturingMoveRecord)) {
@@ -117,7 +117,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
         initializeDefenderChain(maybeCapturingMoveRecord);
       }
 
-      ladderLocInfo = iterateForDefender(captureLoc);
+      LadderLocInfo ladderLocInfo = iterateForDefender(captureLoc);
       if (!ladderLocInfo.isZero()) {
         // Optimization: don't run iteration over adjacent defender locs to calculate the worst capturing for pla considering defender ideal play.
         // Instead, assume that the failed defending loc is actually a capturing loc for pla.
@@ -137,16 +137,25 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
       }
 
       if (!ladderLocInfo.isZero()) {
-        break;
+        if (initDefenderChain) {
+          if (finalLadderLocInfo.isZero()) {
+            finalLadderLocInfo = std::move(ladderLocInfo);
+          } else {
+            finalLadderLocInfo.mergeWith(ladderLocInfo);
+          }
+        } else {
+          finalLadderLocInfo = std::move(ladderLocInfo);
+          break;
+        }
       }
     } else {
       undo(maybeCapturingMoveRecord, FALSE_CAPTURE);
     }
   }
 
-  reduceChainAndUndo(moveRecordForLoc, !ladderLocInfo.isZero() ? LADDER_SUCCEEDED : LADDER_FAILED, &ladderLocInfo);
+  reduceChainAndUndo(moveRecordForLoc, !finalLadderLocInfo.isZero() ? LADDER_SUCCEEDED : LADDER_FAILED, &finalLadderLocInfo);
 
-  return attackerResultsCache.emplace(cacheKey, std::move(ladderLocInfo)).first->second;
+  return attackerResultsCache.emplace(cacheKey, std::move(finalLadderLocInfo)).first->second;
 }
 
 DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForDefender(const Loc loc) {

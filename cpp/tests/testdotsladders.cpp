@@ -873,8 +873,7 @@ TEST(LadderTests, DISABLED_ComplexInterwoundSurroundings) {
 )");
 }
 
-// TODO: Fix calculation of two ladders with single working move but when both of them are inescapable
-TEST(LadderTests, DISABLED_WorkingMoveCreatesTwoLadders) {
+TEST(LadderTests, WorkingMoveCreatesTwoLadders) {
     checkLadders(
         R"(
 .  .  .  .  .  .  .  .
@@ -884,6 +883,22 @@ TEST(LadderTests, DISABLED_WorkingMoveCreatesTwoLadders) {
 .  X  O' O' .x .  .  .
 .  .  X  X  O' X  .  .
 .  .  .  X  O' .  .  .
+.  .  .  .  X  .  .  .
+.  .  .  .  .  .  X  .
+.  .  .  .  .  .  .  .
+)");
+}
+
+TEST(LadderTests, FalseWorkingMoveThatCouldCreateTwoLadders) {
+    checkLadders(
+        R"(
+.  .  .  .  .  .  .  .
+.  .  .  .  O  .  .  .
+.  X  .  O  .' O  .  .
+.  .  .o X' .' .' O  .
+.  X  O  O  .' .' .' O
+.  .  X  X  O  X' O  .
+.  .  .  X  O  .o .  .
 .  .  .  .  X  .  .  .
 .  .  .  .  .  .  X  .
 .  .  .  .  .  .  .  .
