@@ -13,8 +13,8 @@ public:
       return LadderLocInfo(Board::NULL_LOC, pla, nullptr, 0);
     }
 
-    static LadderLocInfo create(const Loc workingLoc, const Player pla, const Board::MoveRecord& moveRecord, const int whiteScoreDiff) {
-      return LadderLocInfo(workingLoc, pla, &moveRecord, whiteScoreDiff);
+    static LadderLocInfo create(const Loc captureLoc, const Player pla, const Board::MoveRecord& moveRecord, const int whiteScoreDiff) {
+      return LadderLocInfo(captureLoc, pla, &moveRecord, whiteScoreDiff);
     }
 
     void mergeWith(const LadderLocInfo& ladderLocInfo) {
@@ -24,7 +24,7 @@ public:
     }
 
     [[nodiscard]] bool isZero() const {
-      return workingLoc == Board::NULL_LOC;
+      return captureLoc == Board::NULL_LOC;
     }
 
     // Prioritize the score over territory.
@@ -39,14 +39,14 @@ public:
       return territoryLocs.size() < other.territoryLocs.size();
     }
 
-    Loc workingLoc;
+    Loc captureLoc;
     Player player;
     short score;
     std::vector<Loc> territoryLocs;
 
   private:
-    explicit LadderLocInfo(const Loc workingLoc, const Player pla, const Board::MoveRecord* moveRecord, const int whiteScoreDiff)
-      : workingLoc(workingLoc), player(pla) {
+    explicit LadderLocInfo(const Loc loc, const Player pla, const Board::MoveRecord* moveRecord, const int whiteScoreDiff)
+      : captureLoc(loc), player(pla) {
       if (!isZero()) {
         assert(!moveRecord->bases.empty());
         for (const auto& base : moveRecord->bases) {
