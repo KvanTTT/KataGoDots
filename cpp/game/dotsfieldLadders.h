@@ -17,6 +17,12 @@ public:
       return LadderLocInfo(workingLoc, pla, &moveRecord, whiteScoreDiff);
     }
 
+    void mergeWith(const LadderLocInfo& ladderLocInfo) {
+      assert(player == ladderLocInfo.player);
+      score += ladderLocInfo.score;
+      territoryLocs.insert(territoryLocs.end(), ladderLocInfo.territoryLocs.begin(), ladderLocInfo.territoryLocs.end());
+    }
+
     [[nodiscard]] bool isZero() const {
       return workingLoc == Board::NULL_LOC;
     }
