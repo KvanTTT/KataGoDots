@@ -597,6 +597,59 @@ std::string DotsLaddersSolver::debugChainsData() const {
   return stream.str();
 }
 
+std::string DotsLaddersSolver::debugResultData() const {
+  vector<string> items;
+  int maxItemLength = 2;
+
+  for (int y = 0; y < board.y_size; y++) {
+    for (int x = 0; x < board.x_size; x++) {
+      const Loc loc = Location::getLoc(x, y, board.x_size);
+
+      std::ostringstream stream;
+      stream << PlayerIO::colorToChar(board.getColor(loc));
+
+      int itemLength = 1;
+
+      Color workingLocColor = getWorkingColor(loc);
+      if (workingLocColor & C_BLACK) {
+        stream << 'x';
+        itemLength++;
+      }
+      if (workingLocColor & C_WHITE) {
+        stream << 'o';
+        itemLength++;
+      }
+
+      Color capturedColor = getCapturedColor(loc);
+      if (capturedColor & C_BLACK) {
+        stream << '\'';
+        itemLength++;
+      }
+      if (capturedColor & C_WHITE) {
+        stream << '\'';
+        itemLength++;
+      }
+
+      maxItemLength = std::max(itemLength, maxItemLength);
+
+      items.emplace_back(stream.str());
+    }
+  }
+
+  std::ostringstream result;
+  for (int i = 0; i < items.size(); i++) {
+    const auto& item = items[i];
+    result << item;
+    if (int x = i % board.x_size; x < board.x_size - 1) {
+      result << string(static_cast<int>(maxItemLength - item.length() + 1), ' ');
+    } else {
+      result << '\n';
+    }
+  }
+
+  return result.str();
+}
+
 // Same letter-coordinate convention as WriteSgf's SGF writer (dataio/sgf.cpp), reimplemented here to
 // avoid pulling that file's heavy transitive dependencies (program/search) into the lightweight
 // katago_tests target that dotsfieldLadders.cpp is built into.
