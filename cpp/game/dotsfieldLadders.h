@@ -294,6 +294,8 @@ private:
 
   [[nodiscard]] std::string debugChainsData() const;
 
+  [[nodiscard]] std::string debugResultData() const;
+
   // A node of the tree of explored moves, kept only when storeMovesTree is true.
   // The root node (movesTreeRoot) is synthetic and has loc == Board::NULL_LOC.
   struct MoveTreeNode {
