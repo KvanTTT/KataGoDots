@@ -74,7 +74,7 @@ struct MiscNNInputParams {
 };
 
 namespace NNInputs {
-  enum class DotsSpatialFeature  {
+  enum class DotsSpatialFeature : uint8_t  {
     OnBoard_0, // 0: On board
     PlayerActive_1, // 1: Pla stone
     PlayerOppActive_2, // 2: Opp stone
@@ -104,7 +104,7 @@ namespace NNInputs {
     COUNT, // = 22
   };
 
-  enum class DotsGlobalFeature  {
+  enum class DotsGlobalFeature : uint8_t  {
     HistoryGroundLoc_0, // 0: prev loc 1 PASS
     Reserved_1, // 1: prev loc 2 PASS
     Reserved_2, // 2: prev loc 3 PASS

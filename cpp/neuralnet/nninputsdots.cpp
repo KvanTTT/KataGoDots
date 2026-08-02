@@ -1,4 +1,7 @@
+#include "../game/dotsfieldLadders.h"
 #include "../neuralnet/nninputs.h"
+
+#include <optional>
 
 #include "../core/test.h"
 
@@ -109,8 +112,6 @@ void NNInputs::fillRowV7Dots(
           setSpatial(pos, DotsSpatialFeature::PlayerOppSurroundings_21);
         }
       }
-
-      // TODO: Set up history and ladder features, https://github.com/KvanTTT/KataGoDots/issues/3
     }
   }
 
@@ -128,6 +129,9 @@ void NNInputs::fillRowV7Dots(
 
   bool groundIsEncountered = false;
   Player currentPla = opp;
+
+  int numTurnsOfHistoryIncluded = 0;
+
   for (int i = 0; i < amountOfHistoryToTryToUse; i++) {
     const int index = moveHistoryLen - i - 1;
     if (index < 0) {
@@ -164,7 +168,38 @@ void NNInputs::fillRowV7Dots(
       setRowBin(rowBin, histPos, static_cast<int>(DotsSpatialFeature::Prev1Loc_9) + i, 1.0f, posStride, featureStride);
     }
 
+    numTurnsOfHistoryIncluded++;
+
     currentPla = getOpp(currentPla);
+  }
+
+  std::optional<DotsLaddersSolver> dotsLaddersSolver = DotsLaddersSolver(board);
+  dotsLaddersSolver->solve(capturesAndTerritoriesInfos);
+
+  int currentCapturedLayer = 0;
+
+  for (auto i = static_cast<uint8_t>(DotsSpatialFeature::LadderCaptured_14); i <= static_cast<uint8_t>(DotsSpatialFeature::LadderCapturedPrevious2_16); i++) {
+    for(int y = 0; y<ySize; y++) {
+      for(int x = 0; x<xSize; x++) {
+        const Loc loc = Location::getLoc(x, y, xSize);
+
+        if (const Color capturedColor = dotsLaddersSolver->getCapturedColor(loc); capturedColor != C_EMPTY) {
+          setSpatial(NNPos::xyToPos(x,y,nnXLen), static_cast<DotsSpatialFeature>(i));
+        }
+
+        if (i == static_cast<uint8_t>(DotsSpatialFeature::LadderCaptured_14) && dotsLaddersSolver->getWorkingColor(loc) == pla) {
+          setSpatial(NNPos::xyToPos(x,y,nnXLen), DotsSpatialFeature::LadderWorkingMoves_17);
+        }
+      }
+    }
+
+    currentCapturedLayer++;
+
+    if (i < static_cast<uint8_t>(DotsSpatialFeature::LadderCapturedPrevious2_16) && numTurnsOfHistoryIncluded >= currentCapturedLayer) {
+      const auto& recentBoard = hist.getRecentBoard(currentCapturedLayer);
+      dotsLaddersSolver.emplace(recentBoard);
+      dotsLaddersSolver->solve(recentBoard.calculateCapturesAndTerritoriesColorsForDots());
+    }
   }
 
   //Komi and any score adjustments
