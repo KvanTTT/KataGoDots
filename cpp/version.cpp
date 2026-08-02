@@ -6,7 +6,11 @@
 #ifdef NO_GIT_REVISION
 #define GIT_REVISION "<omitted>"
 #else
-#include "program/gitinfo.h"
+// Angle-bracket (not quoted) include so this resolves ONLY via the -I search
+// paths, where the build dir's freshly-generated program/gitinfo.h lives. A
+// quoted include would search version.cpp's own directory first and pick up a
+// stale in-source cpp/program/gitinfo.h left over from an in-source build.
+#include <program/gitinfo.h>
 #endif
 
 using namespace std;
@@ -16,7 +20,7 @@ string Version::getAppName() {
 }
 
 string Version::getAppVersion() {
-  return "1.16.5";
+  return "1.17.1";
 }
 
 string Version::getBuildType() {

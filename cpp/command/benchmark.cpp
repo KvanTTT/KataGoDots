@@ -311,7 +311,7 @@ static void warmStartNNEval(const CompactSgf& sgf, Logger& logger, const SearchP
   const Rules rules = Rules(sgf.isDots);
   Board board(sgf.xSize,sgf.ySize,rules);
   Player nextPla = P_BLACK;
-  BoardHistory hist(board,nextPla,rules,0);
+  BoardHistory hist(board,nextPla,rules,0,false);
   SearchParams thisParams = params;
   thisParams.numThreads = 1;
   thisParams.maxVisits = 5;

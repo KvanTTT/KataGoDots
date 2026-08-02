@@ -836,7 +836,7 @@ void Sgf::iterAllUniquePositions(
     rules.multiStoneSuicideLegal = true;
   }
   Board board(xSize,ySize,rules);
-  BoardHistory hist(board,nextPla,rules,0);
+  BoardHistory hist(board,nextPla,rules,0,false);
 
   PositionSample sampleBuf;
   std::vector<std::pair<int64_t,int64_t>> variationTraceNodesBranch;
@@ -867,7 +867,7 @@ void Sgf::iterAllPositions(
     rules.multiStoneSuicideLegal = true;
   }
   Board board(xSize,ySize,rules);
-  BoardHistory hist(board,nextPla,rules,0);
+  BoardHistory hist(board,nextPla,rules,0,false);
 
   PositionSample sampleBuf;
   std::vector<std::pair<int64_t,int64_t>> variationTraceNodesBranch;
@@ -1334,10 +1334,11 @@ Sgf::PositionSample Sgf::PositionSample::previousPosition(double newWeight) cons
   return other;
 }
 
-bool Sgf::PositionSample::tryGetCurrentBoardHistory(const Rules& rules, Player& nextPlaToMove, BoardHistory& hist) const {
+bool Sgf::PositionSample::tryGetCurrentBoardHistory(const Rules& rules, Player& nextPlaToMove, BoardHistory& hist, bool alwaysComputePassAliveUnderSuicideRules) const {
   int encorePhase = 0;
   Player pla = nextPla;
   Board boardCopy = board;
+  hist.setAlwaysComputePassAliveUnderSuicideRules(alwaysComputePassAliveUnderSuicideRules);
   hist.clear(boardCopy,pla,rules,encorePhase);
   int numSampleMoves = (int)moves.size();
   for(int i = 0; i<numSampleMoves; i++) {
@@ -1878,7 +1879,7 @@ Rules CompactSgf::getRulesOrWarn(const Rules& defaultRules, const std::function<
   return rules;
 }
 
-BoardHistory CompactSgf::setupInitialBoardAndHist(const Rules& initialRules, Player& nextPla) const {
+BoardHistory CompactSgf::setupInitialBoardAndHist(const Rules& initialRules, Player& nextPla, bool alwaysComputePassAliveUnderSuicideRules) const {
   Color plPlayer = rootNode.getPLSpecifiedColor();
   if(plPlayer == P_BLACK || plPlayer == P_WHITE)
     nextPla = plPlayer;
@@ -1908,7 +1909,7 @@ BoardHistory CompactSgf::setupInitialBoardAndHist(const Rules& initialRules, Pla
     if(const bool suc = board.setStoneFailIfNoLibs(placement.loc, placement.pla, i < numOfStartPosStones); !suc)
       throw StringError("setupInitialBoardAndHist: initial board position contains invalid stones or zero-liberty stones");
   }
-  auto hist = BoardHistory(board,nextPla,initialRules,0);
+  auto hist = BoardHistory(board,nextPla,initialRules,0,alwaysComputePassAliveUnderSuicideRules);
   if (const int numStonesOnBoard = board.numStonesOnBoard(); hist.initialTurnNumber < numStonesOnBoard)
     hist.initialTurnNumber = numStonesOnBoard;
   return hist;
@@ -1946,9 +1947,9 @@ void CompactSgf::playMovesTolerant(Board& board, Player& nextPla, BoardHistory& 
   }
 }
 
-std::pair<BoardHistory, Board> CompactSgf::setupBoardAndHistAssumeLegal(const Rules& initialRules, Player& nextPla, int64_t turnIdx)
+std::pair<BoardHistory, Board> CompactSgf::setupBoardAndHistAssumeLegal(const Rules& initialRules, Player& nextPla, int64_t turnIdx, bool alwaysComputePassAliveUnderSuicideRules)
   const {
-  BoardHistory hist = setupInitialBoardAndHist(initialRules, nextPla);
+  BoardHistory hist = setupInitialBoardAndHist(initialRules, nextPla, alwaysComputePassAliveUnderSuicideRules);
   Board boardWithMoves(hist.initialBoard);
   playMovesAssumeLegal(boardWithMoves, nextPla, hist, turnIdx);
   return std::make_pair(hist, boardWithMoves);
@@ -1958,8 +1959,9 @@ std::pair<BoardHistory, Board> CompactSgf::setupBoardAndHistTolerant(
   const Rules& initialRules,
   Player& nextPla,
   int64_t turnIdx,
-  bool preventEncore) const {
-  BoardHistory hist = setupInitialBoardAndHist(initialRules, nextPla);
+  bool preventEncore,
+  bool alwaysComputePassAliveUnderSuicideRules) const {
+  BoardHistory hist = setupInitialBoardAndHist(initialRules, nextPla, alwaysComputePassAliveUnderSuicideRules);
   Board boardWithMoves(hist.initialBoard);
   playMovesTolerant(boardWithMoves, nextPla, hist, turnIdx, preventEncore);
   return std::make_pair(hist, boardWithMoves);
@@ -2219,7 +2221,8 @@ void WriteSgf::writeSgf(
 
   string comment;
   Board board(initialBoard);
-  BoardHistory hist(board,endHist.initialPla,endHist.rules,endHist.initialEncorePhase);
+  //Replay faithfully under the same pass-alive computation mode the game was played with.
+  BoardHistory hist(board,endHist.initialPla,endHist.rules,endHist.initialEncorePhase,endHist.alwaysComputePassAliveUnderSuicideRules);
   for(size_t i = 0; i<endHist.moveHistory.size(); i++) {
     comment.clear();
     out << ";";
@@ -2278,12 +2281,26 @@ void WriteSgf::writeSgf(
         comment += scoreBuf;
       }
       if(turnAfterStart < gameData->policyTargetsByTurn.size()) {
+        bool wasReanalyzed =
+          turnAfterStart < gameData->reanalysisByTurn.size() && gameData->reanalysisByTurn[turnAfterStart].wasReanalyzed;
         char visitsBuf[32];
-        sprintf(visitsBuf,"%d", static_cast<int>(gameData->policyTargetsByTurn[turnAfterStart].unreducedNumVisits));
-        if(!comment.empty())
+        if(comment.length() > 0)
           comment += " ";
-        comment += "v=";
-        comment += visitsBuf;
+        if(wasReanalyzed) {
+          //The move was chosen by the original cheap search, whose visits we report as v=, but the recorded
+          //targets and stats come from the post-game reanalysis search, whose visits we report as rv=.
+          sprintf(visitsBuf,"%d",(int)(gameData->reanalysisByTurn[turnAfterStart].originalNumVisits));
+          comment += "v=";
+          comment += visitsBuf;
+          sprintf(visitsBuf,"%d",(int)(gameData->policyTargetsByTurn[turnAfterStart].unreducedNumVisits));
+          comment += " rv=";
+          comment += visitsBuf;
+        }
+        else {
+          sprintf(visitsBuf,"%d",(int)(gameData->policyTargetsByTurn[turnAfterStart].unreducedNumVisits));
+          comment += "v=";
+          comment += visitsBuf;
+        }
       }
       if(turnAfterStart < gameData->targetWeightByTurnUnrounded.size()) {
         if (float weight = gameData->targetWeightByTurnUnrounded[turnAfterStart]; !rules.isDots || !Global::isZero(weight, 0.005f)) {

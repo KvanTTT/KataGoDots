@@ -67,6 +67,7 @@ int MainCmds::runtests(const vector<string>& args) {
   Tests::runBoardAreaTests();
 
   Tests::runRulesTests();
+  Tests::runPassAliveSuicideModeTests();
 
   Tests::runBoardUndoTest();
   Tests::runBoardHandicapTest();
@@ -94,6 +95,7 @@ int MainCmds::runoutputtests(const vector<string>& args) {
   Tests::runNNInputsV3V4Tests();
   Tests::runNNLessSearchTests();
   Tests::runTrainingWriteTests();
+  Tests::runPassAliveSuicideGameTests();
   Tests::runTimeControlsTests();
   Tests::runScoreTests();
   Tests::runNNSymmetryTests();
@@ -559,7 +561,7 @@ int MainCmds::runbeginsearchspeedtest(const vector<string>& args) {
 
   Player nextPla = P_BLACK;
   rules.komi = 6.5;
-  BoardHistory hist(board,nextPla,rules,0);
+  BoardHistory hist(board,nextPla,rules,0,false);
 
   bot->setPosition(nextPla,board,hist);
 
@@ -683,7 +685,7 @@ int MainCmds::runownershipspeedtest(const vector<string>& args) {
 
   Player nextPla = P_BLACK;
   rules.komi = 7.0;
-  BoardHistory hist(board,nextPla,rules,0);
+  BoardHistory hist(board,nextPla,rules,0,false);
 
   bot->setPosition(nextPla,board,hist);
   bot->setAlwaysIncludeOwnerMap(true);

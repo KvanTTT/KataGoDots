@@ -26,7 +26,7 @@ static void runOwnershipAndMisc(NNEvaluator* nnEval, NNEvaluator* nnEval11, NNEv
 
     Player nextPla;
     Rules initialRules = sgf->getRulesOrFailAllowUnspecified(Rules::getTrompTaylorish());
-    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 40);
+    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 40, false);
 
     MiscNNInputParams nnInputParams;
     NNResultBuf buf;
@@ -68,7 +68,7 @@ static void runOwnershipAndMisc(NNEvaluator* nnEval, NNEvaluator* nnEval11, NNEv
 
     Player nextPla;
     Rules initialRules = sgf->getRulesOrFailAllowUnspecified(Rules::getTrompTaylorish());
-    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 43);
+    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 43, false);
 
     MiscNNInputParams nnInputParams;
     NNResultBuf buf;
@@ -251,7 +251,7 @@ static void runOwnershipAndMisc(NNEvaluator* nnEval, NNEvaluator* nnEval11, NNEv
 ....o..
 .......
 )%%");
-    BoardHistory histA(boardA,nextPla,rules,0);
+    BoardHistory histA(boardA,nextPla,rules,0,false);
 
     Board boardB = Board::parseBoard(11,7,R"%%(
 ...........
@@ -262,7 +262,7 @@ static void runOwnershipAndMisc(NNEvaluator* nnEval, NNEvaluator* nnEval11, NNEv
 ...........
 ...........
 )%%");
-    BoardHistory histB(boardB,nextPla,rules,0);
+    BoardHistory histB(boardB,nextPla,rules,0,false);
 
     SearchParams params;
     params.maxVisits = 200;
@@ -315,7 +315,7 @@ o..o..oxo
 ....x.oox
 ......ox.
 )%%");
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
       hist.makeBoardMoveAssumeLegal(board,Location::ofString("H8",board),nextPla,NULL);
       nextPla = P_BLACK;
 
@@ -351,7 +351,7 @@ xx.o.o.o.
 .xxo.o.o.
 ..xo.o.o.
 )%%");
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
     hist.makeBoardMoveAssumeLegal(board,Board::PASS_LOC,nextPla,NULL);
     nextPla = P_WHITE;
 
@@ -408,7 +408,7 @@ xx.o.o.o.
 .........
 .........
 )%%");
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params;
     params.maxVisits = 200;
@@ -451,7 +451,7 @@ xx..xoooo
 ..x...ox.
 )%%");
     board.numWhiteCaptures = 3;
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     MiscNNInputParams nnInputParams;
     NNResultBuf buf;
@@ -491,7 +491,7 @@ xx..xoooo
 ..x...ox.
 )%%");
     board.numWhiteCaptures = 3;
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     MiscNNInputParams nnInputParams;
     NNResultBuf buf;

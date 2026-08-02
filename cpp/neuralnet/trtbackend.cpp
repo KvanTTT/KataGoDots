@@ -5,6 +5,12 @@
 #include <NvOnnxParser.h>
 #include <cuda_runtime_api.h>
 
+// TensorRT versions before 10 cannot parse the ONNX this backend emits (verified failure on
+// TensorRT 8.6: "Kernel weight dimension failed to broadcast to input" at parse time).
+#if NV_TENSORRT_MAJOR < 10
+#error "The TensorRT backend requires TensorRT 10.0 or newer"
+#endif
+
 #include <atomic>
 #include <cstdint>
 #include <fstream>
@@ -94,7 +100,6 @@ ComputeContext* NeuralNet::createComputeContext(
   ConfigParser& cfg) {
   (void)gpuIdxs;
   (void)logger;
-  (void)loadedModel;
 
   ComputeContext* context = new ComputeContext();
   context->nnXLen = nnXLen;
@@ -105,11 +110,14 @@ ComputeContext* NeuralNet::createComputeContext(
   // nvonnxparser (the default). trtDisableOnnx=true falls back to the hand-built ModelParser, which
   // supports convnets only (transformer models will error in createComputeHandle).
   context->useOnnx = !(cfg.contains("trtDisableOnnx") ? cfg.getBool("trtDisableOnnx") : false);
-  // ONNX transformer emitter layout. Default is NCHW (genuine channel-major attention/FFN): benchmarks
-  // show it matches or slightly beats the NHWC bubble path at the saturated throughput operating point
-  // KataGo runs at, and it's the simpler graph. trtTransformerNHWC=true opts into the NHWC path (whole
-  // trunk channel-last with NCHW<->NHWC conversions around it), which wins on single-stream latency.
-  context->transformerNHWC = cfg.contains("trtTransformerNHWC") ? cfg.getBool("trtTransformerNHWC") : false;
+  // ONNX transformer emitter layout. Default is NHWC (whole trunk channel-last with NCHW<->NHWC
+  // conversions around it). Equal or very slightly better than NCHW in accuracy and in throughput
+  // on TensorRT 10.9, but noticeably faster on many nvidia GPUs on TensorRT 10.16.
+  // Normalize convnets to false so their timing/plan cache keys don't change with this setting
+  // (the ONNX builder ignores it for models without transformers anyway).
+  context->transformerNHWC =
+    (cfg.contains("trtTransformerNHWC") ? cfg.getBool("trtTransformerNHWC") : true) &&
+    NeuralNet::getModelDesc(loadedModel).hasAnyTransformerBlocks();
   // Debugging: if set, the ONNX-emitter path dumps the emitted ONNX model and the built engine's
   // per-layer info (precision/format/tactic, via a detailed-profiling build + IEngineInspector) into
   // this directory. Files are disambiguated by board size, FP16/FP32, and exact/max NN-length so the
@@ -1024,17 +1032,22 @@ struct ModelParser {
   }
 
   ILayer* applyCastLayer(ILayer* inputLayer, DataType dataType) {
-#if NV_TENSORRT_MAJOR == 8 && NV_TENSORRT_MINOR == 5
-    auto castLayer = model->network->addIdentity(*inputLayer->getOutput(0));
-    castLayer->setOutputType(0, dataType);
-#else
     auto castLayer = model->network->addCast(*inputLayer->getOutput(0), dataType);
-#endif
     auto castLayerName = string(inputLayer->getName()) + "/cast";
     castLayer->setName(castLayerName.c_str());
     return castLayer;
   }
 };
+
+// The builder's autotuner reports tactics that fail to compile or execute as ERROR-severity
+// "Skipping tactic ... due to exception ..." messages, but these are recoverable: the autotuner
+// moves on to other tactics, and if none work the build fails afterward with its own error.
+// Such messages can mention cask convolution execution failures that would otherwise match the
+// genuine GPU-health fatal checks below (observed on TensorRT 10.16 building on multiple
+// heterogeneous GPUs), so exempt them rather than killing the process mid-build.
+static bool isRecoverableTacticSkipMessage(const string& msg) {
+  return msg.find("Skipping tactic") != string::npos && msg.find("due to exception") != string::npos;
+}
 
 struct TRTLogger : ILogger {
   Logger* logger;
@@ -1054,7 +1067,7 @@ struct TRTLogger : ILogger {
     if(severity == Severity::kERROR && logger && !logger->isLoggingToStderr() && !logger->isLoggingToStdout()) {
       std::cerr << ("TensorRT backend: " + string(msg)) << std::endl;
     }
-    if(severity == Severity::kERROR) {
+    if(severity == Severity::kERROR && !isRecoverableTacticSkipMessage(string(msg))) {
       if((string(msg).find("Cask convolution") != std::string::npos) ||
          (string(msg).find("Cask Convolution") != std::string::npos) ||
          (string(msg).find("elementWiseRunner.cpp") != std::string::npos) ||
@@ -1113,12 +1126,15 @@ struct TRTErrorRecorder : IErrorRecorder {
     std::lock_guard<std::mutex> lock(mutex);
     errors.emplace_back(val,string(desc));
     if(
-      (val != ErrorCode::kUNSPECIFIED_ERROR && val != ErrorCode::kSUCCESS)
-      || (errors[errors.size()-1].second.find("Cask convolution") != std::string::npos)
-      || (errors[errors.size()-1].second.find("Cask Convolution") != std::string::npos)
-      || (errors[errors.size()-1].second.find("elementWiseRunner.cpp") != std::string::npos)
-      || (errors[errors.size()-1].second.find("convBaseRunner.cpp") != std::string::npos)
-      || (errors[errors.size()-1].second.find("Cuda Runtime") != std::string::npos)
+      !isRecoverableTacticSkipMessage(errors[errors.size()-1].second)
+      && (
+        (val != ErrorCode::kUNSPECIFIED_ERROR && val != ErrorCode::kSUCCESS)
+        || (errors[errors.size()-1].second.find("Cask convolution") != std::string::npos)
+        || (errors[errors.size()-1].second.find("Cask Convolution") != std::string::npos)
+        || (errors[errors.size()-1].second.find("elementWiseRunner.cpp") != std::string::npos)
+        || (errors[errors.size()-1].second.find("convBaseRunner.cpp") != std::string::npos)
+        || (errors[errors.size()-1].second.find("Cuda Runtime") != std::string::npos)
+      )
     ) {
       Global::fatalError("Fatal error reported from TensorRT: " + Global::intToString((int)val) + " " + std::string(desc));
     }
@@ -1327,22 +1343,11 @@ struct ComputeHandle {
     // constraint (kOBEY) so TensorRT cannot fall back to FP16; the ModelParser path uses kPREFER.
     config->setFlag(forceObeyPrecision ? BuilderFlag::kOBEY_PRECISION_CONSTRAINTS : BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
 
-#if NV_TENSORRT_MAJOR == 8 && NV_TENSORRT_MINOR == 5
-    // This is to avoid external tactic sources and tactics that have shape switching overhead
-    if(prop->major < 8) {
-      config->setTacticSources(
-        1U << static_cast<uint32_t>(TacticSource::kJIT_CONVOLUTIONS) |
-        1U << static_cast<uint32_t>(TacticSource::kEDGE_MASK_CONVOLUTIONS));
-    } else {
-      config->setTacticSources(1U << static_cast<uint32_t>(TacticSource::kJIT_CONVOLUTIONS));
-    }
-#else
     if(prop->major >= 8) {
       // This is to avoid tactics that have shape switching overhead
       config->setTacticSources(1U << static_cast<uint32_t>(TacticSource::kJIT_CONVOLUTIONS));
       config->setBuilderOptimizationLevel(2);
     }
-#endif
 
     // For the debug plan dump, build with detailed profiling so the engine inspector can report
     // per-layer precision/format/tactic (see the inspector dump after deserialize).

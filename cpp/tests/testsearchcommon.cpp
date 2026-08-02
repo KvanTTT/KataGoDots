@@ -182,7 +182,8 @@ void TestSearchCommon::runBotOnSgf(AsyncBot* bot, const string& sgfStr, const Ru
 
   Player nextPla;
   Rules initialRules = sgf->getRulesOrFailAllowUnspecified(defaultRules);
-  auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, turnIdx);;
+  auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, turnIdx,
+    Search::resolveAlwaysComputePassAliveUnderSuicideRules(bot->getSearch()->searchParams, bot->getSearch()->nnEvaluator));;
   hist.setKomi(overrideKomi);
   runBotOnPosition(bot,board,nextPla,hist,opts);
 }

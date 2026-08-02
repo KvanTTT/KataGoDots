@@ -493,6 +493,7 @@ vector<SearchParams> Setup::loadParams(
     params.rootPruneUselessMoves = getBoolValueForBot(cfg, "rootPruneUselessMoves", idxStr,  true);
     params.conservativePass = getBoolValueForBot(cfg, "conservativePass", idxStr, false);
     params.fillDameBeforePass = getBoolValueForBot(cfg, "fillDameBeforePass", idxStr, false);
+    params.alwaysComputePassAliveUnderSuicideRules = getValueForBot<enabled_t>(cfg, "alwaysComputePassAliveUnderSuicideRules", idxStr, enabled_t::False, enabled_t::Auto, enabled_t::Auto);
     params.avoidMYTDaggerHackPla = C_EMPTY;
     params.wideRootNoise = getValueForBot<double>(cfg, "wideRootNoise", idxStr, 0.0, 5.0, setupFor == SETUP_FOR_ANALYSIS ? DEFAULT_ANALYSIS_WIDE_ROOT_NOISE : 0.00);
     params.enablePassingHacks = getBoolValueForBot(cfg, "enablePassingHacks", idxStr,  setupFor == SETUP_FOR_GTP || setupFor == SETUP_FOR_ANALYSIS);

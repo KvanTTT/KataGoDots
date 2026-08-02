@@ -195,9 +195,14 @@ Loc PlayUtils::getGameInitializationMove(
   Search* botB, Search* botW, const Board& board, const BoardHistory& hist, Player pla, NNResultBuf& buf,
   Rand& gameRand, double temperature
 ) {
-  NNEvaluator* nnEval = (pla == P_BLACK ? botB : botW)->nnEvaluator;
+  const Search* searcher = (pla == P_BLACK ? botB : botW);
+  NNEvaluator* nnEval = searcher->nnEvaluator;
   MiscNNInputParams nnInputParams;
-  nnInputParams.drawEquivalentWinsForWhite = (pla == P_BLACK ? botB : botW)->searchParams.drawEquivalentWinsForWhite;
+  nnInputParams.drawEquivalentWinsForWhite = searcher->searchParams.drawEquivalentWinsForWhite;
+  //Featurize for this bot's net the way that bot's own searches would, even if the game-level history
+  //carries a different pass-alive computation mode.
+  nnInputParams.passAliveSuicideRulesOverride =
+    Search::resolveAlwaysComputePassAliveUnderSuicideRules(searcher->searchParams, nnEval) ? 1 : 0;
   nnEval->evaluate(board,hist,pla,nnInputParams,buf,false,false);
   std::shared_ptr<NNOutput> nnOutput = std::move(buf.result);
 
@@ -289,9 +294,12 @@ vector<Loc> PlayUtils::playExtraBlack(
   std::vector<Loc> handicapLocs;
   if(!hist.isGameFinished) {
     NNResultBuf buf;
+    bool botPassAliveMode = Search::resolveAlwaysComputePassAliveUnderSuicideRules(bot->searchParams, bot->nnEvaluator);
     for(int i = 0; i<numExtraBlack; i++) {
       MiscNNInputParams nnInputParams;
       nnInputParams.drawEquivalentWinsForWhite = bot->searchParams.drawEquivalentWinsForWhite;
+      //Featurize the way this bot's own searches would, even if the passed history differs.
+      nnInputParams.passAliveSuicideRulesOverride = botPassAliveMode ? 1 : 0;
       bot->nnEvaluator->evaluate(board,hist,pla,nnInputParams,buf,false,false);
       std::shared_ptr<NNOutput> nnOutput = std::move(buf.result);
 
@@ -983,7 +991,7 @@ PlayUtils::BenchmarkResults PlayUtils::benchmarkSearchOnPositionsAndPrint(
 
   Board board;
   Player nextPla;
-  BoardHistory hist = sgf.setupInitialBoardAndHist(initialRules, nextPla);
+  BoardHistory hist = sgf.setupInitialBoardAndHist(initialRules, nextPla, Search::resolveAlwaysComputePassAliveUnderSuicideRules(params, nnEval));
 
   int moveNum = 0;
 
@@ -1186,7 +1194,7 @@ Loc PlayUtils::maybeFriendlyPass(
     bool nonPassAliveStones = true;
     bool safeBigTerritories = true;
     bool unsafeBigTerritories = true;
-    bool isMultiStoneSuicideLegal = hist.rules.multiStoneSuicideLegal;
+    bool isMultiStoneSuicideLegal = hist.suicideLegalForPassAlive();
     cleanBoard.calculateArea(area, nonPassAliveStones, safeBigTerritories, unsafeBigTerritories, isMultiStoneSuicideLegal);
   }
   const double highOwnershipThreshold = 0.75;

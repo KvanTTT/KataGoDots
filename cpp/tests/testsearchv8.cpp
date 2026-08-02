@@ -24,7 +24,7 @@ static void runV8TestsSize9(NNEvaluator* nnEval, NNEvaluator* nnEval9, NNEvaluat
 
     Player nextPla;
     Rules initialRules = sgf->getRulesOrFail();
-    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 3);
+    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 3, false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.maxVisits = 200;
@@ -58,7 +58,7 @@ static void runV8TestsRandomSym(NNEvaluator* nnEval, NNEvaluator* nnEval19Exact,
 
     Player nextPla;
     Rules initialRules = sgf->getRulesOrFail();
-    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 11);
+    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 11, false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.maxVisits = 200;
@@ -90,7 +90,7 @@ static void runV8TestsRandomSym(NNEvaluator* nnEval, NNEvaluator* nnEval19Exact,
 
     Player nextPla;
     Rules initialRules = sgf->getRulesOrFail();
-    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 8);
+    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 8, false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.rootNumSymmetriesToSample = 8;
@@ -123,7 +123,7 @@ static void runV8TestsRandomSym(NNEvaluator* nnEval, NNEvaluator* nnEval19Exact,
 
     Player nextPla;
     Rules initialRules = sgf->getRulesOrFail();
-    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 8);
+    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 8, false);
 
     SearchParams paramsA = SearchParams::forTestsV1();
     SearchParams paramsB = SearchParams::forTestsV1();
@@ -207,7 +207,7 @@ static void runV8Tests(NNEvaluator* nnEval, Logger& logger)
 
     const Player startPla = P_WHITE;
     const Rules rules = Rules::getTrompTaylorish();
-    const BoardHistory hist(board,startPla,rules,0);
+    const BoardHistory hist(board,startPla,rules,0,false);
     SearchParams baseParams = SearchParams::forTestsV1();
     baseParams.maxVisits = 400;
     baseParams.maxVisitsPondering = 600;
@@ -476,7 +476,7 @@ static void runV8Tests(NNEvaluator* nnEval, Logger& logger)
 
     Player nextPla = P_BLACK;
     Rules rules = Rules::parseRules("Chinese");
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.maxVisits = 400;
@@ -522,7 +522,7 @@ static void runV8Tests(NNEvaluator* nnEval, Logger& logger)
     {
       Player nextPla;
       Rules initialRules = sgf->getRulesOrFailAllowUnspecified(Rules::getTrompTaylorish());
-      auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 24);
+      auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 24, false);
       SearchParams params = SearchParams::forTestsV1();
       params.maxVisits = 200;
       params.antiMirror = true;
@@ -535,7 +535,7 @@ static void runV8Tests(NNEvaluator* nnEval, Logger& logger)
     {
       Player nextPla;
       Rules initialRules = sgf->getRulesOrFailAllowUnspecified(Rules::getTrompTaylorish());
-      auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 32);
+      auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 32, false);
       SearchParams params = SearchParams::forTestsV1();
       params.maxVisits = 200;
       params.antiMirror = true;
@@ -548,7 +548,7 @@ static void runV8Tests(NNEvaluator* nnEval, Logger& logger)
     {
       Player nextPla;
       Rules initialRules = sgf->getRulesOrFailAllowUnspecified(Rules::getTrompTaylorish());
-      auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 124);
+      auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 124, false);
       SearchParams params = SearchParams::forTestsV1();
       params.maxVisits = 200;
       params.antiMirror = true;
@@ -571,7 +571,7 @@ static void runV8Tests(NNEvaluator* nnEval, Logger& logger)
     {
       Player nextPla;
       Rules initialRules = sgf->getRulesOrFailAllowUnspecified(Rules::getTrompTaylorish());
-      auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 29);
+      auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 29, false);
       SearchParams params = SearchParams::forTestsV1();
       params.maxVisits = 200;
       params.antiMirror = true;
@@ -584,7 +584,7 @@ static void runV8Tests(NNEvaluator* nnEval, Logger& logger)
     {
       Player nextPla;
       Rules initialRules = sgf->getRulesOrFailAllowUnspecified(Rules::getTrompTaylorish());
-      auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 83);
+      auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 83, false);
       SearchParams params = SearchParams::forTestsV1();
       params.maxVisits = 200;
       params.antiMirror = true;
@@ -610,7 +610,7 @@ static void runMoreV8Tests(NNEvaluator* nnEval, Logger& logger)
 
     Player nextPla;
     Rules initialRules = sgf->getRulesOrFail();
-    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 8);
+    auto [hist, board] = sgf->setupBoardAndHistAssumeLegal(initialRules, nextPla, 8, false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.maxVisits = 20;
@@ -675,7 +675,7 @@ oxxxooxoooo
 
       Player nextPla = P_WHITE;
       Rules rules = Rules::parseRules("Chinese");
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
       {
         cout << "Without root ending bonus pts===================" << endl;
         cout << endl;
@@ -700,7 +700,7 @@ oxxxooxoooo
       Player nextPla = P_WHITE;
       Rules rules = Rules::parseRules("Chinese");
       rules.hasButton = true;
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
       {
         cout << "Without root ending bonus pts===================" << endl;
         cout << endl;
@@ -724,7 +724,7 @@ oxxxooxoooo
 
       Player nextPla = P_BLACK;
       Rules rules = Rules::parseRules("Chinese");
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
       {
         cout << "Without root ending bonus pts===================" << endl;
         cout << endl;
@@ -749,7 +749,7 @@ oxxxooxoooo
       Player nextPla = P_BLACK;
       Rules rules = Rules::parseRules("Chinese");
       rules.hasButton = true;
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
       {
         cout << "Without root ending bonus pts===================" << endl;
         cout << endl;
@@ -773,7 +773,7 @@ oxxxooxoooo
 
       Player nextPla = P_BLACK;
       Rules rules = Rules::parseRules("Japanese");
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
       {
         cout << "Without root ending bonus pts===================" << endl;
         cout << endl;
@@ -798,7 +798,7 @@ oxxxooxoooo
 
       Player nextPla = P_BLACK;
       Rules rules = Rules::parseRules("Japanese");
-      BoardHistory hist(board,nextPla,rules,2);
+      BoardHistory hist(board,nextPla,rules,2,false);
       {
         cout << "Without root ending bonus pts===================" << endl;
         cout << endl;
@@ -854,7 +854,7 @@ xxxx.xxoxxx
 
       Player nextPla = P_WHITE;
       Rules rules = Rules::parseRules("Chinese");
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
       {
         AsyncBot* bot = new AsyncBot(params2, nnEval, &logger, "async bot ending bonus points seed");
         runBotOnPosition(bot, board, nextPla, hist, opts);
@@ -879,7 +879,7 @@ xxxx.xxoxxx
 .........
 .........
 )%%");
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.maxVisits = 400;
@@ -919,7 +919,7 @@ xxxx.xxoxxx
 .........
 .........
 )%%");
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.maxVisits = 10000;
@@ -975,7 +975,7 @@ xxxx.xxoxxx
 
     Player nextPla = P_BLACK;
     Rules rules = Rules::parseRules("Chinese");
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams paramsFast = SearchParams::forTestsV1();
     paramsFast.maxVisits = 5;
@@ -1131,7 +1131,7 @@ xxxx.xxoxxx
 
     Player nextPla = P_WHITE;
     Rules rules = Rules::parseRules("Chinese");
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams paramsBase = SearchParams::forTestsV1();
     paramsBase.maxVisits = 500;
@@ -1269,7 +1269,7 @@ oooxxox..
     {
       Player nextPla = P_WHITE;
       Rules rules = Rules::parseRules("Japanese");
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
 
       cout << "===================================================================" << endl;
       cout << "Base, white to play" << endl;
@@ -1283,7 +1283,7 @@ oooxxox..
     {
       Player nextPla = P_WHITE;
       Rules rules = Rules::parseRules("Japanese");
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
 
       cout << "===================================================================" << endl;
       cout << "Fill dame before pass, white to play" << endl;
@@ -1298,7 +1298,7 @@ oooxxox..
     {
       Player nextPla = P_BLACK;
       Rules rules = Rules::parseRules("Japanese");
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
 
       cout << "===================================================================" << endl;
       cout << "Base, black to play" << endl;
@@ -1312,7 +1312,7 @@ oooxxox..
     {
       Player nextPla = P_BLACK;
       Rules rules = Rules::parseRules("Japanese");
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
 
       cout << "===================================================================" << endl;
       cout << "Fill dame before pass, black to play" << endl;
@@ -1350,7 +1350,7 @@ oooo.o.oo
       Player nextPla = P_WHITE;
       Rules rules = Rules::parseRules("Chinese");
       rules.komi = 14;
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
 
       cout << "===================================================================" << endl;
       cout << "White to play" << endl;
@@ -1369,7 +1369,7 @@ oooo.o.oo
     {
       Player nextPla = P_BLACK;
       Rules rules = Rules::parseRules("Chinese");
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
 
       cout << "===================================================================" << endl;
       cout << "White to play" << endl;
@@ -1411,7 +1411,7 @@ oooo.o.oo
     {
       Rules rules = Rules::parseRules("Japanese");
       rules.komi = 8;
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
 
       cout << "===================================================================" << endl;
       cout << "White to play" << endl;
@@ -1448,7 +1448,7 @@ o....xo..
       Player nextPla = P_BLACK;
       Rules rules = Rules::parseRules("Chinese");
       rules.komi = 4;
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
       hist.makeBoardMoveAssumeLegal(board,Board::PASS_LOC,nextPla,NULL);
       nextPla = P_WHITE;
 
@@ -1482,7 +1482,7 @@ o....xo..
       Player nextPla = P_WHITE;
       Rules rules = Rules::parseRules("Chinese");
       rules.komi = 7;
-      BoardHistory hist(board,nextPla,rules,0);
+      BoardHistory hist(board,nextPla,rules,0,false);
       hist.makeBoardMoveAssumeLegal(board,Board::PASS_LOC,nextPla,NULL);
       nextPla = P_BLACK;
 
@@ -1530,7 +1530,7 @@ o....xo..
     Player nextPlaBase = P_BLACK;
     Rules rules = Rules::parseRules("Japanese");
     rules.komi = 6.5;
-    BoardHistory histBase(boardBase,nextPlaBase,rules,0);
+    BoardHistory histBase(boardBase,nextPlaBase,rules,0,false);
 
     SearchParams paramsBase = SearchParams::forTestsV1();
     paramsBase.maxVisits = 1000;
@@ -1657,7 +1657,7 @@ o....xo..
     Player nextPla = P_BLACK;
     Rules rules = Rules::parseRules("Japanese");
     rules.komi = 6.5;
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params0 = SearchParams::forTestsV1();
     params0.maxVisits = 1000;
@@ -1747,7 +1747,7 @@ o....xo..
     Player nextPla = P_BLACK;
     Rules rules = Rules::parseRules("Japanese");
     rules.komi = 6.5;
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params0 = SearchParams::forTestsV1();
     params0.maxVisits = 1000;
@@ -1804,7 +1804,7 @@ o....xo..
     Player nextPla = P_WHITE;
     Rules rules = Rules::parseRules("Japanese");
     rules.komi = 25.5;
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params0 = SearchParams::forTestsV1();
     params0.maxVisits = 1000;
@@ -1864,7 +1864,7 @@ ooox..o
 oxxxxxx
 xx.....
 )%%");
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.maxVisits = 100;
@@ -1902,7 +1902,7 @@ static void runMoreV8TestsRandomizedNNEvals(NNEvaluator* nnEval, Logger& logger)
 
     Player nextPla = P_BLACK;
     Rules rules = Rules::parseRules("AGA");
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.rootNumSymmetriesToSample = 8;
@@ -2000,7 +2000,7 @@ static void runV8SearchMultithreadTest(NNEvaluator* nnEval, Logger& logger)
     Player nextPla = P_BLACK;
     Rules rules = Rules::parseRules("Japanese");
     rules.komi = 8.5;
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.maxVisits = 16000;
@@ -2092,7 +2092,7 @@ xoxxoo........o.x..
     Player nextPla = P_WHITE;
     Rules rules = Rules::parseRules("Chinese");
     rules.komi = 6.5;
-    BoardHistory hist(board,nextPla,rules,0);
+    BoardHistory hist(board,nextPla,rules,0,false);
 
     SearchParams params = SearchParams::forTestsV1();
     params.maxVisits = 8000;
