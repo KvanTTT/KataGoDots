@@ -432,7 +432,7 @@ int MainCmds::samplesgfs(const vector<string>& args) {
       Rules rules = compactSgf.getRulesOrFailAllowUnspecified(Rules::getSimpleTerritory());
       //Featurize per the model's own declaration (no user-level search params in this mode).
       BoardHistory hist = compactSgf.setupInitialBoardAndHist(rules, nextPla, valueFluctuationNNEval->modelPreferPassAliveUnderSuicideRules());
-      Board& board = hist.initialBoard;
+      Board board = hist.initialBoard;
 
       if(valueFluctuationMakeKomiFair) {
         Rand rand;
@@ -1385,7 +1385,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
     Player nextPla;
     //Keep pass-alive computations and featurization consistent with how the search performs them.
     BoardHistory hist = sgf.setupInitialBoardAndHist(rules, nextPla, search->getRootHist().alwaysComputePassAliveUnderSuicideRules);
-    Board& board = hist.initialBoard;
+    Board board = hist.initialBoard;
 
     if(!gameInit->isAllowedBSize(board.x_size,board.y_size)) {
       numFilteredSgfs.fetch_add(1);

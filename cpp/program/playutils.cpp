@@ -989,9 +989,9 @@ PlayUtils::BenchmarkResults PlayUtils::benchmarkSearchOnPositionsAndPrint(
   //Take the komi from the sgf, otherwise ignore the rules in the sgf
   initialRules.komi = sgf.getRulesOrFailAllowUnspecified(initialRules).komi;
 
-  Board board;
   Player nextPla;
   BoardHistory hist = sgf.setupInitialBoardAndHist(initialRules, nextPla, Search::resolveAlwaysComputePassAliveUnderSuicideRules(params, nnEval));
+  Board board = hist.initialBoard;
 
   int moveNum = 0;
 

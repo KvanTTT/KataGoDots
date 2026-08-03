@@ -140,7 +140,7 @@ void Tests::runNNInputsV3V4Tests() {
       Rules initialRules = Rules::getTrompTaylorish();
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
       BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla, false);
-      Board& board = hist.initialBoard;
+      Board board = hist.initialBoard;
       vector<Move>& moves = sgf->moves;
 
       for(size_t i = 0; i<moves.size(); i++) {
@@ -199,7 +199,7 @@ void Tests::runNNInputsV3V4Tests() {
       Rules initialRules = Rules::getTrompTaylorish();
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
       BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla, false);
-      Board& board = hist.initialBoard;
+      Board board = hist.initialBoard;
       vector<Move>& moves = sgf->moves;
 
       for(size_t i = 0; i<moves.size(); i++) {
@@ -257,7 +257,7 @@ void Tests::runNNInputsV3V4Tests() {
       Rules initialRules = Rules::getTrompTaylorish();
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
       BoardHistory hist =  sgf->setupInitialBoardAndHist(initialRules, nextPla, false);
-      Board& board = hist.initialBoard;
+      Board board = hist.initialBoard;
       vector<Move>& moves = sgf->moves;
 
       for(size_t i = 0; i<moves.size(); i++) {
@@ -314,7 +314,7 @@ void Tests::runNNInputsV3V4Tests() {
       Rules initialRules = Rules::getTrompTaylorish();
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
       BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla, false);
-      Board& board = hist.initialBoard;
+      Board board = hist.initialBoard;
       vector<Move>& moves = sgf->moves;
 
       for(size_t i = 0; i<moves.size(); i++) {
@@ -570,7 +570,7 @@ xxx..xx
       Rules initialRules = Rules(Rules::KO_SIMPLE, Rules::SCORING_TERRITORY, Rules::TAX_SEKI, false, false, Rules::WHB_ZERO, false, 0.0f);
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
       BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla, false);
-      Board& board = hist.initialBoard;
+      Board board = hist.initialBoard;
 
       int nnXLen = 6;
       int nnYLen = 6;
@@ -645,7 +645,7 @@ xxx..xx
       Rules initialRules;
       initialRules = sgf->getRulesOrFailAllowUnspecified(initialRules);
       BoardHistory hist = sgf->setupInitialBoardAndHist(initialRules, nextPla, false);
-      Board& board = hist.initialBoard;
+      Board board = hist.initialBoard;
       vector<Move>& moves = sgf->moves;
 
       int nnXLen = 13;
@@ -1338,7 +1338,7 @@ ooxooxo
             Player nextPla;
             Rules rules = sgf->getRulesOrFailAllowUnspecified(rulesToUse);
             BoardHistory hist = sgf->setupInitialBoardAndHist(rules, nextPla, false);
-            Board& board = hist.initialBoard;
+            Board board = hist.initialBoard;
 
             int nnXLen = 9;
             int nnYLen = 9;

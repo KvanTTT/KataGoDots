@@ -377,7 +377,7 @@ int MainCmds::searchentropyanalysis(const vector<string>& args) {
     Player pla;
     Rules rules = sgfObj->getRulesOrFailAllowUnspecified(Rules::getSimpleTerritory());
     BoardHistory hist = sgfObj->setupInitialBoardAndHist(rules, pla, bot->getRootHist().alwaysComputePassAliveUnderSuicideRules);
-    Board& board = hist.initialBoard;
+    Board board = hist.initialBoard;
 
     for(int i = 0; i < turnIdx; i++) {
       Loc moveLoc = sgfObj->moves[i].loc;
