@@ -3343,12 +3343,9 @@ ComputeContext* NeuralNet::createComputeContext(
   context->useFP16Mode = useFP16Mode;
 
   // NHWC layout is a CUDA-specific option read directly off of cfg. Auto means "NHWC if FP16" (see below).
-  context->useNHWCMode =
-    cfg.contains("cudaUseNHWC") ? cfg.getEnabled("cudaUseNHWC") : enabled_t::Auto;
-  context->cudaDisableGraphSDPA =
-    cfg.contains("cudaDisableGraphSDPA") ? cfg.getBool("cudaDisableGraphSDPA") : false;
-  context->use1x1MatmulMode =
-    cfg.contains("cudaUse1x1Matmul") ? cfg.getEnabled("cudaUse1x1Matmul") : enabled_t::Auto;
+  context->useNHWCMode = cfg.getOrDefaultEnabled("cudaUseNHWC", enabled_t::Auto);
+  context->cudaDisableGraphSDPA = cfg.getOrDefaultBool("cudaDisableGraphSDPA", false);
+  context->use1x1MatmulMode = cfg.getOrDefaultEnabled("cudaUse1x1Matmul", enabled_t::Auto);
   return context;
 }
 

@@ -512,12 +512,8 @@ ComputeContext* NeuralNet::createComputeContext(
     throw StringError("NeuralNet::createComputeContext - specified no gpus to use");
 
   // OpenCL-specific options, read directly off of the config.
-  string openCLTunerFile;
-  if(cfg.contains("openclTunerFile"))
-    openCLTunerFile = cfg.getString("openclTunerFile");
-  bool openCLReTunePerBoardSize = false;
-  if(cfg.contains("openclReTunePerBoardSize"))
-    openCLReTunePerBoardSize = cfg.getBool("openclReTunePerBoardSize");
+  string openCLTunerFile = cfg.getOrDefaultString("openclTunerFile", "");
+  bool openCLReTunePerBoardSize = cfg.getOrDefaultBool("openclReTunePerBoardSize", false);
 
   std::function<OpenCLTuneParams(const string&,int)> getParamsForDeviceName =
     [&openCLTunerFile,&homeDataDirOverride,openCLReTunePerBoardSize,logger,nnXLen,nnYLen,useFP16Mode,loadedModel](const string& name, int gpuIdxForTuning) {

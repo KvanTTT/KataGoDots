@@ -109,21 +109,20 @@ ComputeContext* NeuralNet::createComputeContext(
   // The TensorRT backend builds its network by emitting ONNX from the model and parsing it with
   // nvonnxparser (the default). trtDisableOnnx=true falls back to the hand-built ModelParser, which
   // supports convnets only (transformer models will error in createComputeHandle).
-  context->useOnnx = !(cfg.contains("trtDisableOnnx") ? cfg.getBool("trtDisableOnnx") : false);
+  context->useOnnx = !cfg.getOrDefaultBool("trtDisableOnnx", false);
   // ONNX transformer emitter layout. Default is NHWC (whole trunk channel-last with NCHW<->NHWC
   // conversions around it). Equal or very slightly better than NCHW in accuracy and in throughput
   // on TensorRT 10.9, but noticeably faster on many nvidia GPUs on TensorRT 10.16.
   // Normalize convnets to false so their timing/plan cache keys don't change with this setting
   // (the ONNX builder ignores it for models without transformers anyway).
-  context->transformerNHWC =
-    (cfg.contains("trtTransformerNHWC") ? cfg.getBool("trtTransformerNHWC") : true) &&
+  context->transformerNHWC = cfg.getOrDefaultBool("trtTransformerNHWC", true) &&
     NeuralNet::getModelDesc(loadedModel).hasAnyTransformerBlocks();
   // Debugging: if set, the ONNX-emitter path dumps the emitted ONNX model and the built engine's
   // per-layer info (precision/format/tactic, via a detailed-profiling build + IEngineInspector) into
   // this directory. Files are disambiguated by board size, FP16/FP32, and exact/max NN-length so the
   // multiple engines built in one process (e.g. an FP16 and an FP32 evaluator) don't overwrite each
   // other. Off by default; only for investigating numerical/precision issues in the TRT graph.
-  context->dumpDebugPlanToDir = cfg.contains("trtDumpDebugPlanToDir") ? cfg.getString("trtDumpDebugPlanToDir") : "";
+  context->dumpDebugPlanToDir = cfg.getOrDefaultString("trtDumpDebugPlanToDir", "");
   return context;
 }
 
