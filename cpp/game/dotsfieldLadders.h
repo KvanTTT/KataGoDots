@@ -250,7 +250,7 @@ private:
 
   void createAndPushChainInfo(Loc loc, Player pla);
 
-  void createAndPushChainInfo(const std::vector<Loc>& locs, Player pla);
+  void createAndPushChainInfo(const Loc* locs, size_t locsSize, Player pla);
 
   void popChainInfo(Player pla);
 

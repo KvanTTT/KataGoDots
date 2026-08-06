@@ -1,5 +1,6 @@
 #include "dotsfieldLadders.h"
 
+#include <array>
 #include <iomanip>
 
 #include "board.h"
@@ -566,16 +567,15 @@ void DotsLaddersSolver::initializeDefenderChain(const Board::MoveRecord& capturi
       });
     }
   }
-  createAndPushChainInfo(defenderInitChainLocs, defender);
+  createAndPushChainInfo(defenderInitChainLocs.data(), defenderInitChainLocs.size(), defender);
 }
 
 void DotsLaddersSolver::createAndPushChainInfo(const Loc loc, const Player pla) {
-  vector<Loc> locs(1);
-  locs[0] = loc;
-  createAndPushChainInfo(locs, pla);
+  const array<Loc, 1> locs = { loc };
+  createAndPushChainInfo(locs.data(), locs.size(), pla);
 }
 
-void DotsLaddersSolver::createAndPushChainInfo(const vector<Loc>& locs, const Player pla) {
+void DotsLaddersSolver::createAndPushChainInfo(const Loc* locs, const size_t locsSize, const Player pla) {
   vector<ChainsInfo>& chainInfos = pla == attacker ? attackerChainInfos : defenderChainInfos;
   vector<Loc>& chainLocs = pla == attacker ? attackerChainLocs : defenderChainLocs;
   vector<Loc>& maybeCaptureLocs = pla == attacker ? attackerMaybeCaptureLocs : defenderMaybeCaptureLocs;
@@ -587,7 +587,8 @@ void DotsLaddersSolver::createAndPushChainInfo(const vector<Loc>& locs, const Pl
   assert(C_WALL != pla);
   assert(walkStack.empty());
 
-  for (const Loc loc : locs) {
+  for (size_t i = 0; i < locsSize; i++) {
+    const Loc loc = locs[i];
     assert(board.getColor(loc) == pla);
     walkStack.push_back(loc);
   }
