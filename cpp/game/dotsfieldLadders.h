@@ -17,10 +17,28 @@ public:
       return LadderLocInfo(captureLoc, pla, &moveRecord, whiteScoreDiff);
     }
 
-    void mergeWith(const LadderLocInfo& ladderLocInfo) {
-      assert(player == ladderLocInfo.player);
-      score += ladderLocInfo.score;
-      territoryLocs.insert(territoryLocs.end(), ladderLocInfo.territoryLocs.begin(), ladderLocInfo.territoryLocs.end());
+    void minimizeOrMerge(const LadderLocInfo& otherLadderLocInfo) {
+      assert(player == otherLadderLocInfo.player);
+      int numberOfCommonLocs = 0;
+      for (const Loc otherTerritoryLoc : otherLadderLocInfo.territoryLocs) {
+        if (contains(territoryLocs, otherTerritoryLoc)) {
+          numberOfCommonLocs++;
+        }
+      }
+
+      if (numberOfCommonLocs == 0) {
+        // Merge in case of unrelated territories
+        score += otherLadderLocInfo.score;
+        territoryLocs.insert(territoryLocs.end(), otherLadderLocInfo.territoryLocs.begin(), otherLadderLocInfo.territoryLocs.end());
+      } else if (territoryLocs.size() > otherLadderLocInfo.territoryLocs.size()) {
+        // Minimize in case of other territory is smaller
+        // The minimization makes output more refined from the point of view of NN in terms of locs overlapping.
+        // Although in some cases it can produce not ideal result even considering ideal opp play when surrounding is inevitable.
+        score = otherLadderLocInfo.score;
+        territoryLocs = otherLadderLocInfo.territoryLocs;
+      } else {
+        // Do nothing in case of other territory is larger (the current LadderLocInfo is already minimized).
+      }
     }
 
     [[nodiscard]] bool isZero() const {

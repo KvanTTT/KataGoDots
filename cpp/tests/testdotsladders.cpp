@@ -894,9 +894,9 @@ TEST(LadderTests, FalseWorkingMoveThatCouldCreateTwoLadders) {
         R"(
 .  .  .  .  .  .  .  .
 .  .  .  .  O  .  .  .
-.  X  .  O  .' O  .  .
-.  .  .o X' .' .' O  .
-.  X  O  O  .' .' .' O
+.  X  .  O  .  O  .  .
+.  .  .o X' .  .  O  .
+.  X  O  O  .  .  .  O
 .  .  X  X  O  X' O  .
 .  .  .  X  O  .o .  .
 .  .  .  .  X  .  .  .

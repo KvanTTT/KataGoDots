@@ -122,6 +122,9 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
         // Optimization: don't run iteration over adjacent defender locs to calculate the worst capturing for pla considering defender ideal play.
         // Instead, assume that the failed defending loc is actually a capturing loc for pla.
         // It might form the base(s) with the worst possible evaluation in terms of score and territory.
+        //
+        // Also, the minimization makes output more refined from the point of view of NN in terms of locs overlapping,
+        // Although in some cases it can produce not ideal result even considering ideal opp play when surrounding is inevitable.
         const auto maybeWorstResultIfConsiderIdealDefenderPlay = LadderLocInfo::create(
           captureLoc, attacker, maybeCapturingMoveRecord, whiteScoreDiff
         );
@@ -141,7 +144,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
           if (finalLadderLocInfo.isZero()) {
             finalLadderLocInfo = std::move(ladderLocInfo);
           } else {
-            finalLadderLocInfo.mergeWith(ladderLocInfo);
+            finalLadderLocInfo.minimizeOrMerge(ladderLocInfo);
           }
         } else {
           finalLadderLocInfo = std::move(ladderLocInfo);
