@@ -138,7 +138,7 @@ public:
   [[nodiscard]] uint32_t getCacheHitsCount() const { return cacheHitsCounter; }
   [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
   [[nodiscard]] uint32_t getCacheSize() const { return attackerResultsCache.size(); }
-  [[nodiscard]] uint16_t getCurrentDepth() const { return currentDepth; }
+  [[nodiscard]] uint16_t getCurrentDepth() const { return movesSequence.size(); }
   [[nodiscard]] short getWhiteScoreDiff() const { return board.numBlackCaptures - board.numWhiteCaptures - initialWhiteScore; }
   void clearMaxDepth() { maxDepth = 0; }
   [[nodiscard]] bool getStoreMovesTree() const { return storeMovesTree; }
@@ -177,9 +177,9 @@ private:
     const auto moveRecord = const_cast<Board&>(board).playMoveRecordedDots(loc, pla);
 
     movesCounter++;
-    currentDepth++;
-    if (currentDepth > maxDepth) {
-      maxDepth = currentDepth;
+    movesSequence.push_back(loc);
+    if (movesSequence.size() > maxDepth) {
+      maxDepth = movesSequence.size();
     }
 
     if (storeMovesTree) {
@@ -219,7 +219,7 @@ private:
       movesTreeStack.pop_back();
     }
 
-    currentDepth--;
+    movesSequence.pop_back();
   }
 
   void createAndPushChainInfo(Loc loc, Player pla);
@@ -268,7 +268,7 @@ private:
   }
 
   void resetInitTerritory() {
-    assert(currentDepth == 1);
+    assert(movesSequence.size() == 1);
     assert(!initTerritory.empty());
     for (const Loc loc : initTerritory) {
       chainsData[loc] = static_cast<char>(chainsData[loc] & ~0b1'0000);
@@ -335,7 +335,6 @@ private:
   Player defender{};
   Loc initLoc{};
 
-  uint16_t currentDepth = 0;
   uint16_t maxDepth = 0;
   uint32_t movesCounter = 0;
   uint32_t cacheHitsCounter = 0;
@@ -365,6 +364,7 @@ private:
   std::vector<ChainsInfo> attackerChainInfos;
   std::vector<ChainsInfo> defenderChainInfos;
   std::vector<std::vector<Loc>> defenderCaptureLocs;
+  std::vector<Loc> movesSequence;
 
   // Transposition cache for iterateForAttacker(), keyed by the board position hash combined with the current player.
   std::unordered_map<Hash128, LadderLocInfo, Hash128Hash> attackerResultsCache;
