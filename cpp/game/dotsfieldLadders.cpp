@@ -61,6 +61,7 @@ void DotsLaddersSolver::startLadder(const Loc newInitLoc, const Player pla) {
     assert(getCapturedColor(initLoc) != attacker);
     setWorkingLocPlayer(initLoc, attacker);
   }
+  attackerResultsCache.clear();
   initLoc = Board::NULL_LOC;
   attacker = C_EMPTY;
   defender = C_EMPTY;
@@ -75,7 +76,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
 
   const auto moveRecordForLoc = play(loc, attacker);
 
-  const Hash128 cacheKey = board.pos_hash ^ Board::ZOBRIST_PLAYER_HASH[attacker];
+  const Hash128 cacheKey = board.pos_hash;
   if (const auto cacheIt = attackerResultsCache.find(cacheKey); cacheIt != attackerResultsCache.end()) {
     const LadderLocInfo& cachedResult = cacheIt->second;
     undo(moveRecordForLoc, cachedResult.isZero() ? LADDER_FAILED : LADDER_SUCCEEDED, &cachedResult, true);
