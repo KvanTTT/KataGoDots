@@ -626,10 +626,10 @@ bool Tests::runBackendErrorTest(
     hists = loadHists(TestCommon::getMultiGameSize10x14Data());
   else if(boardSizeDataset == "rectangle")
     hists = loadHists(TestCommon::getMultiGameRectangleData());
-  else if(boardSizeDataset == "39x32dots") {
+  else if(Global::isSuffix(boardSizeDataset, "dots")) {
     const Rules rules = Rules::DEFAULT_DOTS;
-    Rand dotsRand("Tests::runBackendErrorTest 39x32dots");
-    Board board(39, 32, rules);
+    Rand dotsRand("Tests::runBackendErrorTest " + boardSizeDataset);
+    Board board(nnEval->getNNXLen(), nnEval->getNNYLen(), rules);
     Player pla = board.setStartPos(dotsRand);
     BoardHistory hist(board, pla, rules, 0, false);
     hists.push_back(hist);
