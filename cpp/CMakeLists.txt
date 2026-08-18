@@ -465,12 +465,10 @@ elseif(USE_BACKEND STREQUAL "TENSORRT")
 
   find_library(TENSORRT_LIBRARY NAMES nvinfer nvinfer_${TENSORRT_VERSION_MAJOR} HINTS ${TENSORRT_ROOT_DIR} PATH_SUFFIXES lib)
 
-  # Version 8 is required for serializing the builder timing cache.
-  # Version 8.2 is required for eliminating the global logger for Builder and Runtime.
-  # Version 8.5 is required for eliminating many deprecated APIs and adopting new features.
-  # Version 8.6 is for CUDA 12 support and further reduction in initialization time.
-  if(TENSORRT_VERSION VERSION_LESS 8.5)
-    message(FATAL_ERROR "TensorRT 8.5 or greater is required but ${TENSORRT_VERSION} was found.")
+  # TensorRT 11 makes strongly typed networks mandatory. The backend emits explicit FP16/FP32
+  # precision boundaries in ONNX and intentionally no longer carries the removed weak-typing path.
+  if(TENSORRT_VERSION VERSION_LESS 11.0)
+    message(FATAL_ERROR "TensorRT 11.0 or greater is required but ${TENSORRT_VERSION} was found.")
   endif()
   include_directories(SYSTEM ${CUDAToolkit_INCLUDE_DIRS} ${TENSORRT_INCLUDE_DIR}) #SYSTEM is for suppressing some compiler warnings in thrust libraries
   target_link_libraries(katago CUDA::cudart_static ${TENSORRT_LIBRARY})
