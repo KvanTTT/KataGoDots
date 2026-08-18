@@ -1,0 +1,22 @@
+# Core training, inference, export, and self-play data pipeline
+numpy>=1.24
+packaging>=23.0
+psutil>=5.9
+# Python 3.8 is supported by PyTorch up to the 2.4 release line.
+torch>=2.3,<2.5; python_version < "3.9"
+torch>=2.5; python_version >= "3.9"
+
+# SGF processing, statistics, and distributed-server utilities
+python-dateutil>=2.8
+requests>=2.31
+requests-toolbelt>=1.0
+scipy>=1.10
+sgfmill>=1.1
+
+# Visualization and auxiliary GUI tools
+matplotlib>=3.7
+Pillow>=9.5
+wxPython>=4.2
+
+# Tests
+pytest>=7.4
