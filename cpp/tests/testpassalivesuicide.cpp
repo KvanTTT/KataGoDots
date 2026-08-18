@@ -138,7 +138,7 @@ oox.
   {
     Logger logger(nullptr,false,false);
     NNEvaluator* nnEval = TestSearchCommon::startNNEval(
-      "",logger,"passAliveSuicideModeTest",NNPos::MAX_BOARD_LEN,NNPos::MAX_BOARD_LEN,
+      "",logger,"passAliveSuicideModeTest",NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,
       0,true,false,false,true,false
     );
     //With no loaded model, auto resolves to false
@@ -249,7 +249,7 @@ oox.
   {
     Logger logger(nullptr,false,false);
     NNEvaluator* nnEval = TestSearchCommon::startNNEval(
-      "",logger,"passAliveSuicideCacheTest",NNPos::MAX_BOARD_LEN,NNPos::MAX_BOARD_LEN,
+      "",logger,"passAliveSuicideCacheTest",NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,
       0,true,false,false,true,false
     );
 

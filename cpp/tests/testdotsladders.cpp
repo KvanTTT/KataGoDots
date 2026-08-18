@@ -1115,12 +1115,14 @@ TEST(LadderTests, StressSimple) {
         farMoveX = height - 1;
         farMoveY = farMoveX;
     }
-    if constexpr (width < height) {
+    else if constexpr (width < height) {
         farMoveX = width - 1;
         farMoveY = farMoveX;
     }
-    farMoveX = width - 2;
-    farMoveY = height - 1;
+    else {
+        farMoveX = width - 2;
+        farMoveY = height - 1;
+    }
     moves.emplace_back(Location::getLoc(farMoveX, farMoveY, width), P_BLACK);
 
     cout << "Check capturing:" << '\n';
