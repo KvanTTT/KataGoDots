@@ -423,7 +423,8 @@ static void initializeRulesPresets() {
   Rules dotsBBSRules = Rules::DEFAULT_DOTS;
   dotsBBSRules.startPos = Rules::START_POS_CROSS;
   dotsBBSRules.startPosIsRandom = false;
-  addPreset(dotsBBSRules, DOTS_BBS_STANDARD_RULES, {});
+  // "russian" is a standard preset that was used on "playdots.ru"
+  addPreset(dotsBBSRules, DOTS_BBS_STANDARD_RULES, { "russian" });
 
   Rules dotsNotagoRules = Rules::DEFAULT_DOTS;
   dotsNotagoRules.startPos = Rules::START_POS_CROSS_4;
