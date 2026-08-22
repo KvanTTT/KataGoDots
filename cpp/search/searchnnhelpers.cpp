@@ -197,8 +197,12 @@ bool Search::maybeRecomputeExistingNNOutput(
       //If root needs different optimism, we need to recompute it.
       //If humanSL is missing, but we want it, we need to recompute.
       //Also do so when ignoring history pre root
+      //conservativePass does not apply to Dots, where GROUND genuinely ends the game and is never treated as
+      //non-terminal. Without this guard we would recompute the root every single search, since `passWouldEndGame`
+      //is unconditionally true for Dots, and the cache reasoning below wouldn't hold either because
+      //conservativePass is deliberately left out of the Dots nn hash (see `NNInputs::getHash`).
       if(nnOutput->whiteOwnerMap == NULL ||
-         (searchParams.conservativePass && thread.history.passWouldEndGame(thread.board,thread.pla)) ||
+         (searchParams.conservativePass && !thread.history.rules.isDots && thread.history.passWouldEndGame(thread.board,thread.pla)) ||
          searchParams.rootNumSymmetriesToSample > 1 ||
          searchParams.rootPolicyOptimism != searchParams.policyOptimism ||
          (searchParams.ignorePreRootHistory && !searchParams.ignoreAllHistory) ||

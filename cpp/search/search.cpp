@@ -412,7 +412,9 @@ bool Search::makeMove(Loc moveLoc, Player movePla, bool preventEncore) {
 
       //Okay, this is now our new root! Create a copy so as to keep the root out of the node table.
       const bool copySubtreeValueBias = false;
-      const bool forceNonTerminal = rootHistory.isGameFinished; // Make sure the root isn't considered terminal if game would be finished.
+      // Make sure the root isn't considered terminal if game would be finished.
+      // Except for a finished Dots board (grounded), where no move exists at all and the root really is terminal.
+      const bool forceNonTerminal = rootHistory.isGameFinished && !rootBoard.is_finished;
       rootNode = new SearchNode(*child, forceNonTerminal, copySubtreeValueBias);
       //Sweep over the new root marking it as good (calling NULL function), and then delete anything unmarked.
       //This will include the old copy of the child that we promoted to root.
@@ -438,7 +440,10 @@ bool Search::makeMove(Loc moveLoc, Player movePla, bool preventEncore) {
   //In the case that we are conservativePass and a pass would end the game, need to clear the search.
   //This is because deeper in the tree, such a node would have been explored as ending the game, but now that
   //it's a root pass, it needs to be treated as if it no longer ends the game.
-  if(searchParams.conservativePass && rootHistory.passWouldEndGame(rootBoard,rootPla))
+  //Not needed for Dots: GROUND nodes are never forced non-terminal (see `playoutDescend`), so their status can't
+  //change when they become a root pass. Clearing anyway would throw away the whole tree on every single move,
+  //since `passWouldEndGame` is unconditionally true for Dots.
+  if(searchParams.conservativePass && !rootHistory.rules.isDots && rootHistory.passWouldEndGame(rootBoard,rootPla))
     clearSearch();
 
   //In the case that we're preventing encore, and the phase would have ended, we also need to clear the search
@@ -769,7 +774,9 @@ void Search::beginSearch(bool pondering) {
   if(rootNode == NULL) {
     //Avoid storing the root node in the nodeTable, guarantee that it never is part of a cycle, allocate it directly.
     //Also force that it is non-terminal.
-    const bool forceNonTerminal = rootHistory.isGameFinished; // Make sure the root isn't considered terminal if game would be finished.
+    // Make sure the root isn't considered terminal if game would be finished.
+    // Except for a finished Dots board (grounded), where no move exists at all and the root really is terminal.
+    const bool forceNonTerminal = rootHistory.isGameFinished && !rootBoard.is_finished;
     rootNode = new SearchNode(rootPla, forceNonTerminal, createMutexIdxForNode(dummyThread), rootGraphHash);
     if(searchParams.useEvalCache && searchParams.useGraphSearch && evalCache != nullptr && mirroringPla == C_EMPTY)
       rootNode->evalCacheEntry = evalCache->find(getEvalCacheKey(rootNode->graphHash));
@@ -1368,10 +1375,14 @@ bool Search::playoutDescend(
 
       //If conservative pass, passing from the root is always non-terminal
       //If friendly passing rules, we might also be non-terminal
-      const bool forceNonTerminal = bestChildMoveLoc == Board::PASS_LOC && thread.history.isGameFinished && (
-        (searchParams.conservativePass && (&node == rootNode)) ||
-        canForceNonTerminalDueToFriendlyPass
-      );
+      //Neither applies to Dots: GROUND is an explicit game-ending move whose score is exact, so the resulting
+      //node is genuinely terminal. Forcing it non-terminal would ask the net to evaluate a position that has
+      //no legal moves at all (see `getReasonableMoves`).
+      const bool forceNonTerminal = !thread.history.rules.isDots &&
+        bestChildMoveLoc == Board::PASS_LOC && thread.history.isGameFinished && (
+          (searchParams.conservativePass && (&node == rootNode)) ||
+          canForceNonTerminalDueToFriendlyPass
+        );
       child = allocateOrFindNode(thread, thread.pla, bestChildMoveLoc, forceNonTerminal, thread.graphHash);
       child->virtualLosses.fetch_add(1,std::memory_order_release);
 

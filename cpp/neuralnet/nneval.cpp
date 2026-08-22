@@ -1001,7 +1001,7 @@ void NNEvaluator::evaluate(
 
     float policySum = 0.0f;
 
-    if(nnInputParams.enablePassingHacks) {
+    if(!board.isDots() && nnInputParams.enablePassingHacks) {
       //Cap passing prior policy at 95% (19x other moves)
       float maxPassPolicySumFactor = 19.0f;
 
