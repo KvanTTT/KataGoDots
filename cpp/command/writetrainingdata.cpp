@@ -55,10 +55,12 @@ static void getNNEval(
   bool skipCache = true;
   bool includeOwnerMap = true;
   MiscNNInputParams nnInputParams;
-  // Use conservative pass so that if players interleave passing in the middle of their moves
-  // when it would not be valid under a strict passing ruleset, it doesn't create a huge swing in value.
-  nnInputParams.conservativePassAndIsRoot = true;
-  nnInputParams.enablePassingHacks = true;
+  if (!hist.rules.isDots) {
+    // Use conservative pass so that if players interleave passing in the middle of their moves
+    // when it would not be valid under a strict passing ruleset, it doesn't create a huge swing in value.
+    nnInputParams.conservativePassAndIsRoot = true;
+    nnInputParams.enablePassingHacks = true;
+  }
   nnInputParams.drawEquivalentWinsForWhite = drawEquivalentWinsForWhite;
   nnInputParams.playoutDoublingAdvantage = (playoutDoublingAdvantagePla == getOpp(nextPla) ? -playoutDoublingAdvantage : playoutDoublingAdvantage);
   nnInputParams.maxHistory = maxHistory;
@@ -376,6 +378,10 @@ static void parseSGFRank(
     else if(Global::isSuffix(rankStr,"p")) {
       rankNumber = Global::stringToInt(Global::chopSuffix(rankStr,"p"));
       isPro = true;
+    }
+    else if (const std::size_t index = rankStr.find(','); index != string::npos) {
+      rankNumber = Global::stringToInt(rankStr.substr(index + 1));
+      isUnknown = true;
     }
     //-------------------------------------------------------------
     else {
@@ -738,9 +744,15 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
   params.chosenMoveTemperature = 0.1;
   params.useUncertainty = false; // To prevent weird selection effects at low playouts
   params.numThreads = numSearchThreads;
-  params.rootEndingBonusPoints = 0.8; // More aggressive game ending
-  params.conservativePass = false; // false since we want game completions to be consistent with strict rules
-  params.enablePassingHacks = true;
+  if (whatDataSource != DOTS_KEY) {
+    params.rootEndingBonusPoints = 0.8; // More aggressive game ending
+    params.conservativePass = false; // false since we want game completions to be consistent with strict rules
+    params.enablePassingHacks = true;
+  } else {
+    params.rootEndingBonusPoints = 0.0;
+    params.conservativePass = false;
+    params.enablePassingHacks = false;
+  }
 
   std::map<string,KGSCsvLine> kgsCsvMap;
   if(kgsCsv != "") {
@@ -1021,6 +1033,9 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
     else if(whatDataSource == "fox") {
       sgfGameRatednessIsUnknown = true;
     }
+    else if (whatDataSource == DOTS_KEY) {
+      // TODO: implement for Dots
+    }
     else {
       throw StringError("Unknown what-data-source " + whatDataSource);
     }
@@ -1061,6 +1076,9 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
     }
     else if(whatDataSource == "go4go") {
       sgfTimeControl = "";
+    }
+    else if (whatDataSource == DOTS_KEY) {
+      sgfTimeControl = ""; // TODO: implement for Dots
     }
     else {
       throw StringError("Unknown data source: " + whatDataSource);
@@ -1133,7 +1151,7 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
 
     Rules rules;
     bool rulesDisableValueTraining = false;
-    if(whatDataSource == "ogs" || whatDataSource == "kgs") {
+    if(whatDataSource == "ogs" || whatDataSource == "kgs" || whatDataSource == DOTS_KEY) {
       try {
         rules = sgf->getRulesOrFail();
       }
@@ -1386,10 +1404,9 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
     // No friendly pass since we want to complete consistent with strict rules
     rules.friendlyPassOk = false;
 
-    // TODO: Fix construction of board and hist
-    Board board(Rules::DEFAULT_GO);
+    Board board(rules);
     Player nextPla;
-    BoardHistory hist(Rules::DEFAULT_GO);
+    BoardHistory hist(rules);
     try {
       //Set up before replaying so game replay/adjudication, featurization, and targets are all uniform
       //with each other and with the searches (whose setPosition resolves to the same value from params).
@@ -1796,6 +1813,13 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
       tcIsUnknown = true;
       gameDate = SimpleDate(sgfDate);
       sgfSource = SGFMetadata::SOURCE_GO4GO;
+    }
+    else if (whatDataSource == DOTS_KEY) {
+      // TODO: implement for Dots
+      tcIsUnknown = true;
+      sgfTimeControl = "";
+
+      sgfSource = SGFMetadata::SOURCE_DOTS;
     }
     else {
       throw StringError("Unknown data source: " + whatDataSource);
@@ -2325,6 +2349,12 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
       }
     }
 
+    // We have no q value targets here: unlike selfplay, the positions we write are human moves from the
+    // sgf rather than the result of a search, so there are no per-child search values to record.
+    // Still size the vector by turn so that addRow can index it - each row gets an empty QValueTargets,
+    // which fillQValueTarget turns into an all-zeros q value row.
+    const std::vector<QValueTargets> whiteQValueTargets(whiteValueTargets.size());
+
     for(size_t m = 0; m<policyTargets.size(); m++) {
       int turnIdx = (int)m;
       int64_t unreducedNumVisits = 0;
@@ -2353,7 +2383,6 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
       const std::vector<ChangedNeuralNet*> changedNeuralNets;
       const bool hitTurnLimit = false;
       const int mode = 0;
-      const std::vector<QValueTargets> whiteQValueTargets;
 
       if(
         trainingWeights[m] > 1e-8

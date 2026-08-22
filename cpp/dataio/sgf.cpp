@@ -72,8 +72,7 @@ static const int COORD_MAX = 128;
 static MoveNoBSize parseSgfLocOrPassNoSize(const string& s, Player pla) {
   if(s.length() == 0)
     return MoveNoBSize(COORD_MAX,COORD_MAX,pla);
-  if(s.length() != 2)
-    propertyFail("Invalid location: " + s);
+  // Don't check the `length == 2` to support capturing location that are used for Dots game: ``W[kj.lj.jj.ki]`
 
   int x = parseSgfCoord(s[0]);
   int y = parseSgfCoord(s[1]);
@@ -150,7 +149,8 @@ static Rules getRulesFromSgf(const SgfNode& rootNode, const int xSize, const int
     rules = *defaultRules;
   }
 
-  if (defaultRules == nullptr || rootNode.hasProperty("KM")) {
+  // Komi isn't mandatory for Dots game
+  if ((defaultRules == nullptr && !dotsGame) || rootNode.hasProperty("KM")) {
     rules.komi = rootNode.getKomiOrFail();
   }
 
