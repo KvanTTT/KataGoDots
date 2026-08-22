@@ -357,6 +357,17 @@ double Search::getEndingWhiteScoreBonus(const SearchNode& parent, Loc moveLoc) c
   if(&parent != rootNode || moveLoc == Board::NULL_LOC)
     return 0.0;
 
+  //Not applicable to Dots: this heuristic exists to discourage Go dame-filling and pointless endgame moves,
+  //and both of its exemption clauses rely on Go semantics that don't hold here - `isAdjacentToPla` is
+  //4-connected while Dots is 8-connected, and `isNonPassAliveSelfConnection` reads a pass-alive area that
+  //for Dots is really an ownership map. The Dots training configs already set rootEndingBonusPoints = 0.0,
+  //so this also keeps play consistent with how the net was trained.
+  //
+  // TODO: In theory it could be applicable to Dots as well to discourage pointless endgame moves, however currently
+  // it's not clear how to properly implement it.
+  if(rootHistory.rules.isDots)
+    return 0.0;
+
   const NNOutput* nnOutput = parent.getNNOutput();
   if(nnOutput == NULL || nnOutput->whiteOwnerMap == NULL)
     return 0.0;
