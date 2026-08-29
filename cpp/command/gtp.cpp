@@ -3492,119 +3492,143 @@ int MainCmds::gtp(const vector<string>& args) {
     }
 
     else if(command == "loadsgf") {
-      if(pieces.size() != 1 && pieces.size() != 2) {
+      std::unique_ptr<CompactSgf> sgf = nullptr;
+      int moveNumber = 0;
+      bool moveNumberSpecified = false;
+
+      if(pieces.size() <= 0) {
         responseIsError = true;
-        response = "Expected one or two arguments for loadsgf but got '" + Global::concat(pieces," ") + "'";
+        response = "Expected an sgf filename or raw sgf data for loadsgf but got no arguments";
       }
       else {
-        const string& filename = pieces[0];
-        bool parseFailed = false;
-        bool moveNumberSpecified = false;
-        int moveNumber = 0;
-        if(pieces.size() == 2) {
-          bool suc = Global::tryStringToInt(pieces[1],moveNumber);
-          moveNumber--;
-          if(!suc || moveNumber < 0 || moveNumber > 10000000)
-            parseFailed = true;
-          else {
-            moveNumberSpecified = true;
-          }
+        //First, try interpreting the arguments as "filename [moveNumber]"
+        try {
+          sgf = CompactSgf::loadFile(pieces[0]);
         }
-        if(parseFailed) {
-          responseIsError = true;
-          response = "Invalid value for moveNumber for loadsgf";
+        catch(...) {
+          sgf = nullptr;
+        }
+
+        if(sgf != nullptr) {
+          if(pieces.size() > 2) {
+            responseIsError = true;
+            response = "Expected one or two arguments for loadsgf but got '" + Global::concat(pieces," ") + "'";
+          }
+          else if(pieces.size() == 2) {
+            bool suc = Global::tryStringToInt(pieces[1],moveNumber);
+            moveNumber--;
+            if(!suc || moveNumber < 0 || moveNumber > 10000000) {
+              responseIsError = true;
+              response = "Invalid value for moveNumber for loadsgf";
+            }
+            else {
+              moveNumberSpecified = true;
+            }
+          }
         }
         else {
-          Board sgfInitialBoard;
-          Player sgfInitialNextPla;
-          Rules sgfRules;
-          Board sgfBoard;
-          Player sgfNextPla;
-          BoardHistory sgfHist;
-
-          bool sgfParseSuccess = false;
-          std::unique_ptr<CompactSgf> sgf = nullptr;
+          //Otherwise, interpret the whole argument text as raw sgf data. Rejoin the pieces since
+          //sgf data can contain spaces, which the command line was split on.
           try {
-            sgf = CompactSgf::loadFile(filename);
-
-            if(sgf->moves.size() > 0x3FFFFFFF)
-              throw StringError("Sgf has too many moves");
-            if(!moveNumberSpecified || moveNumber > sgf->moves.size())
-              moveNumber = (int)sgf->moves.size();
-
-            sgfRules = sgf->getRulesOrWarn(
-              engine->getCurrentRules(), //Use current rules as default
-              [&logger](const string& msg) { logger.write(msg); cerr << msg << endl; }
-            );
-            if(engine->nnEval != nullptr) {
-              bool rulesWereSupported;
-              Rules supportedRules = engine->nnEval->getSupportedRules(sgfRules,rulesWereSupported);
-              if(!rulesWereSupported) {
-                ostringstream out;
-                out << "WARNING: Rules " << sgfRules.toJsonStringNoKomi()
-                    << " from sgf not supported by neural net, using " << supportedRules.toJsonStringNoKomi() << " instead";
-                logger.write(out.str());
-                if(!logger.isLoggingToStderr())
-                  cerr << out.str() << endl;
-                sgfRules = supportedRules;
-              }
-            }
-
-            if(isForcingKomi)
-              sgfRules.komi = forcedKomi;
-
-            {
-              //See if the rules differ, IGNORING komi differences
-              Rules currentRules = engine->getCurrentRules();
-              currentRules.komi = sgfRules.komi;
-              if(sgfRules != currentRules) {
-                ostringstream out;
-                out << "Changing rules to " << sgfRules.toJsonStringNoKomi();
-                logger.write(out.str());
-                if(!logger.isLoggingToStderr())
-                  cerr << out.str() << endl;
-              }
-            }
-
-            //Set up with the pass-alive computation mode the bot will be using BEFORE replaying the
-            //moves, so that any game-end adjudication happening during the replay matches what the
-            //same moves would give if entered via play commands on the bot's own history.
-            BoardHistory sgfInitialHist = sgf->setupInitialBoardAndHist(
-              sgfRules, sgfInitialNextPla, Search::resolveAlwaysComputePassAliveUnderSuicideRules(engine->getGenmoveParams(), engine->nnEval)
-            );
-            sgfInitialBoard = sgfInitialHist.initialBoard;
-            sgfInitialHist.setInitialTurnNumber(sgfInitialBoard.numStonesOnBoard()); //Should give more accurate temperaure and time control behavior
-            sgfBoard = sgfInitialBoard;
-            sgfNextPla = sgfInitialNextPla;
-            sgfHist = sgfInitialHist;
-            sgf->playMovesTolerant(sgfBoard,sgfNextPla,sgfHist,moveNumber,preventEncore);
-
-            sgf = nullptr;
-            sgfParseSuccess = true;
-          }
-          catch(const StringError& err) {
-            sgf = nullptr;
-            responseIsError = true;
-            response = "Could not load sgf: " + string(err.what());
+            sgf = CompactSgf::parse(Global::concat(pieces," "));
           }
           catch(...) {
             sgf = nullptr;
+          }
+          if(sgf == nullptr) {
             responseIsError = true;
-            response = "Cannot load file";
+            response = "Could not load sgf: '" + pieces[0] + "' is not a loadable file and the argument is not valid sgf data";
+          }
+        }
+      }
+
+      if(!responseIsError) {
+        Board sgfInitialBoard;
+        Player sgfInitialNextPla;
+        Rules sgfRules;
+        Board sgfBoard;
+        Player sgfNextPla;
+        BoardHistory sgfHist;
+
+        bool sgfParseSuccess = false;
+        try {
+          if(sgf->moves.size() > 0x3FFFFFFF)
+            throw StringError("Sgf has too many moves");
+          if(!moveNumberSpecified || moveNumber > sgf->moves.size())
+            moveNumber = (int)sgf->moves.size();
+
+          sgfRules = sgf->getRulesOrWarn(
+            engine->getCurrentRules(), //Use current rules as default
+            [&logger](const string& msg) { logger.write(msg); cerr << msg << endl; }
+          );
+          if(engine->nnEval != nullptr) {
+            bool rulesWereSupported;
+            Rules supportedRules = engine->nnEval->getSupportedRules(sgfRules,rulesWereSupported);
+            if(!rulesWereSupported) {
+              ostringstream out;
+              out << "WARNING: Rules " << sgfRules.toJsonStringNoKomi()
+                  << " from sgf not supported by neural net, using " << supportedRules.toJsonStringNoKomi() << " instead";
+              logger.write(out.str());
+              if(!logger.isLoggingToStderr())
+                cerr << out.str() << endl;
+              sgfRules = supportedRules;
+            }
           }
 
-          if(sgfParseSuccess) {
-            if(sgfRules.komi != engine->getCurrentRules().komi) {
+          if(isForcingKomi)
+            sgfRules.komi = forcedKomi;
+
+          {
+            //See if the rules differ, IGNORING komi differences
+            Rules currentRules = engine->getCurrentRules();
+            currentRules.komi = sgfRules.komi;
+            if(sgfRules != currentRules) {
               ostringstream out;
-              out << "Changing komi to " << sgfRules.komi;
+              out << "Changing rules to " << sgfRules.toJsonStringNoKomi();
               logger.write(out.str());
               if(!logger.isLoggingToStderr())
                 cerr << out.str() << endl;
             }
-            maybeSaveAvoidPatterns(false);
-            engine->setOrResetBoardSize(cfg,logger,seedRand,sgfBoard.x_size,sgfBoard.y_size,logger.isLoggingToStderr());
-            engine->setPositionAndRules(sgfNextPla, sgfBoard, sgfHist, sgfInitialBoard, sgfInitialNextPla, sgfHist.moveHistory);
           }
+
+          //Set up with the pass-alive computation mode the bot will be using BEFORE replaying the
+          //moves, so that any game-end adjudication happening during the replay matches what the
+          //same moves would give if entered via play commands on the bot's own history.
+          BoardHistory sgfInitialHist = sgf->setupInitialBoardAndHist(
+            sgfRules, sgfInitialNextPla, Search::resolveAlwaysComputePassAliveUnderSuicideRules(engine->getGenmoveParams(), engine->nnEval)
+          );
+          sgfInitialBoard = sgfInitialHist.initialBoard;
+          sgfInitialHist.setInitialTurnNumber(sgfInitialBoard.numStonesOnBoard()); //Should give more accurate temperaure and time control behavior
+          sgfBoard = sgfInitialBoard;
+          sgfNextPla = sgfInitialNextPla;
+          sgfHist = sgfInitialHist;
+          sgf->playMovesTolerant(sgfBoard,sgfNextPla,sgfHist,moveNumber,preventEncore);
+
+          sgf = nullptr;
+          sgfParseSuccess = true;
+        }
+        catch(const StringError& err) {
+          sgf = nullptr;
+          responseIsError = true;
+          response = "Could not load sgf: " + string(err.what());
+        }
+        catch(...) {
+          sgf = nullptr;
+          responseIsError = true;
+          response = "Could not load sgf";
+        }
+
+        if(sgfParseSuccess) {
+          if(sgfRules.komi != engine->getCurrentRules().komi) {
+            ostringstream out;
+            out << "Changing komi to " << sgfRules.komi;
+            logger.write(out.str());
+            if(!logger.isLoggingToStderr())
+              cerr << out.str() << endl;
+          }
+          maybeSaveAvoidPatterns(false);
+          engine->setOrResetBoardSize(cfg,logger,seedRand,sgfBoard.x_size,sgfBoard.y_size,logger.isLoggingToStderr());
+          engine->setPositionAndRules(sgfNextPla, sgfBoard, sgfHist, sgfInitialBoard, sgfInitialNextPla, sgfHist.moveHistory);
         }
       }
     }
