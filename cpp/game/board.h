@@ -149,6 +149,19 @@ struct Board
   // The max captures count is when a field is filled with all dots except sides and +1 for storing zero captures (used for empty surroundings)
   static constexpr int MAX_CAPTURES_COUNT = (MAX_LEN_X - 2) * (MAX_LEN_Y - 2) + 1;
 
+  // Expected total number of moves in a game, per point of board area. Used by
+  // Search::interpolateEarly to express the chosen-move temperature decay as a proportion of the
+  // game rather than an absolute turn count.
+  // Go plays roughly 0.69 moves per point (a 19x19 game runs ~250 moves).
+  // Dots is shorter because captured areas leave play and because a won game ends at grounding.
+  // Typically strong human tournament play measures 0.16, oppai-rs assumes 0.32.
+  // Retune this one number when self-play game lengths change materially.
+  static constexpr double GO_EXPECTED_MOVES_PER_POINT = 250.0 / (19 * 19);
+  static constexpr double DOTS_EXPECTED_MOVES_PER_POINT = 400.0 / (39 * 32);
+  // Reference game length the Dots decay is normalized against, so that a config value keeps
+  // meaning "this many turns out of a typical game" rather than "this many turns on 19x19".
+  static constexpr double REFERENCE_GAME_LENGTH = GO_EXPECTED_MOVES_PER_POINT * 19.0 * 19.0;
+
   // Location used to indicate an invalid spot on the board.
   static constexpr Loc NULL_LOC = 0;
   // Location used to indicate a pass or grounding (Dots game) move is desired.
@@ -310,6 +323,8 @@ struct Board
   }
 
   double sqrtBoardArea() const;
+  //Rough expected total number of moves in a game on this board. See DOTS_EXPECTED_MOVES_PER_POINT.
+  double expectedGameLength() const;
 
   //Gets the number of stones of the chain at loc. Precondition: location must be black or white.
   int getChainSize(Loc loc) const;
