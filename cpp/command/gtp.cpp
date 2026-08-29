@@ -3165,14 +3165,12 @@ int MainCmds::gtp(const vector<string>& args) {
     }
 
     else if (command == GET_MOVES_COMMAND) {
-      const BoardHistory& history = engine->bot->getRootHist();
-      response = printMoves(history.moveHistory, engine->bot->getRootBoard());
+      response = printMoves(engine->moveHistory, engine->initialBoard);
     }
 
     else if (command == GET_POSITION_COMMAND) {
-      const auto& rootBoard = engine->bot->getRootBoard();
       // TODO: fix for handicap start moves
-      response = printMoves(rootBoard.start_pos_moves, rootBoard);
+      response = printMoves(engine->initialBoard.start_pos_moves, engine->initialBoard);
     }
 
     else if(command == "undo") {
