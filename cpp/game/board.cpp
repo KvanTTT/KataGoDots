@@ -296,6 +296,11 @@ Color Board::getPlacedColor(const Loc loc) const {
   return rules.isDots ? getPlacedDotColor(state) : state;
 }
 
+double Board::expectedGameLength() const {
+  const double movesPerPoint = isDots() ? DOTS_EXPECTED_MOVES_PER_POINT : GO_EXPECTED_MOVES_PER_POINT;
+  return movesPerPoint * x_size * y_size;
+}
+
 double Board::sqrtBoardArea() const {
     if (x_size == y_size) {
         return x_size;

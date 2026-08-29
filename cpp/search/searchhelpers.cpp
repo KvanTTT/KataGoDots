@@ -556,7 +556,14 @@ bool Search::shouldSuppressPass(const SearchNode* n) const {
 
 double Search::interpolateEarly(double halflife, double earlyValue, double value) const {
   double rawHalflives = (double)rootHistory.getCurrentTurnNumber() / halflife;
-  double halflives = rawHalflives * 19.0 / sqrt(rootBoard.x_size*rootBoard.y_size);
+  //Scale the halflife so it covers the same fraction of a game on any board size.
+  //Go keeps its historical sqrt(area) scaling. Dots game length grows with the area rather than
+  //its square root, so scaling by sqrt(area) would make the early phase shrink as a fraction of
+  //the game on larger boards. Normalizing by the expected game length keeps that fraction fixed,
+  //so the config value means "this many turns out of a REFERENCE_GAME_LENGTH game".
+  double halflives = rootBoard.isDots()
+    ? rawHalflives * Board::REFERENCE_GAME_LENGTH / rootBoard.expectedGameLength()
+    : rawHalflives * 19.0 / sqrt(rootBoard.x_size*rootBoard.y_size);
   return value + (earlyValue - value) * pow(0.5, halflives);
 }
 
