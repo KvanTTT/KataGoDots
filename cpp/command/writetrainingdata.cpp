@@ -1815,7 +1815,7 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
       sgfSource = SGFMetadata::SOURCE_GO4GO;
     }
     else if (whatDataSource == DOTS_KEY) {
-      // TODO: implement for Dots
+      assumeMultipleStartingBlackMovesAreHandicap = false;
       tcIsUnknown = true;
       sgfTimeControl = "";
 

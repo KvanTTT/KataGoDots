@@ -3211,6 +3211,17 @@ int MainCmds::gtp(const vector<string>& args) {
       }
 
       if (!responseIsError) {
+        if(movesCount <= 0) {
+          responseIsError = true;
+          response = "Expected positive integer for moves count";
+        }
+        else if(command != "genmove" && command != "genmove_debug" && movesCount != 1) {
+          responseIsError = true;
+          response = "Expected one move for " + command + " but got " + std::to_string(movesCount);
+        }
+      }
+
+      if (!responseIsError) {
         bool debug = command == "genmove_debug" || command == "kata-search_debug";
         bool playChosenMove = command == "genmove" || command == "genmove_debug";
 
@@ -3229,35 +3240,98 @@ int MainCmds::gtp(const vector<string>& args) {
         gargs.logSearchInfoForChosenMove = logSearchInfoForChosenMove;
         gargs.debug = debug;
 
-        for (int i = 0; i < movesCount; i++) {
-          if (engine->bot->getRootHist().isGameFinished) {
-            break; // Stop on game termination
+        const bool collectResponses = command == "genmove" || command == "genmove_debug";
+        if(collectResponses && movesCount > 1) {
+          vector<string> generatedResponses;
+          bool anyError = false;
+          string errorResponse;
+          auto handleGeneratedResponse = [&generatedResponses,&anyError,&errorResponse](const string& response, bool responseIsError) {
+            if(responseIsError) {
+              anyError = true;
+              errorResponse = response;
+            }
+            else {
+              generatedResponses.push_back(response);
+            }
+          };
+
+          for (int i = 0; i < movesCount; i++) {
+            if (engine->bot->getRootHist().isGameFinished) {
+              break; // Stop on game termination
+            }
+
+            if(command == "kata-search_cancellable") {
+              engine->genMoveCancellable(
+                pla,
+                logger,
+                gargs,
+                GTPEngine::AnalyzeArgs(),
+                handleGeneratedResponse
+              );
+              suppressResponse = true;
+              currentlyGenmoving = true;
+              break;
+            }
+            else {
+              engine->genMove(
+                pla,
+                logger,
+                gargs,
+                GTPEngine::AnalyzeArgs(),
+                playChosenMove,
+                handleGeneratedResponse,
+                maybeStartPondering
+              );
+              suppressResponse = true;
+            }
+            if(anyError)
+              break;
+            pla = getOpp(pla);
           }
 
-          if(command == "kata-search_cancellable") {
-            engine->genMoveCancellable(
-              pla,
-              logger,
-              gargs,
-              GTPEngine::AnalyzeArgs(),
-              printGTPResponse
-            );
-            suppressResponse = true; // genmove handles it manually by calling printGTPResponse
-            currentlyGenmoving = true; // so that any newline will interrupt us
+          if(anyError) {
+            responseIsError = true;
+            response = errorResponse;
           }
           else {
-            engine->genMove(
-              pla,
-              logger,
-              gargs,
-              GTPEngine::AnalyzeArgs(),
-              playChosenMove,
-              printGTPResponse,
-              maybeStartPondering
-            );
-            suppressResponse = true; // genmove handles it manually by calling printGTPResponse
+            printGTPResponseHeader();
+            for(const string& responseLine : generatedResponses)
+              printGTPResponseNoHeader(responseLine, false);
+            suppressResponse = true;
           }
-          pla = getOpp(pla);
+        }
+        else {
+          for (int i = 0; i < movesCount; i++) {
+            if (engine->bot->getRootHist().isGameFinished) {
+              break; // Stop on game termination
+            }
+
+            if(command == "kata-search_cancellable") {
+              engine->genMoveCancellable(
+                pla,
+                logger,
+                gargs,
+                GTPEngine::AnalyzeArgs(),
+                printGTPResponse
+              );
+              suppressResponse = true; // genmove handles it manually by calling printGTPResponse
+              currentlyGenmoving = true; // so that any newline will interrupt us
+              break;
+            }
+            else {
+              engine->genMove(
+                pla,
+                logger,
+                gargs,
+                GTPEngine::AnalyzeArgs(),
+                playChosenMove,
+                printGTPResponse,
+                maybeStartPondering
+              );
+              suppressResponse = true; // genmove handles it manually by calling printGTPResponse
+            }
+            pla = getOpp(pla);
+          }
         }
       }
     }
