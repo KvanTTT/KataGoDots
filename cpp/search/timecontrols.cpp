@@ -192,13 +192,38 @@ void TimeControls::getTime(const Board& board, const BoardHistory& hist, double 
   double approxTurnsLeftIncrement; //Turns left in which we plan to spend our main time
   double approxTurnsLeftByoYomi;   //Turns left in which we plan to spend our main time
   {
-    double typicalGameLengthToAllowForAbsolute = 0.95 * boardArea + 20.0;
-    double typicalGameLengthToAllowForIncrement = 0.75 * boardArea + 15.0;
-    double typicalGameLengthToAllowForByoYomi = 0.50 * boardArea + 10.0;
+    double typicalGameLengthToAllowForAbsolute;
+    double typicalGameLengthToAllowForIncrement;
+    double typicalGameLengthToAllowForByoYomi;
 
-    double minApproxTurnsLeftAbsolute = 0.15 * boardArea + 30.0;
-    double minApproxTurnsLeftIncrement = 0.10 * boardArea + 20.0;
-    double minApproxTurnsLeftByoYomi = 0.02 * boardArea + 4.0;
+    double minApproxTurnsLeftAbsolute;
+    double minApproxTurnsLeftIncrement;
+    double minApproxTurnsLeftByoYomi;
+
+    if(board.isDots()) {
+      //These are the multiples of the expected game length that the Go formulas below work out to on
+      //19x19, but taken from Board::expectedGameLength() so that they track how long a game actually
+      //runs instead of the board area. A Dots game is far shorter than a Go game of the same area, so
+      //the Go constants would predict ~1200 moves on a 39x32 board where ~400 is typical, making the
+      //bot spread its time over three times too many turns and move far too fast.
+      const double expectedGameLength = board.expectedGameLength();
+      typicalGameLengthToAllowForAbsolute = 1.45 * expectedGameLength;
+      typicalGameLengthToAllowForIncrement = 1.14 * expectedGameLength;
+      typicalGameLengthToAllowForByoYomi = 0.76 * expectedGameLength;
+
+      minApproxTurnsLeftAbsolute = 0.34 * expectedGameLength;
+      minApproxTurnsLeftIncrement = 0.22 * expectedGameLength;
+      minApproxTurnsLeftByoYomi = 0.045 * expectedGameLength;
+    }
+    else {
+      typicalGameLengthToAllowForAbsolute = 0.95 * boardArea + 20.0;
+      typicalGameLengthToAllowForIncrement = 0.75 * boardArea + 15.0;
+      typicalGameLengthToAllowForByoYomi = 0.50 * boardArea + 10.0;
+
+      minApproxTurnsLeftAbsolute = 0.15 * boardArea + 30.0;
+      minApproxTurnsLeftIncrement = 0.10 * boardArea + 20.0;
+      minApproxTurnsLeftByoYomi = 0.02 * boardArea + 4.0;
+    }
 
     approxTurnsLeftAbsolute = std::max(typicalGameLengthToAllowForAbsolute - numStonesOnBoard, minApproxTurnsLeftAbsolute);
     approxTurnsLeftIncrement = std::max(typicalGameLengthToAllowForIncrement - numStonesOnBoard, minApproxTurnsLeftIncrement);
