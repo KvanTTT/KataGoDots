@@ -8,6 +8,10 @@ int BoardHistory::countDotsScoreWhiteMinusBlack(const Board& board, Color area[B
   return board.calculateOwnershipAndWhiteScore(area, C_EMPTY);
 }
 
+void BoardHistory::setPresumedNextMovePla(const Player pla) {
+  presumedNextMovePla = pla;
+}
+
 bool BoardHistory::isGroundReasonable(const Board& board) const {
   return !std::isnan(whiteScoreIfGroundingAlive(board));
 }

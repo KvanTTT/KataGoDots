@@ -206,6 +206,11 @@ struct BoardHistory {
   //Score the board as-is. If the game is already finished, and is NOT a no-result, then this should be idempotent.
   void endAndScoreGameNow(const Board& board);
 
+  //Makes [pla] the player to move without touching anything else. Dots lets either player move at any time,
+  //so an analysis of a position may be asked for a player that isn't the natural next mover; unlike `clear`,
+  //this keeps the moves played so far, which the evaluation of a Dots position depends on.
+  void setPresumedNextMovePla(Player pla);
+
   // Returns true if all dots are grounded or some player wins by grounding
   bool isGroundReasonable(const Board& board) const;
   // Returns true if opp player wins by grounding
