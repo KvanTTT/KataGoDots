@@ -131,6 +131,11 @@ int MainCmds::analysis(const vector<string>& args) {
 
   const bool warnUnusedFields = cfg.getOrDefaultBool("warnUnusedFields", true);
 
+  //Dots is a different game rather than a rules variant of Go, so the engine has to know which one it serves
+  //before any query arrives: it decides the default rules of the bots below. A query may still say `dots`
+  //on its own, but a mismatch with the model is nothing this command can fix.
+  const bool isDotsByDefault = cfg.getOrDefaultBool(DOTS_KEY, false);
+
   auto loadParams = [&humanModelFile](ConfigParser& config, SearchParams& params, Player& perspective, Player defaultPerspective) {
     bool hasHumanModel = humanModelFile != "";
     params = Setup::loadSingleParams(config,Setup::SETUP_FOR_ANALYSIS,hasHumanModel);
@@ -162,7 +167,9 @@ int MainCmds::analysis(const vector<string>& args) {
     Setup::initializeSession(cfg);
     const int expectedConcurrentEvals = numAnalysisThreads * defaultParams.numThreads;
     const bool defaultRequireExactNNLen = false;
-    const int defaultMaxBatchSize = -1;
+    //A config that doesn't specify `nnMaxBatchSize` is served with a batch that fits the search threads,
+    //so that a config of another command (a GTP one) may be used for an analysis as it is
+    const int defaultMaxBatchSize = expectedConcurrentEvals;
     const bool disableFP16 = false;
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
@@ -225,9 +232,11 @@ int MainCmds::analysis(const vector<string>& args) {
     "turnNumbers",
     "boardXSize",
     "boardYSize",
+    DOTS_KEY,
     "initialStones",
     "moves",
     "initialPlayer",
+    "playerToMove",
     "analyzeTurns",
     "priorities",
     "rules",
@@ -318,7 +327,11 @@ int MainCmds::analysis(const vector<string>& args) {
   };
 
   //Returns false if no analysis was reportable due to there being no root node or search results.
-  auto reportAnalysis = [&preventEncore,&pushToWrite](const AnalyzeRequest* request, const Search* search, bool isDuringSearch) {
+  //[chosenMoveLoc] is the move the engine would play itself, reported once the search is over, so that
+  //a client needs no second engine (a GTP `genmove` one) to both analyze a position and play it.
+  auto reportAnalysis = [&preventEncore,&pushToWrite](
+    const AnalyzeRequest* request, const Search* search, bool isDuringSearch, Loc chosenMoveLoc = Board::NULL_LOC
+  ) {
     json ret;
     ret["id"] = request->id;
     ret["turnNumber"] = request->turnNumber;
@@ -333,6 +346,14 @@ int MainCmds::analysis(const vector<string>& args) {
       request->includeNoResultValue,
       ret
     );
+
+    if(success && !isDuringSearch) {
+      ret["chosenMove"] = Location::toString(chosenMoveLoc, request->board);
+      //Resigning is a decision of a player rather than of the search, and the one of Dots depends on nothing
+      //but the position, so it's reported instead of being guessed by a client from the win rate
+      if(request->hist.rules.isDots)
+        ret["resignReasonable"] = request->hist.isResignReasonable(request->board, request->nextPla);
+    }
 
     if(success)
       pushToWrite(new string(ret.dump()));
@@ -380,19 +401,20 @@ int MainCmds::analysis(const vector<string>& args) {
           }
         };
 
+        Loc chosenMoveLoc = Board::NULL_LOC;
         if(request->reportDuringSearch) {
           std::function<void(const Search* search)> callback = [&request,&reportAnalysis](const Search* search) {
             const bool isDuringSearch = true;
             reportAnalysis(request,search,isDuringSearch);
           };
-          bot->genMoveSynchronousAnalyze(
+          chosenMoveLoc = bot->genMoveSynchronousAnalyze(
             pla, TimeControls(), searchFactor,
             request->reportDuringSearchEvery, request->firstReportDuringSearchAfter,
             callback, onSearchBegun
           );
         }
         else {
-          bot->genMoveSynchronous(pla, TimeControls(), searchFactor, onSearchBegun);
+          chosenMoveLoc = bot->genMoveSynchronous(pla, TimeControls(), searchFactor, onSearchBegun);
         }
 
         if(logSearchInfo) {
@@ -404,7 +426,7 @@ int MainCmds::analysis(const vector<string>& args) {
         {
           const bool isDuringSearch = false;
           const Search* search = bot->getSearch();
-          bool analysisWritten = reportAnalysis(request,search,isDuringSearch);
+          bool analysisWritten = reportAnalysis(request,search,isDuringSearch,chosenMoveLoc);
           //If the search didn't have any root or root neural net output, it must have been interrupted and we must be quitting imminently
           if(!analysisWritten) {
             //If the reason we stopped was because we noticed a terminate, then we will write out a dummy response even if we didn't have
@@ -438,8 +460,10 @@ int MainCmds::analysis(const vector<string>& args) {
   vector<AsyncBot*> bots;
   for(int threadIdx = 0; threadIdx<numAnalysisThreads; threadIdx++) {
     string searchRandSeed = Global::uint64ToHexString(seedRand.nextUInt64()) + Global::uint64ToHexString(seedRand.nextUInt64());
-    // TODO: Fix for Dots game
-    AsyncBot* bot = new AsyncBot(defaultParams, nnEval, humanEval, &logger, searchRandSeed, Rules::DEFAULT_GO);
+    AsyncBot* bot = new AsyncBot(
+      defaultParams, nnEval, humanEval, &logger, searchRandSeed,
+      isDotsByDefault ? Rules::DEFAULT_DOTS : Rules::DEFAULT_GO
+    );
     bot->setCopyOfExternalPatternBonusTable(patternBonusTable);
     bot->setExternalEvalCache(evalCache);
     threads.emplace_back(analysisLoopProtected,bot,threadIdx);
@@ -825,6 +849,16 @@ int MainCmds::analysis(const vector<string>& args) {
           continue;
       }
 
+      //Which player the analyzed position is evaluated for. In Go it always follows from the moves,
+      //but a Dots player may move several times in a row, so the client is the one that knows
+      //whose move is being considered.
+      Player playerToMove = C_EMPTY;
+      if(input.find("playerToMove") != input.end()) {
+        bool suc = parsePlayer(input, "playerToMove", playerToMove);
+        if(!suc)
+          continue;
+      }
+
       vector<bool> shouldAnalyze(moveHistory.size()+1,false);
       if(input.find("analyzeTurns") != input.end()) {
         vector<int> analyzeTurns;
@@ -891,17 +925,18 @@ int MainCmds::analysis(const vector<string>& args) {
 
 
       Rules rules;
+      const bool queryIsDots = input.value(DOTS_KEY, isDotsByDefault);
       if(input.find("rules") != input.end()) {
         if(input["rules"].is_string()) {
           string s = input["rules"].get<string>();
-          if(!Rules::tryParseRules(s, rules, input.value("dots", false))) {
+          if(!Rules::tryParseRules(s, rules, queryIsDots)) {
             reportErrorForId(rbase.id, "rules", "Could not parse rules: " + s);
             continue;
           }
         }
         else if(input["rules"].is_object()) {
           string s = input["rules"].dump();
-          if(!Rules::tryParseRules(s, rules, input.value("dots", false))) {
+          if(!Rules::tryParseRules(s, rules, queryIsDots)) {
             reportErrorForId(rbase.id, "rules", "Could not parse rules: " + s);
             continue;
           }
@@ -1149,6 +1184,8 @@ int MainCmds::analysis(const vector<string>& args) {
       if(initialPlayer == C_EMPTY) {
         if(moveHistory.size() > 0)
           initialPlayer = moveHistory[0].pla;
+        else if(rules.isDots)
+          initialPlayer = placements.empty() ? P_BLACK : getOpp(placements.back().pla);
         else
           initialPlayer = BoardHistory::numHandicapStonesOnBoard(board) > 0 ? P_WHITE : P_BLACK;
       }
@@ -1188,13 +1225,28 @@ int MainCmds::analysis(const vector<string>& args) {
             priority = priorities[turnNumber];
           }
 
+          //A Dots position may be evaluated for either player, and the neural net requires the history
+          //to agree on who moves next, see `playerToMove`
+          Board requestBoard = board;
+          BoardHistory requestHist = hist;
+          const Player requestPla = playerToMove != C_EMPTY ? playerToMove : nextPla;
+          if(requestPla != nextPla) {
+            if(rules.isDots) {
+              requestHist.setPresumedNextMovePla(requestPla);
+            }
+            else {
+              requestBoard.clearSimpleKoLoc();
+              requestHist.clear(requestBoard,requestPla,rules,requestHist.encorePhase);
+            }
+          }
+
           AnalyzeRequest* newRequest = new AnalyzeRequest();
           newRequest->internalId = internalIdCounter++;
           newRequest->id = rbase.id;
           newRequest->turnNumber = turnNumber;
-          newRequest->board = board;
-          newRequest->hist = hist;
-          newRequest->nextPla = nextPla;
+          newRequest->board = requestBoard;
+          newRequest->hist = requestHist;
+          newRequest->nextPla = requestPla;
           newRequest->params = rbase.params;
           newRequest->perspective = rbase.perspective;
           newRequest->analysisPVLen = rbase.analysisPVLen;
@@ -1219,7 +1271,10 @@ int MainCmds::analysis(const vector<string>& args) {
 
         Player movePla = moveHistory[turnNumber].pla;
         Loc moveLoc = moveHistory[turnNumber].loc;
-        if(movePla != nextPla) {
+        //Consecutive moves of the same player are a normal part of Dots analysis (a captured position may hand the turn
+        //back, and the user of an analysis may ask for any player to move), so the history is kept as it is:
+        //restarting it would drop the moves played so far and evaluate an early game position instead
+        if(movePla != nextPla && !rules.isDots) {
           board.clearSimpleKoLoc();
           hist.clear(board,movePla,rules,hist.encorePhase);
           hist.setAssumeMultipleStartingBlackMovesAreHandicap(assumeMultipleStartingBlackMovesAreHandicap);
