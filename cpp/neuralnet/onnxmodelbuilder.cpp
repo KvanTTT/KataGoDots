@@ -1,6 +1,8 @@
 #include "../neuralnet/onnxmodelbuilder.h"
 
 #include <cmath>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "../core/global.h"
 #include "../core/test.h"
@@ -14,9 +16,79 @@ using namespace std;
 
 namespace {
 
-// Builder that accumulates ONNX nodes and initializers into a single GraphProto, handing back
-// tensor names as it goes. Tensors are float32; transformerNHWC selects a channel-last NHWC trunk
-// instead of NCHW (see buildBlockStack / buildConv).
+static bool isFloatingPointTensorType(int type) {
+  return type == onnx::TensorProto::FLOAT || type == onnx::TensorProto::FLOAT16;
+}
+
+// TensorRT 11 removed weak typing and all builder/layer precision overrides. Express mixed
+// precision in the ONNX model itself by inserting Cast nodes at precision boundaries. The trunk
+// runs in FP16, while RMSNorms and the trunk-tip/heads remain FP32 for numerical stability. Network
+// inputs and outputs also remain FP32, so the backend's host buffers do not change.
+static void makeMixedPrecision(
+  onnx::GraphProto* graph,
+  const vector<string>& trunkTipAndHeadNodeNames,
+  const vector<string>& rmsNormNodeNames) {
+  unordered_set<string> fp32NodeNames;
+  fp32NodeNames.insert(trunkTipAndHeadNodeNames.begin(), trunkTipAndHeadNodeNames.end());
+  fp32NodeNames.insert(rmsNormNodeNames.begin(), rmsNormNodeNames.end());
+
+  unordered_map<string, int> tensorTypes;
+  for(const onnx::ValueInfoProto& input: graph->input())
+    tensorTypes[input.name()] = input.type().tensor_type().elem_type();
+  for(const onnx::TensorProto& initializer: graph->initializer())
+    tensorTypes[initializer.name()] = initializer.data_type();
+
+  vector<onnx::NodeProto> originalNodes;
+  originalNodes.reserve(graph->node_size());
+  for(const onnx::NodeProto& node: graph->node())
+    originalNodes.push_back(node);
+  graph->clear_node();
+
+  unordered_map<string, string> convertedTensors;
+  int castCounter = 0;
+  for(const onnx::NodeProto& originalNode: originalNodes) {
+    onnx::NodeProto node = originalNode;
+    const int targetType =
+      fp32NodeNames.count(node.name()) > 0 ? onnx::TensorProto::FLOAT : onnx::TensorProto::FLOAT16;
+
+    for(int i = 0; i < node.input_size(); i++) {
+      const string inputName = node.input(i);
+      const auto typeIt = tensorTypes.find(inputName);
+      if(typeIt == tensorTypes.end() || !isFloatingPointTensorType(typeIt->second) || typeIt->second == targetType)
+        continue;
+
+      const string conversionKey = Global::intToString(targetType) + ":" + inputName;
+      auto convertedIt = convertedTensors.find(conversionKey);
+      string convertedName;
+      if(convertedIt != convertedTensors.end()) {
+        convertedName = convertedIt->second;
+      } else {
+        convertedName = inputName + (targetType == onnx::TensorProto::FLOAT16 ? "/to_fp16/" : "/to_fp32/") +
+                        Global::intToString(castCounter++);
+        onnx::NodeProto* castNode = graph->add_node();
+        castNode->set_op_type("Cast");
+        castNode->set_name(convertedName);
+        castNode->add_input(inputName);
+        castNode->add_output(convertedName);
+        onnx::AttributeProto* toAttr = castNode->add_attribute();
+        toAttr->set_name("to");
+        toAttr->set_type(onnx::AttributeProto::INT);
+        toAttr->set_i(targetType);
+        tensorTypes[convertedName] = targetType;
+        convertedTensors[conversionKey] = convertedName;
+      }
+      node.set_input(i, convertedName);
+    }
+
+    graph->add_node()->CopyFrom(node);
+    for(const string& outputName: node.output())
+      tensorTypes[outputName] = targetType;
+  }
+}
+
+// Builder that accumulates an FP32 ONNX graph and initializers into a single GraphProto, handing
+// back tensor names as it goes. makeMixedPrecision rewrites it after construction when requested.
+// transformerNHWC selects a channel-last NHWC trunk instead of NCHW.
 struct Builder {
   onnx::GraphProto* graph;
   int nnXLen;
@@ -34,7 +106,7 @@ struct Builder {
   // (no masking needed). Computed once and reused by every attention block.
   string maskBiasName;
 
-  // Collected node names for FP32-forcing regions (see OnnxModelBuilder::Result).
+  // Collected node names for regions that remain FP32 when makeMixedPrecision rewrites the graph.
   vector<string> trunkTipAndHeadNodeNames;
   vector<string> rmsNormNodeNames;
 
@@ -319,7 +391,7 @@ struct Builder {
   }
 
   // mask - 1, broadcast. On-board (mask=1) -> 0, off-board (mask=0) -> -1, so adding it to a tensor
-  // shifts off-board cells down by 1 (matching ModelParser's gpmaskshift) while leaving on-board
+  // shifts off-board cells down by 1 while leaving on-board
   // cells unchanged; the subsequent max then ignores off-board cells (activations are >= 0 > -1).
   string maskMinusOne(const string& maskName, const string& nameBase) {
     string c = addScalarInitializer(uniq(nameBase + "/negone"), -1.0f);
@@ -480,16 +552,13 @@ struct Builder {
       // RMS over channels AND on-board spatial positions, per batch element -> [N,1,1,1].
       // The mean-of-squares is a reduction over C*H*W (tens of thousands of elements). A naive
       // sum-of-squares can exceed the FP16 max (65504) on a full 19x19 board (e.g. ~138000), overflowing
-      // to inf and corrupting the whole trunk tip. Although these nodes are tagged FP32 (see the
-      // FP32-forcing in trtbackend.cpp) and the tag is applied successfully, TensorRT disregards it for
-      // the reduction: it fuses square+reduce into a Myelin kernel that accumulates in FP16 internally
-      // and overflows regardless of the per-layer precision/output constraint. So we always reduce with
-      // ReduceMean (the running mean stays O(1) and never overflows, independent of whether the pin is
-      // honored) rather than ReduceSum-then-divide.
+      // to inf and corrupting the whole trunk tip. This region is explicitly FP32 in the mixed-precision
+      // ONNX graph, and ReduceMean additionally keeps the running magnitude O(1) if graph optimization
+      // or a future precision policy changes how the reduction is fused. Avoid ReduceSum-then-divide.
       //   exact:  meanSq = ReduceMean_{C,H,W}(x^2)                          (whole buffer is on-board)
       //   masked: meanSq = ReduceMean_{C,H,W}(x^2 * mask) / maskMean        (recover the on-board mean;
       //           maskMean = on-board fraction of the buffer, so dividing by it cancels the off-board
-      //           zeros that ReduceMean averaged over). maskMean is itself FP32-pinned.
+      //           zeros that ReduceMean averaged over). maskMean is in the explicit FP32 region.
       string sq = addNode("Mul", {input, input}, uniq(desc.name + "/sq"), desc.name + "/sq");
       string reduceInput = sq;
       if(!requireExactNNLen)
@@ -812,13 +881,18 @@ Result build(
   int nnYLen,
   bool requireExactNNLen,
   bool transformerNHWC,
+  bool useFP16,
   Logger* logger
 ) {
   if(desc.metaEncoderVersion > 0)
     throw StringError("OnnxModelBuilder: SGF metadata encoder not yet supported");
 
-  if(logger != NULL)
-    logger->write("Building internal onnx model, requireExactNNLen=" + Global::boolToString(requireExactNNLen) + " transformerNHWC=" + Global::boolToString(transformerNHWC));
+  if(logger != NULL) {
+    logger->write(
+      "Building internal onnx model, requireExactNNLen=" + Global::boolToString(requireExactNNLen) +
+      " transformerNHWC=" + Global::boolToString(transformerNHWC) +
+      " useFP16=" + Global::boolToString(useFP16));
+  }
 
   int numInputChannels = desc.numInputChannels;
   int numInputGlobalChannels = desc.numInputGlobalChannels;
@@ -838,6 +912,7 @@ Result build(
   };
   addMeta("name", desc.name);
   addMeta("modelVersion", Global::intToString(desc.modelVersion));
+  addMeta("precision", useFP16 ? "mixed-fp16-fp32" : "fp32");
 
   onnx::GraphProto* graph = model.mutable_graph();
   graph->set_name(desc.name.empty() ? "katago" : desc.name);
@@ -1091,11 +1166,12 @@ Result build(
   //     logger->write("OnnxModelBuilder: DEBUG exposed all internal node outputs as graph outputs");
   // }
 
+  if(useFP16)
+    makeMixedPrecision(graph, b.trunkTipAndHeadNodeNames, b.rmsNormNodeNames);
+
   OnnxModelBuilder::Result result;
   if(!model.SerializeToString(&result.serializedModel))
     throw StringError("OnnxModelBuilder: failed to serialize ModelProto");
-  result.trunkTipAndHeadNodeNames = std::move(b.trunkTipAndHeadNodeNames);
-  result.rmsNormNodeNames = std::move(b.rmsNormNodeNames);
   return result;
 }
 

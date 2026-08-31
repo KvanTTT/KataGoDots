@@ -626,6 +626,31 @@ bool Tests::runBackendErrorTest(
     hists = loadHists(TestCommon::getMultiGameSize10x14Data());
   else if(boardSizeDataset == "rectangle")
     hists = loadHists(TestCommon::getMultiGameRectangleData());
+  else if(Global::isSuffix(boardSizeDataset, "dots")) {
+    const Rules rules = Rules::DEFAULT_DOTS;
+    Rand dotsRand("Tests::runBackendErrorTest " + boardSizeDataset);
+    Board board(nnEval->getNNXLen(), nnEval->getNNYLen(), rules);
+    Player pla = board.setStartPos(dotsRand);
+    BoardHistory hist(board, pla, rules, 0, false);
+    hists.push_back(hist);
+
+    vector<Loc> candidateMoves;
+    candidateMoves.reserve(board.x_size * board.y_size);
+    for(int y = 0; y < board.y_size; y++) {
+      for(int x = 0; x < board.x_size; x++)
+        candidateMoves.push_back(Location::getLoc(x, y, board.x_size));
+    }
+    dotsRand.shuffle(candidateMoves);
+    for(Loc loc: candidateMoves) {
+      if(!hist.isLegal(board, loc, pla))
+        continue;
+      hist.makeBoardMoveAssumeLegal(board, loc, pla, nullptr);
+      pla = getOpp(pla);
+      hists.push_back(hist);
+      if(hists.size() >= 64)
+        break;
+    }
+  }
   else
     throw StringError("Unknown dataset to test gpu error on: " + boardSizeDataset);
 

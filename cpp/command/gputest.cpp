@@ -30,7 +30,9 @@ int MainCmds::testgpuerror(const vector<string>& args) {
     KataGoCommandLine cmd("Test GPU error between FP16 and FP32 with and without batching");
     cmd.addConfigFileArg(KataGoCommandLine::defaultGtpConfigFileName(),"gtp_example.cfg");
     cmd.addModelFileArg();
-    TCLAP::ValueArg<string> boardSizeDatasetArg("","boardsize", "Dataset to benchmark on (9,13,19,10x14,rectangle), default 19", false, "19", "SIZE");
+    TCLAP::ValueArg<string> boardSizeDatasetArg(
+      "", "boardsize", "Dataset to benchmark on (9,13,19,10x14,rectangle,WIDTHxHEIGHTdots), default 19",
+      false, "19", "SIZE");
     TCLAP::SwitchArg quickArg("","quick","Faster shorter test");
     cmd.add(boardSizeDatasetArg);
     cmd.add(quickArg);
@@ -67,6 +69,17 @@ int MainCmds::testgpuerror(const vector<string>& args) {
     else if(boardSizeDataset == "rectangle") {
       defaultNNXSize = 19;
       defaultNNYSize = 19;
+    }
+    else if(Global::isSuffix(boardSizeDataset, "dots")) {
+      const vector<string> sizePieces = Global::split(Global::chopSuffix(boardSizeDataset, "dots"), 'x');
+      if(
+        sizePieces.size() != 2 ||
+        !Global::tryStringToInt(sizePieces[0], defaultNNXSize) ||
+        !Global::tryStringToInt(sizePieces[1], defaultNNYSize) ||
+        defaultNNXSize < 2 || defaultNNXSize > Board::MAX_LEN_X ||
+        defaultNNYSize < 2 || defaultNNYSize > Board::MAX_LEN_Y
+      )
+        throw StringError("Invalid Dots board size dataset: " + boardSizeDataset);
     }
     else {
       throw StringError("Board size dataset to test: invalid value " + boardSizeDataset);
@@ -126,8 +139,8 @@ int MainCmds::testgpuerror(const vector<string>& args) {
     }
   }
 
-  const double policyOptimismForTest = cfg.getOrDefaultDouble("policyOptimism", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 0.0);
-  const double pdaForTest = cfg.getOrDefaultDouble("playoutDoublingAdvantage", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 0.0);
+  const double policyOptimismForTest = cfg.getOrDefaultDouble("policyOptimism", std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max(), 0.0);
+  const double pdaForTest = cfg.getOrDefaultDouble("playoutDoublingAdvantage", std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max(), 0.0);
   const double nnPolicyTemperatureForTest = cfg.getOrDefaultDouble("rootPolicyTemperature", std::numeric_limits<double>::min(), std::numeric_limits<double>::max(), 1.0);
   if(policyOptimismForTest != 0.0 || pdaForTest != 0.0 || nnPolicyTemperatureForTest != 1.0) {
     logger.write("Using policyOptimismForTest " + Global::doubleToString(policyOptimismForTest));

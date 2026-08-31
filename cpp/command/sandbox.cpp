@@ -210,10 +210,9 @@ namespace {
 }
 
 // Smoke test for the ONNX emit -> serialize -> nvonnxparser -> buildSerializedNetwork chain.
-// Goal: prove that an onnx::ModelProto built with our (protobuf 3.12.4) library is accepted by
-// TensorRT's bundled nvonnxparser and can be built into an engine, before we invest in a real
-// ModelDesc -> ONNX emitter. The graph here is intentionally trivial: a single Identity node
-// mapping one dynamic-batch input to one output.
+// Proves that an onnx::ModelProto built with the configured protobuf library is accepted by
+// TensorRT's bundled nvonnxparser and can be built into an engine. The graph is intentionally
+// trivial: a single Identity node mapping one dynamic-batch input to one output.
 int MainCmds::sandbox() {
   GOOGLE_PROTOBUF_VERIFY_VERSION;
 
@@ -222,7 +221,7 @@ int MainCmds::sandbox() {
 
   // ---- Build the ONNX ModelProto ----
   onnx::ModelProto model;
-  model.set_ir_version(onnx::IR_VERSION_2023_5_5);  // IR v9, accepted by TensorRT 10.x
+  model.set_ir_version(onnx::IR_VERSION_2023_5_5);  // IR v9, accepted by TensorRT 11.x
   model.set_producer_name("katago-sandbox");
   {
     onnx::OperatorSetIdProto* opset = model.add_opset_import();
@@ -273,8 +272,7 @@ int MainCmds::sandbox() {
   if(!builder)
     throw StringError("sandbox: failed to create TensorRT builder");
 
-  const auto explicitBatch = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
-  auto network = unique_ptr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(explicitBatch));
+  auto network = unique_ptr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(0));
   if(!network)
     throw StringError("sandbox: failed to create TensorRT network");
 

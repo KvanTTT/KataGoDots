@@ -5,17 +5,16 @@
 #include <NvOnnxParser.h>
 #include <cuda_runtime_api.h>
 
-// TensorRT versions before 10 cannot parse the ONNX this backend emits (verified failure on
-// TensorRT 8.6: "Kernel weight dimension failed to broadcast to input" at parse time).
-#if NV_TENSORRT_MAJOR < 10
-#error "The TensorRT backend requires TensorRT 10.0 or newer"
+// TensorRT 11 made strongly typed networks mandatory and removed the weak-typing APIs used by the
+// old hand-built network path. This backend emits an explicitly typed ONNX graph instead.
+#if NV_TENSORRT_MAJOR < 11
+#error "The TensorRT backend requires TensorRT 11.0 or newer"
 #endif
 
 #include <atomic>
 #include <cstdint>
 #include <fstream>
 #include <random>
-#include <set>
 
 #include "../core/fileutils.h"
 #include "../core/makedir.h"
@@ -84,7 +83,6 @@ struct ComputeContext {
   int nnYLen;
   enabled_t useFP16Mode;
   string homeDataDirOverride;
-  bool useOnnx;          // build via the ONNX emitter (default true); false = hand-built ModelParser
   bool transformerNHWC;  // ONNX emitter: run transformer blocks channel-last (default true)
   string dumpDebugPlanToDir;  // if non-empty, dump emitted ONNX + built-engine layer info here (debug)
 };
@@ -106,13 +104,8 @@ ComputeContext* NeuralNet::createComputeContext(
   context->nnYLen = nnYLen;
   context->useFP16Mode = useFP16Mode;
   context->homeDataDirOverride = homeDataDirOverride;
-  // The TensorRT backend builds its network by emitting ONNX from the model and parsing it with
-  // nvonnxparser (the default). trtDisableOnnx=true falls back to the hand-built ModelParser, which
-  // supports convnets only (transformer models will error in createComputeHandle).
-  context->useOnnx = !cfg.getOrDefaultBool("trtDisableOnnx", false);
   // ONNX transformer emitter layout. Default is NHWC (whole trunk channel-last with NCHW<->NHWC
-  // conversions around it). Equal or very slightly better than NCHW in accuracy and in throughput
-  // on TensorRT 10.9, but noticeably faster on many nvidia GPUs on TensorRT 10.16.
+  // conversions around it). Benchmark the alternative on the target GPU before disabling it.
   // Normalize convnets to false so their timing/plan cache keys don't change with this setting
   // (the ONNX builder ignores it for models without transformers anyway).
   context->transformerNHWC = cfg.getOrDefaultBool("trtTransformerNHWC", true) &&
@@ -152,898 +145,24 @@ void NeuralNet::freeLoadedModel(LoadedModel* loadedModel) {
   delete loadedModel;
 }
 
+// Bump when a backend change must invalidate timing and serialized-plan caches.
+// 9 introduces TensorRT 11 strongly typed ONNX graphs with explicit FP16/FP32 Cast boundaries.
+static constexpr int trtTuneSalt = 9;
+
 const ModelDesc& NeuralNet::getModelDesc(const LoadedModel* loadedModel) {
   return loadedModel->modelDesc;
 }
 
-struct TRTModel {
-  int nnXLen;
-  int nnYLen;
-  int maxBatchSize;
-  bool requireExactNNLen;
-
-  // TensorRT keeps only reference to weights before engine is built
-  const LoadedModel* rawModel;
-  vector<unique_ptr<float[]>> extraWeights;
-
-  int modelVersion;
-  bool dotsGame;
+struct TRTBuildState {
   uint8_t tuneHash[32];
-  IOptimizationProfile* profile;
   unique_ptr<INetworkDefinition> network;
-  vector<pair<string, string>> debugOutputs;
-
-  TRTModel() = default;
-  TRTModel(TRTModel&&) = default;
-  TRTModel(const TRTModel&) = delete;
-  TRTModel& operator=(TRTModel&&) = default;
-  TRTModel& operator=(const TRTModel&) = delete;
-};
-
-struct ModelParser {
-  unique_ptr<TRTModel> model;
-
-  ITensor* inputMask;
-  ITensor* inputSpatial;
-  ITensor* inputGlobal;
-  ITensor* inputMeta;
-
-  ILayer* maskSumLayer;
-  ILayer* maskScaleLayer;
-  ILayer* maskQuadLayer;
-
-  string tuneDesc;  // Serves as a hash of the network architecture specific to tuning
-
-  ModelParser() = default;
-  ModelParser(const ModelParser&) = delete;
-  ModelParser& operator=(const ModelParser&) = delete;
-
-  // Bump this when between katago versions we want to forcibly drop old timing caches and plan caches.
-  // Bumped 7->8 for the TensorRT ONNX overhaul (ONNX emitter as default path, NHWC trunk, FP32 pinning).
-  static constexpr int tuneSalt = 8;
-
-  unique_ptr<TRTModel> build(
-    unique_ptr<INetworkDefinition> net,
-    IOptimizationProfile* profile,
-    const LoadedModel* rawModel,
-    int nnXLen,
-    int nnYLen,
-    int maxBatchSize,
-    bool requireExactNNLen) {
-    model = make_unique<TRTModel>();
-
-    model->nnXLen = nnXLen;
-    model->nnYLen = nnYLen;
-    model->profile = profile;
-    model->network = move(net);
-    model->rawModel = rawModel;
-    model->maxBatchSize = maxBatchSize;
-    model->requireExactNNLen = requireExactNNLen;
-
-    auto& network = model->network;
-    auto modelDesc = &model->rawModel->modelDesc;
-
-    if(modelDesc->numInputMetaChannels > 0) {
-      tuneDesc = Global::strprintf(
-        R"|("salt"(%d)"modelwithmeta"(%d,%d,%d,%d,%d,%d,%d))|",
-        tuneSalt,
-        modelDesc->modelVersion,
-        modelDesc->numInputChannels,
-        modelDesc->numInputGlobalChannels,
-        modelDesc->numInputMetaChannels,
-        modelDesc->numValueChannels,
-        modelDesc->numScoreValueChannels,
-        modelDesc->numOwnershipChannels
-      );
-    }
-    else {
-      tuneDesc = Global::strprintf(
-        R"|("salt"(%d)"model"(%d,%d,%d,%d,%d,%d))|",
-        tuneSalt,
-        modelDesc->modelVersion,
-        modelDesc->numInputChannels,
-        modelDesc->numInputGlobalChannels,
-        modelDesc->numValueChannels,
-        modelDesc->numScoreValueChannels,
-        modelDesc->numOwnershipChannels
-      );
-    }
-
-    model->modelVersion = modelDesc->modelVersion;
-    model->dotsGame = modelDesc->isDotsGame;
-    network->setName(modelDesc->name.c_str());
-
-    initInputs();
-    initMaskProcLayers();
-
-    auto trunk = buildTrunk(&modelDesc->trunk);
-    buildPolicyHead(trunk->getOutput(0), &modelDesc->policyHead);
-    buildValueHead(trunk->getOutput(0), &modelDesc->valueHead);
-
-    SHA2::get256(tuneDesc.c_str(), model->tuneHash);
-
-    return move(model);
-  }
-
-  void markDebugOutput(ITensor* tensor, const string& description, bool force2D = false) {
-#ifdef DEBUG_INTERMEDIATE_VALUES
-    auto& network = model->network;
-    ILayer* debugOutputLayer = nullptr;
-    if(force2D) {
-      auto layer = network->addShuffle(*tensor);
-      layer->setReshapeDimensions({2, {0, -1}});
-      debugOutputLayer = layer;
-    } else {
-      debugOutputLayer = network->addIdentity(*tensor);
-    }
-    debugOutputLayer->setOutputType(0, DataType::kFLOAT);
-    string debugOutputName = "DBG" + to_string(hash<string>{}(description));
-    auto debugOutput = debugOutputLayer->getOutput(0);
-    network->markOutput(*debugOutput);
-    debugOutput->setName(debugOutputName.c_str());
-    debugOutput->setType(DataType::kFLOAT);
-    debugOutput->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-    model->debugOutputs.emplace_back(debugOutputName, description);
-#else
-    (void)tensor;
-    (void)description;
-    (void)force2D;
-#endif
-  }
-
-  void initInputs() {
-    auto profile = model->profile;
-    auto& network = model->network;
-    auto modelDesc = &model->rawModel->modelDesc;
-
-    int nnXLen = model->nnXLen;
-    int nnYLen = model->nnYLen;
-    int numInputChannels = modelDesc->numInputChannels;
-    int numInputGlobalChannels = modelDesc->numInputGlobalChannels;
-    int numInputMetaChannels = modelDesc->numInputMetaChannels;
-
-    int numFeatures = NNModelVersion::getNumSpatialFeatures(model->modelVersion, model->dotsGame);
-    if(numInputChannels != numFeatures)
-      throw StringError(Global::strprintf(
-        "Neural net numInputChannels (%d) was not the expected number based on version (%d)",
-        numInputChannels,
-        numFeatures));
-    int numGlobalFeatures = NNModelVersion::getNumGlobalFeatures(model->modelVersion, model->dotsGame);
-    if(numInputGlobalChannels != numGlobalFeatures)
-      throw StringError(Global::strprintf(
-        "Neural net numInputGlobalChannels (%d) was not the expected number based on version (%d)",
-        numInputGlobalChannels,
-        numGlobalFeatures));
-    if(numInputMetaChannels > 0) {
-      if(numInputMetaChannels != SGFMetadata::METADATA_INPUT_NUM_CHANNELS)
-        throw StringError(Global::strprintf("Neural net numInputMetaChannels (%d) was not the expected number (%d)",
-          numInputMetaChannels, SGFMetadata::METADATA_INPUT_NUM_CHANNELS
-        ));
-    }
-
-    if(nnXLen > NNPos::MAX_BOARD_LEN_X)
-      throw StringError(
-        Global::strprintf("nnXLen (%d) is greater than NNPos::MAX_BOARD_LEN_X (%d)", nnXLen, NNPos::MAX_BOARD_LEN_X));
-    if(nnYLen > NNPos::MAX_BOARD_LEN_Y)
-      throw StringError(
-        Global::strprintf("nnYLen (%d) is greater than NNPos::MAX_BOARD_LEN_Y (%d)", nnYLen, NNPos::MAX_BOARD_LEN_Y));
-
-    inputMask = network->addInput("InputMask", DataType::kFLOAT, {4, {-1, 1, nnYLen, nnXLen}});
-    inputMask->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-    profile->setDimensions("InputMask", OptProfileSelector::kMIN, Dims4(1, 1, nnYLen, nnXLen));
-    profile->setDimensions("InputMask", OptProfileSelector::kOPT, Dims4(model->maxBatchSize, 1, nnYLen, nnXLen));
-    profile->setDimensions("InputMask", OptProfileSelector::kMAX, Dims4(model->maxBatchSize, 1, nnYLen, nnXLen));
-
-    inputSpatial = network->addInput("InputSpatial", DataType::kFLOAT, {4, {-1, numInputChannels, nnYLen, nnXLen}});
-    inputSpatial->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-    profile->setDimensions("InputSpatial", OptProfileSelector::kMIN, Dims4(1, numInputChannels, nnYLen, nnXLen));
-    profile->setDimensions(
-      "InputSpatial", OptProfileSelector::kOPT, Dims4(model->maxBatchSize, numInputChannels, nnYLen, nnXLen));
-    profile->setDimensions(
-      "InputSpatial", OptProfileSelector::kMAX, Dims4(model->maxBatchSize, numInputChannels, nnYLen, nnXLen));
-
-    inputGlobal =
-      network->addInput("InputGlobal", DataType::kFLOAT, {4, {-1, numInputGlobalChannels, 1, 1}});
-    inputSpatial->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-    profile->setDimensions("InputGlobal", OptProfileSelector::kMIN, Dims4(1, numInputGlobalChannels, 1, 1));
-    profile->setDimensions(
-      "InputGlobal", OptProfileSelector::kOPT, Dims4(model->maxBatchSize, numInputGlobalChannels, 1, 1));
-    profile->setDimensions(
-      "InputGlobal", OptProfileSelector::kMAX, Dims4(model->maxBatchSize, numInputGlobalChannels, 1, 1));
-
-    if(numInputMetaChannels > 0) {
-      inputMeta =
-        network->addInput("InputMeta", DataType::kFLOAT, {4, {-1, numInputMetaChannels, 1, 1}});
-      inputSpatial->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-      profile->setDimensions("InputMeta", OptProfileSelector::kMIN, Dims4(1, numInputMetaChannels, 1, 1));
-      profile->setDimensions(
-        "InputMeta", OptProfileSelector::kOPT, Dims4(model->maxBatchSize, numInputMetaChannels, 1, 1));
-      profile->setDimensions(
-        "InputMeta", OptProfileSelector::kMAX, Dims4(model->maxBatchSize, numInputMetaChannels, 1, 1));
-    }
-    else {
-      inputMeta = NULL;
-    }
-
-    markDebugOutput(inputSpatial, "Initial bin features");
-  }
-
-  void initMaskProcLayers() {
-    int nnXLen = model->nnXLen;
-    int nnYLen = model->nnYLen;
-    auto& network = model->network;
-
-    if(!model->requireExactNNLen) {
-      maskSumLayer = network->addReduce(*inputMask, ReduceOperation::kSUM, 1U << 2 | 1U << 3, true);
-      maskSumLayer->setName("InputMask/sum");
-      maskSumLayer->setPrecision(DataType::kFLOAT);
-
-      auto maskWidthLayer = network->addUnary(*maskSumLayer->getOutput(0), UnaryOperation::kSQRT);
-      maskWidthLayer->setName("InputMask/width");
-      maskWidthLayer->setPrecision(DataType::kFLOAT);
-
-      auto maskScaleWeightsShift = make_unique<float[]>(1);
-      auto maskScaleWeightsScale = make_unique<float[]>(1);
-      maskScaleWeightsShift[0] = -1.4f;
-      maskScaleWeightsScale[0] = 0.1f;
-      maskScaleLayer = network->addScale(
-        *maskWidthLayer->getOutput(0),
-        ScaleMode::kUNIFORM,
-        {DataType::kFLOAT, maskScaleWeightsShift.get(), 1},
-        {DataType::kFLOAT, maskScaleWeightsScale.get(), 1},
-        {DataType::kFLOAT, nullptr, 0});
-      maskScaleLayer->setName("InputMask/scale");
-      maskScaleLayer->setPrecision(DataType::kFLOAT);
-      model->extraWeights.push_back(move(maskScaleWeightsShift));
-      model->extraWeights.push_back(move(maskScaleWeightsScale));
-
-      auto maskCenterSquareWeightsShift = make_unique<float[]>(1);
-      auto maskCenterSquareWeightsPower = make_unique<float[]>(1);
-      maskCenterSquareWeightsShift[0] = -14.0f;
-      maskCenterSquareWeightsPower[0] = 2.0f;
-      auto maskCenterSquareLayer = network->addScale(
-        *maskWidthLayer->getOutput(0),
-        ScaleMode::kUNIFORM,
-        {DataType::kFLOAT, maskCenterSquareWeightsShift.get(), 1},
-        {DataType::kFLOAT, nullptr, 0},
-        {DataType::kFLOAT, maskCenterSquareWeightsPower.get(), 1});
-      maskCenterSquareLayer->setName("InputMask/centersquare");
-      maskCenterSquareLayer->setPrecision(DataType::kFLOAT);
-      model->extraWeights.push_back(move(maskCenterSquareWeightsShift));
-      model->extraWeights.push_back(move(maskCenterSquareWeightsPower));
-
-      auto maskQuadWeightsShift = make_unique<float[]>(1);
-      auto maskQuadWeightsScale = make_unique<float[]>(1);
-      maskQuadWeightsShift[0] = -0.1f;
-      maskQuadWeightsScale[0] = 0.01f;
-      maskQuadLayer = network->addScale(
-        *maskCenterSquareLayer->getOutput(0),
-        ScaleMode::kUNIFORM,
-        {DataType::kFLOAT, maskQuadWeightsShift.get(), 1},
-        {DataType::kFLOAT, maskQuadWeightsScale.get(), 1},
-        {DataType::kFLOAT, nullptr, 0});
-      maskQuadLayer->setName("InputMask/quad");
-      maskQuadLayer->setPrecision(DataType::kFLOAT);
-      model->extraWeights.push_back(move(maskQuadWeightsShift));
-      model->extraWeights.push_back(move(maskQuadWeightsScale));
-    } else {
-      float maskWidth = sqrtf(nnXLen * nnYLen);
-
-      auto maskScaleLayerWeights = make_unique<float[]>(1);
-      maskScaleLayerWeights[0] = maskWidth * 0.1f - 1.4f;
-      maskScaleLayer = network->addConstant({4, {1, 1, 1, 1}}, {DataType::kFLOAT, maskScaleLayerWeights.get(), 1});
-      maskScaleLayer->setName("InputMask/scale");
-      model->extraWeights.push_back(move(maskScaleLayerWeights));
-
-      auto maskQuadLayerWeights = make_unique<float[]>(1);
-      maskQuadLayerWeights[0] = (maskWidth - 14.0f) * (maskWidth - 14.0f) * 0.01f - 0.1f;
-      maskQuadLayer = network->addConstant({4, {1, 1, 1, 1}}, {DataType::kFLOAT, maskQuadLayerWeights.get(), 1});
-      maskQuadLayer->setName("InputMask/quad");
-      model->extraWeights.push_back(move(maskQuadLayerWeights));
-    }
-  }
-
-  ILayer* buildTrunk(const TrunkDesc* desc) {
-    auto& network = model->network;
-
-    string name = desc->name;
-    int numChannels = desc->trunkNumChannels;
-
-    tuneDesc += Global::strprintf(
-      R"|("%s"(%d,%d,%d,%d,%d))|",
-      desc->name.c_str(),
-      desc->numBlocks,
-      desc->trunkNumChannels,
-      desc->midNumChannels,
-      desc->regularNumChannels,
-      desc->gpoolNumChannels);
-
-    auto initialConvLayer = buildConvLayer(inputSpatial, &desc->initialConv);
-    auto initialMatMulLayer = buildMatMulLayer(inputGlobal, &desc->initialMatMul);
-    ILayer* initialMetaLayer;
-    if(desc->metaEncoderVersion > 0) {
-      initialMetaLayer = buildSGFMetadataEncoder(inputMeta, &desc->sgfMetadataEncoder);
-    }
-    else {
-      initialMetaLayer = NULL;
-    }
-
-    auto initialConv = initialConvLayer->getOutput(0);
-    auto initialMatMul = initialMatMulLayer->getOutput(0);
-    auto initialMeta = initialMetaLayer == NULL ? NULL : initialMetaLayer->getOutput(0);
-
-    testAssert(initialConv->getDimensions().d[1] == numChannels);
-    testAssert(initialMatMul->getDimensions().d[1] == numChannels);
-    if(initialMeta != NULL) {
-      testAssert(initialMeta->getDimensions().d[1] == numChannels);
-    }
-
-    markDebugOutput(initialConvLayer->getOutput(0), "After initial conv");
-
-    auto initialBiasLayer = network->addElementWise(*initialConv, *initialMatMul, ElementWiseOperation::kSUM);
-    if(initialMeta != NULL) {
-      initialBiasLayer = network->addElementWise(*(initialBiasLayer->getOutput(0)), *initialMeta, ElementWiseOperation::kSUM);
-    }
-    auto initialBiasLayerName = name + "/initbias";
-    initialBiasLayer->setName(initialBiasLayerName.c_str());
-
-    testAssert(desc->blocks.size() == desc->numBlocks);
-    auto trunkScratchLayer = buildResidualBlockStack(initialBiasLayer->getOutput(0), desc->blocks, "trunk");
-
-    if(desc->trunkNormKind != TRUNK_NORM_KIND_STANDARD)
-      throw StringError(
-        "TensorRT backend: trunk RMSNorm is not supported by the non-ONNX ModelParser path. Remove "
-        "trtDisableOnnx (or set it to false) to use the ONNX path, which supports it.");
-    auto trunkTipBatchNormLayer = buildBatchNormLayer(trunkScratchLayer->getOutput(0), &desc->trunkTipBN);
-    auto trunkTipActivationLayer =
-      buildActivationLayer(trunkTipBatchNormLayer->getOutput(0), &desc->trunkTipActivation);
-    auto trunkTipMaskLayer = applyMaskLayer(trunkTipActivationLayer);
-
-    auto trunkTipCastLayer = applyCastLayer(trunkTipMaskLayer, DataType::kFLOAT);
-    markDebugOutput(trunkTipCastLayer->getOutput(0), "Trunk tip");
-
-    return trunkTipCastLayer;
-  }
-
-  ILayer* buildResidualBlockStack(
-    ITensor* input,
-    const std::vector<std::pair<int, unique_ptr_void>>& blocks,
-    const string& name) {
-    ILayer* trunkScratchLayer = model->network->addIdentity(*input);
-    auto trunkScratchLayerName = name + "/scratch";
-    trunkScratchLayer->setName(trunkScratchLayerName.c_str());
-
-    for(int i = 0; i < blocks.size(); i++) {
-      markDebugOutput(trunkScratchLayer->getOutput(0), name + " before block " + to_string(i));
-      if(blocks[i].first == ORDINARY_BLOCK_KIND) {
-        auto blockDesc = static_cast<ResidualBlockDesc*>(blocks[i].second.get());
-        trunkScratchLayer = buildResidualBlock(trunkScratchLayer->getOutput(0), blockDesc);
-      } else if(blocks[i].first == GLOBAL_POOLING_BLOCK_KIND) {
-        auto blockDesc = static_cast<GlobalPoolingResidualBlockDesc*>(blocks[i].second.get());
-        trunkScratchLayer = buildGlobalPoolingResidualBlock(trunkScratchLayer->getOutput(0), blockDesc);
-      } else if(blocks[i].first == NESTED_BOTTLENECK_BLOCK_KIND) {
-        auto blockDesc = static_cast<NestedBottleneckResidualBlockDesc*>(blocks[i].second.get());
-        trunkScratchLayer = buildNestedBottleneckResidualBlock(trunkScratchLayer->getOutput(0), blockDesc);
-      } else if(blocks[i].first == TRANSFORMER_ATTENTION_BLOCK_KIND ||
-                blocks[i].first == TRANSFORMER_FFN_BLOCK_KIND) {
-        throw StringError(
-          "TensorRT backend: transformer blocks are not supported by the non-ONNX ModelParser path. "
-          "Remove trtDisableOnnx (or set it to false) to use the ONNX path, which supports them.");
-      } else {
-        ASSERT_UNREACHABLE;
-      }
-    }
-
-    return trunkScratchLayer;
-  }
-
-  void buildPolicyHead(ITensor* input, const PolicyHeadDesc* desc) {
-    auto& network = model->network;
-    string name = desc->name;
-
-    auto p1ConvLayer = buildConvLayer(input, &desc->p1Conv, true);
-    auto g1ConvLayer = buildConvLayer(input, &desc->g1Conv, true);
-    auto g1BatchNormLayer = buildBatchNormLayer(g1ConvLayer->getOutput(0), &desc->g1BN, true);
-    auto g1ActivationLayer = buildActivationLayer(g1BatchNormLayer->getOutput(0), &desc->g1Activation, true);
-    auto g1MaskLayer = applyMaskLayer(g1ActivationLayer, true);
-    auto g1CastLayer = applyCastLayer(g1MaskLayer, DataType::kFLOAT);
-    auto gpoolLayer = applyGPoolLayer(g1CastLayer, true);
-    auto gpoolToBiasMulLayer = buildMatMulLayer(gpoolLayer->getOutput(0), &desc->gpoolToBiasMul, true);
-    auto p1CastLayer = applyCastLayer(p1ConvLayer, DataType::kFLOAT);
-    auto gpoolBiasLayer = network->addElementWise(
-      *p1CastLayer->getOutput(0), *gpoolToBiasMulLayer->getOutput(0), ElementWiseOperation::kSUM);
-    auto gpoolBiasLayerName = name + "/gpbias";
-    gpoolBiasLayer->setName(gpoolBiasLayerName.c_str());
-    gpoolBiasLayer->setPrecision(DataType::kFLOAT);
-    auto p1BatchNormLayer = buildBatchNormLayer(gpoolBiasLayer->getOutput(0), &desc->p1BN, true);
-    auto p1ActivationLayer = buildActivationLayer(p1BatchNormLayer->getOutput(0), &desc->p1Activation, true);
-    auto p1MaskLayer = applyMaskLayer(p1ActivationLayer, true);
-
-    markDebugOutput(p1ConvLayer->getOutput(0), "p1 pre-gpool-sum");
-    markDebugOutput(g1ConvLayer->getOutput(0), "g1 pre-gpool");
-    markDebugOutput(gpoolLayer->getOutput(0), "g1 pooled", true);
-    markDebugOutput(gpoolToBiasMulLayer->getOutput(0), "g1 biases", true);
-    markDebugOutput(gpoolBiasLayer->getOutput(0), "p1 after-gpool-sum");
-
-    // So that mask layer can be omitted
-    testAssert(desc->p2Conv.convXSize == 1);
-    testAssert(desc->p2Conv.convYSize == 1);
-
-    auto p2ConvLayer = buildConvLayer(p1MaskLayer->getOutput(0), &desc->p2Conv, true);
-    p2ConvLayer->setPrecision(DataType::kFLOAT);
-    if(model->modelVersion >= 15) {
-      auto gpoolToPassMulLayer = buildMatMulLayer(gpoolLayer->getOutput(0), &desc->gpoolToPassMul, true);
-      gpoolToPassMulLayer->setPrecision(DataType::kFLOAT);
-      auto gpoolToPassBiasLayer = buildMatBiasLayer(gpoolToPassMulLayer->getOutput(0), &desc->gpoolToPassBias, true);
-      auto gpoolToPassActLayer = buildActivationLayer(gpoolToPassBiasLayer->getOutput(0), &desc->passActivation, true);
-      auto gpoolToPassMul2Layer = buildMatMulLayer(gpoolToPassActLayer->getOutput(0), &desc->gpoolToPassMul2, true);
-      gpoolToPassMul2Layer->setPrecision(DataType::kFLOAT);
-
-      auto outputPolicyPass = gpoolToPassMul2Layer->getOutput(0);
-      network->markOutput(*outputPolicyPass);
-      outputPolicyPass->setName("OutputPolicyPass");
-      outputPolicyPass->setType(DataType::kFLOAT);
-      outputPolicyPass->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-    } else {
-      auto gpoolToPassMulLayer = buildMatMulLayer(gpoolLayer->getOutput(0), &desc->gpoolToPassMul, true);
-      gpoolToPassMulLayer->setPrecision(DataType::kFLOAT);
-
-      auto outputPolicyPass = gpoolToPassMulLayer->getOutput(0);
-      network->markOutput(*outputPolicyPass);
-      outputPolicyPass->setName("OutputPolicyPass");
-      outputPolicyPass->setType(DataType::kFLOAT);
-      outputPolicyPass->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-    }
-
-    auto outputPolicy = p2ConvLayer->getOutput(0);
-    network->markOutput(*outputPolicy);
-    outputPolicy->setName("OutputPolicy");
-    outputPolicy->setType(DataType::kFLOAT);
-    outputPolicy->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-  }
-
-  void buildValueHead(ITensor* input, const ValueHeadDesc* desc) {
-    auto& network = model->network;
-
-    auto v1ConvLayer = buildConvLayer(input, &desc->v1Conv, true);
-    auto v1BatchNormLayer = buildBatchNormLayer(v1ConvLayer->getOutput(0), &desc->v1BN, true);
-    auto v1ActivationLayer = buildActivationLayer(v1BatchNormLayer->getOutput(0), &desc->v1Activation, true);
-    auto v1MaskLayer = applyMaskLayer(v1ActivationLayer, true);
-    auto v1CastLayer = applyCastLayer(v1MaskLayer, DataType::kFLOAT);
-
-    markDebugOutput(v1ConvLayer->getOutput(0), "v1");
-
-    auto gpoolLayer = applyGPoolLayer(v1CastLayer, true, true);
-    auto v2MulLayer = buildMatMulLayer(gpoolLayer->getOutput(0), &desc->v2Mul, true);
-    auto v2BiasLayer = buildMatBiasLayer(v2MulLayer->getOutput(0), &desc->v2Bias, true);
-    auto v2ActivationLayer = buildActivationLayer(v2BiasLayer->getOutput(0), &desc->v2Activation, true);
-
-    markDebugOutput(gpoolLayer->getOutput(0), "v1 pooled", true);
-    markDebugOutput(v2ActivationLayer->getOutput(0), "v2", true);
-
-    auto v3MulLayer = buildMatMulLayer(v2ActivationLayer->getOutput(0), &desc->v3Mul, true);
-    auto v3BiasLayer = buildMatBiasLayer(v3MulLayer->getOutput(0), &desc->v3Bias, true);
-
-    auto sv3MulLayer = buildMatMulLayer(v2ActivationLayer->getOutput(0), &desc->sv3Mul, true);
-    auto sv3BiasLayer = buildMatBiasLayer(sv3MulLayer->getOutput(0), &desc->sv3Bias, true);
-
-    // So that mask layer can be omitted
-    testAssert(desc->vOwnershipConv.convXSize == 1);
-    testAssert(desc->vOwnershipConv.convYSize == 1);
-
-    auto vOwnershipConvLayer = buildConvLayer(v1MaskLayer->getOutput(0), &desc->vOwnershipConv, true);
-    auto vOwnershipCastLayer = applyCastLayer(vOwnershipConvLayer, DataType::kFLOAT);
-
-    auto outputValue = v3BiasLayer->getOutput(0);
-    network->markOutput(*outputValue);
-    outputValue->setName("OutputValue");
-    outputValue->setType(DataType::kFLOAT);
-    outputValue->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-
-    auto outputScoreValue = sv3BiasLayer->getOutput(0);
-    network->markOutput(*outputScoreValue);
-    outputScoreValue->setName("OutputScoreValue");
-    outputScoreValue->setType(DataType::kFLOAT);
-    outputScoreValue->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-
-    auto outputOwnership = vOwnershipCastLayer->getOutput(0);
-    network->markOutput(*outputOwnership);
-    outputOwnership->setName("OutputOwnership");
-    outputOwnership->setType(DataType::kFLOAT);
-    outputOwnership->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-
-    auto modelDesc = &model->rawModel->modelDesc;
-    testAssert(outputValue->getDimensions().d[1] == modelDesc->numValueChannels);
-    testAssert(outputScoreValue->getDimensions().d[1] == modelDesc->numScoreValueChannels);
-    testAssert(outputOwnership->getDimensions().d[1] == modelDesc->numOwnershipChannels);
-  }
-
-
-  ILayer* buildSGFMetadataEncoder(ITensor* input, const SGFMetadataEncoderDesc* desc) {
-    auto mul1Layer = buildMatMulLayer(input, &desc->mul1);
-    auto bias1Layer = buildMatBiasLayer(mul1Layer->getOutput(0), &desc->bias1);
-    auto act1Layer = buildActivationLayer(bias1Layer->getOutput(0), &desc->act1);
-
-    auto mul2Layer = buildMatMulLayer(act1Layer->getOutput(0), &desc->mul2);
-    auto bias2Layer = buildMatBiasLayer(mul2Layer->getOutput(0), &desc->bias2);
-    auto act2Layer = buildActivationLayer(bias2Layer->getOutput(0), &desc->act2);
-
-    auto mul3Layer = buildMatMulLayer(act2Layer->getOutput(0), &desc->mul3);
-    return mul3Layer;
-  }
-
-  ILayer* buildResidualBlock(ITensor* input, const ResidualBlockDesc* desc) {
-    auto preBatchNormLayer = buildBatchNormLayer(input, &desc->preBN);
-    auto preActivationLayer = buildActivationLayer(preBatchNormLayer->getOutput(0), &desc->preActivation);
-    auto preMaskLayer = applyMaskLayer(preActivationLayer);
-    auto regularConvLayer = buildConvLayer(preMaskLayer->getOutput(0), &desc->regularConv);
-    auto midBatchNormLayer = buildBatchNormLayer(regularConvLayer->getOutput(0), &desc->midBN);
-    auto midActivationLayer = buildActivationLayer(midBatchNormLayer->getOutput(0), &desc->midActivation);
-    auto midMaskLayer = applyMaskLayer(midActivationLayer);
-    auto finalConvLayer = buildConvLayer(midMaskLayer->getOutput(0), &desc->finalConv);
-
-    auto mergeLayer = model->network->addElementWise(*input, *finalConvLayer->getOutput(0), ElementWiseOperation::kSUM);
-    mergeLayer->setName(desc->name.c_str());
-
-    return mergeLayer;
-  }
-
-  ILayer* buildGlobalPoolingResidualBlock(ITensor* input, const GlobalPoolingResidualBlockDesc* desc) {
-    auto& network = model->network;
-    string name = desc->name;
-
-    auto preBatchNormLayer = buildBatchNormLayer(input, &desc->preBN);
-    auto preActivationLayer = buildActivationLayer(preBatchNormLayer->getOutput(0), &desc->preActivation);
-    auto preMaskLayer = applyMaskLayer(preActivationLayer);
-
-    auto regularConvLayer = buildConvLayer(preMaskLayer->getOutput(0), &desc->regularConv);
-    auto gpoolConvLayer = buildConvLayer(preMaskLayer->getOutput(0), &desc->gpoolConv);
-    auto gpoolBatchNormLayer = buildBatchNormLayer(gpoolConvLayer->getOutput(0), &desc->gpoolBN);
-    auto gpoolActivationLayer = buildActivationLayer(gpoolBatchNormLayer->getOutput(0), &desc->gpoolActivation);
-    auto gpoolMaskLayer = applyMaskLayer(gpoolActivationLayer);
-    auto gpoolLayer = applyGPoolLayer(gpoolMaskLayer);
-    auto gpoolToBiasMulLayer = buildMatMulLayer(gpoolLayer->getOutput(0), &desc->gpoolToBiasMul);
-    auto gpoolBiasLayer = network->addElementWise(
-      *regularConvLayer->getOutput(0), *gpoolToBiasMulLayer->getOutput(0), ElementWiseOperation::kSUM);
-    auto gpoolBiasLayerName = name + "/gpbias";
-    gpoolBiasLayer->setName(gpoolBiasLayerName.c_str());
-
-    auto midBatchNormLayer = buildBatchNormLayer(gpoolBiasLayer->getOutput(0), &desc->midBN);
-    auto midActivationLayer = buildActivationLayer(midBatchNormLayer->getOutput(0), &desc->midActivation);
-    auto midMaskLayer = applyMaskLayer(midActivationLayer);
-
-    auto finalConvLayer = buildConvLayer(midMaskLayer->getOutput(0), &desc->finalConv);
-
-    auto mergeLayer = network->addElementWise(*input, *finalConvLayer->getOutput(0), ElementWiseOperation::kSUM);
-    mergeLayer->setName(name.c_str());
-
-    return mergeLayer;
-  }
-
-  ILayer* buildNestedBottleneckResidualBlock(ITensor* input, const NestedBottleneckResidualBlockDesc* desc) {
-    testAssert(desc->blocks.size() == desc->numBlocks);
-
-    auto preBatchNormLayer = buildBatchNormLayer(input, &desc->preBN);
-    auto preActivationLayer = buildActivationLayer(preBatchNormLayer->getOutput(0), &desc->preActivation);
-    auto preMaskLayer = applyMaskLayer(preActivationLayer);
-    auto preConvLayer = buildConvLayer(preMaskLayer->getOutput(0), &desc->preConv);
-    auto stackLayer = buildResidualBlockStack(preConvLayer->getOutput(0), desc->blocks, desc->name);
-    auto postBatchNormLayer = buildBatchNormLayer(stackLayer->getOutput(0), &desc->postBN);
-    auto postActivationLayer = buildActivationLayer(postBatchNormLayer->getOutput(0), &desc->postActivation);
-    auto postMaskLayer = applyMaskLayer(postActivationLayer);
-    auto postConvLayer = buildConvLayer(postMaskLayer->getOutput(0), &desc->postConv);
-
-    auto mergeLayer = model->network->addElementWise(*input, *postConvLayer->getOutput(0), ElementWiseOperation::kSUM);
-    mergeLayer->setName(desc->name.c_str());
-
-    return mergeLayer;
-  }
-
-  ILayer* buildMatMulLayer(ITensor* input, const MatMulLayerDesc* desc, bool forceFP32 = false) {
-    int numInChannels = desc->inChannels;
-    int numOutChannels = desc->outChannels;
-
-    tuneDesc += Global::strprintf(R"|("%s"(%d,%d))|", desc->name.c_str(), desc->inChannels, desc->outChannels);
-
-    testAssert(desc->weights.size() == numInChannels * numOutChannels);
-    testAssert(input->getDimensions().d[1] == numInChannels);
-
-    // Transpose from model's CK to TensorRT's KC
-    auto transposedWeights = make_unique<float[]>(desc->weights.size());
-    for(int ic = 0; ic < numInChannels; ic++) {
-      for(int oc = 0; oc < numOutChannels; oc++) {
-        transposedWeights[oc * numInChannels + ic] = desc->weights[ic * numOutChannels + oc];
-      }
-    }
-
-    // For convenience, both I/O tensors have 3 dimentions (in addition to batch), so that
-    // matmul is mathmatically equivalent to a 2D convolution of 1x1 features and 1x1 kernels.
-    auto matMulLayer = model->network->addConvolutionNd(
-      *input,
-      desc->outChannels,
-      {2, {1, 1}},
-      {DataType::kFLOAT, transposedWeights.get(), static_cast<int64_t>(desc->weights.size())},
-      {DataType::kFLOAT, nullptr, 0});
-    matMulLayer->setName(desc->name.c_str());
-
-    if(forceFP32) {
-      matMulLayer->setPrecision(DataType::kFLOAT);
-    }
-
-    model->extraWeights.push_back(move(transposedWeights));
-
-    return matMulLayer;
-  }
-
-  ILayer* buildMatBiasLayer(ITensor* input, const MatBiasLayerDesc* desc, bool forceFP32 = false) {
-    int numChannels = desc->numChannels;
-
-    tuneDesc += Global::strprintf(R"|("%s"(%d))|", desc->name.c_str(), desc->numChannels);
-
-    testAssert(desc->weights.size() == numChannels);
-    testAssert(input->getDimensions().d[1] == numChannels);
-
-    auto matBiasLayer = model->network->addScale(
-      *input,
-      ScaleMode::kCHANNEL,
-      {DataType::kFLOAT, desc->weights.data(), static_cast<int64_t>(numChannels)},
-      {DataType::kFLOAT, nullptr, 0},
-      {DataType::kFLOAT, nullptr, 0});
-    matBiasLayer->setName(desc->name.c_str());
-
-    if(forceFP32) {
-      matBiasLayer->setPrecision(DataType::kFLOAT);
-    }
-
-    return matBiasLayer;
-  }
-
-  ILayer* buildConvLayer(ITensor* input, const ConvLayerDesc* desc, bool forceFP32 = false) {
-    int convXSize = desc->convXSize;
-    int convYSize = desc->convYSize;
-    int dilationX = desc->dilationX;
-    int dilationY = desc->dilationY;
-    int numInChannels = desc->inChannels;
-    int numOutChannels = desc->outChannels;
-
-    tuneDesc += Global::strprintf(
-      R"|("%s"(%d,%d,%d,%d,%d,%d))|",
-      desc->name.c_str(),
-      desc->convXSize,
-      desc->convYSize,
-      desc->inChannels,
-      desc->outChannels,
-      desc->dilationX,
-      desc->dilationY);
-
-    testAssert(desc->weights.size() == convYSize * convXSize * numInChannels * numOutChannels);
-    testAssert(input->getDimensions().d[1] == numInChannels);
-
-    auto convLayer = model->network->addConvolutionNd(
-      *input,
-      desc->outChannels,
-      {2, {convYSize, convXSize}},
-      {DataType::kFLOAT, desc->weights.data(), static_cast<int64_t>(desc->weights.size())},
-      {DataType::kFLOAT, nullptr, 0});
-    convLayer->setDilationNd({2, {dilationY, dilationX}});
-    convLayer->setPaddingMode(PaddingMode::kSAME_UPPER);
-    convLayer->setName(desc->name.c_str());
-
-    if(forceFP32) {
-      convLayer->setPrecision(DataType::kFLOAT);
-    }
-
-    return convLayer;
-  }
-
-  ILayer* buildBatchNormLayer(ITensor* input, const BatchNormLayerDesc* desc, bool forceFP32 = false) {
-    int numChannels = desc->numChannels;
-
-    tuneDesc += Global::strprintf(R"|("%s"(%d))|", desc->name.c_str(), desc->numChannels);
-
-    testAssert(desc->mean.size() == numChannels);
-    testAssert(desc->variance.size() == numChannels);
-    testAssert(desc->scale.size() == numChannels);
-    testAssert(desc->bias.size() == numChannels);
-    testAssert(desc->mergedScale.size() == numChannels);
-    testAssert(desc->mergedBias.size() == numChannels);
-    testAssert(input->getDimensions().d[1] == numChannels);
-
-    auto bnLayer = model->network->addScale(
-      *input,
-      ScaleMode::kCHANNEL,
-      {DataType::kFLOAT, desc->mergedBias.data(), static_cast<int64_t>(numChannels)},
-      {DataType::kFLOAT, desc->mergedScale.data(), static_cast<int64_t>(numChannels)},
-      {DataType::kFLOAT, nullptr, 0});
-    bnLayer->setName(desc->name.c_str());
-
-    if(forceFP32) {
-      bnLayer->setPrecision(DataType::kFLOAT);
-    }
-
-    return bnLayer;
-  }
-
-  ILayer* buildActivationLayer(ITensor* input, const ActivationLayerDesc* desc, bool forceFP32 = false) {
-    tuneDesc += Global::strprintf(R"|("%s"(%d))|", desc->name.c_str(), desc->activation);
-    if(desc->activation == ACTIVATION_IDENTITY) {
-      auto activationLayer = model->network->addIdentity(*input);
-      activationLayer->setName(desc->name.c_str());
-      if(forceFP32) {
-        activationLayer->setPrecision(DataType::kFLOAT);
-      }
-      return activationLayer;
-    }
-    if(desc->activation == ACTIVATION_RELU) {
-      auto activationLayer = model->network->addActivation(*input, ActivationType::kRELU);
-      activationLayer->setName(desc->name.c_str());
-      if(forceFP32) {
-        activationLayer->setPrecision(DataType::kFLOAT);
-      }
-      return activationLayer;
-    }
-    if(desc->activation == ACTIVATION_MISH) {
-      auto softplusLayer = model->network->addActivation(*input, ActivationType::kSOFTPLUS);
-      auto softplusLayerName = desc->name + "/softplus";
-      softplusLayer->setName(softplusLayerName.c_str());
-      auto tanhLayer = model->network->addActivation(*softplusLayer->getOutput(0), ActivationType::kTANH);
-      auto tanhLayerName = desc->name + "/tanh";
-      tanhLayer->setName(tanhLayerName.c_str());
-      auto mergeLayer = model->network->addElementWise(*input, *tanhLayer->getOutput(0), ElementWiseOperation::kPROD);
-      mergeLayer->setName(desc->name.c_str());
-      if(forceFP32) {
-        softplusLayer->setPrecision(DataType::kFLOAT);
-        tanhLayer->setPrecision(DataType::kFLOAT);
-        mergeLayer->setPrecision(DataType::kFLOAT);
-      }
-      return mergeLayer;
-    }
-    if(desc->activation == ACTIVATION_MISH_SCALE8) {
-      auto softplusLayer = model->network->addActivation(*input, ActivationType::kSOFTPLUS);
-      softplusLayer->setAlpha(1.0f);
-      softplusLayer->setBeta(8.0f);
-      auto softplusLayerName = desc->name + "/softplus";
-      softplusLayer->setName(softplusLayerName.c_str());
-      auto tanhLayer = model->network->addActivation(*softplusLayer->getOutput(0), ActivationType::kTANH);
-      auto tanhLayerName = desc->name + "/tanh";
-      tanhLayer->setName(tanhLayerName.c_str());
-      auto mergeLayer = model->network->addElementWise(*input, *tanhLayer->getOutput(0), ElementWiseOperation::kPROD);
-      mergeLayer->setName(desc->name.c_str());
-      if(forceFP32) {
-        softplusLayer->setPrecision(DataType::kFLOAT);
-        tanhLayer->setPrecision(DataType::kFLOAT);
-        mergeLayer->setPrecision(DataType::kFLOAT);
-      }
-      return mergeLayer;
-    }
-    else {
-      // SILU (and any other newer activation) is only handled by the ONNX path; the hand-built
-      // ModelParser predates it. This is reachable only when trtDisableOnnx is set on such a model.
-      throw StringError(
-        "TensorRT backend: activation " + Global::intToString(desc->activation) +
-        " (e.g. SiLU) is not supported by the non-ONNX ModelParser path. Remove trtDisableOnnx (or "
-        "set it to false) to use the ONNX path, which supports it.");
-    }
-  }
-
-  ILayer* applyGPoolLayer(ILayer* inputLayer, bool forceFP32 = false, bool isValueHead = false) {
-    auto& network = model->network;
-    string name = inputLayer->getName();
-
-    ILayer* gpoolSumLayer = nullptr;
-    ILayer* gpoolMeanLayer = nullptr;
-    if(!model->requireExactNNLen) {
-      gpoolSumLayer = network->addReduce(*inputLayer->getOutput(0), ReduceOperation::kSUM, 1U << 2 | 1U << 3, true);
-      auto gpoolSumLayerName = name + "/gpsum";
-      gpoolSumLayer->setName(gpoolSumLayerName.c_str());
-      gpoolMeanLayer =
-        network->addElementWise(*gpoolSumLayer->getOutput(0), *maskSumLayer->getOutput(0), ElementWiseOperation::kDIV);
-    } else {
-      gpoolMeanLayer = network->addReduce(*inputLayer->getOutput(0), ReduceOperation::kAVG, 1U << 2 | 1U << 3, true);
-    }
-    auto gpoolMeanLayerName = name + "/gpmean";
-    gpoolMeanLayer->setName(gpoolMeanLayerName.c_str());
-
-    auto gpoolMeanScaleLayer = network->addElementWise(
-      *gpoolMeanLayer->getOutput(0), *maskScaleLayer->getOutput(0), ElementWiseOperation::kPROD);
-    auto gpoolMeanScaleLayerName = name + "/gpmeanscale";
-    gpoolMeanScaleLayer->setName(gpoolMeanScaleLayerName.c_str());
-
-    ILayer* gpoolMaskAddLayer = nullptr;
-    ILayer* gpoolMaskShiftLayer = nullptr;
-    ILayer* gpoolConcatInputLayer3 = nullptr;
-    if(isValueHead) {
-      auto gpoolMeanQuadLayer = network->addElementWise(
-        *gpoolMeanLayer->getOutput(0), *maskQuadLayer->getOutput(0), ElementWiseOperation::kPROD);
-      auto gpoolMeanQuadLayerName = name + "/gpmeanquad";
-      gpoolMeanQuadLayer->setName(gpoolMeanQuadLayerName.c_str());
-      gpoolConcatInputLayer3 = gpoolMeanQuadLayer;
-    } else if(!model->requireExactNNLen) {
-      // All activation functions we use right now are always greater than -1.0, and map 0 -> 0.
-      // So off-board areas will equal 0, and then this max is mask-safe if we assign -1.0 to off-board areas.
-      auto gpoolMaskShiftWeights = make_unique<float[]>(1);
-      gpoolMaskShiftWeights[0] = -1.0f;
-      gpoolMaskShiftLayer = network->addScale(
-        *inputMask,
-        ScaleMode::kUNIFORM,
-        {DataType::kFLOAT, gpoolMaskShiftWeights.get(), 1},
-        {DataType::kFLOAT, nullptr, 0},
-        {DataType::kFLOAT, nullptr, 0});
-      auto gpoolMaskShiftLayerName = name + "/gpmaskshift";
-      gpoolMaskShiftLayer->setName(gpoolMaskShiftLayerName.c_str());
-      model->extraWeights.push_back(move(gpoolMaskShiftWeights));
-      gpoolMaskAddLayer = network->addElementWise(
-        *inputLayer->getOutput(0), *gpoolMaskShiftLayer->getOutput(0), ElementWiseOperation::kSUM);
-      auto gpoolMaskAddLayerName = name + "/gpmaskadd";
-      gpoolMaskAddLayer->setName(gpoolMaskAddLayerName.c_str());
-      auto gpoolMaxLayer =
-        network->addReduce(*gpoolMaskAddLayer->getOutput(0), ReduceOperation::kMAX, 1U << 2 | 1U << 3, true);
-      auto gpoolMaxLayerName = name + "/gpmax";
-      gpoolMaxLayer->setName(gpoolMaxLayerName.c_str());
-      gpoolConcatInputLayer3 = gpoolMaxLayer;
-    } else {
-      auto gpoolMaxLayer =
-        network->addReduce(*inputLayer->getOutput(0), ReduceOperation::kMAX, 1U << 2 | 1U << 3, true);
-      auto gpoolMaxLayerName = name + "/gpmax";
-      gpoolMaxLayer->setName(gpoolMaxLayerName.c_str());
-      gpoolConcatInputLayer3 = gpoolMaxLayer;
-    }
-
-    ITensor* gpoolConcatInputs[] = {
-      gpoolMeanLayer->getOutput(0), gpoolMeanScaleLayer->getOutput(0), gpoolConcatInputLayer3->getOutput(0)};
-    auto gpoolConcatLayer = network->addConcatenation(gpoolConcatInputs, 3);
-    auto gpoolConcatLayerName = name + "/gpconcat";
-    gpoolConcatLayer->setAxis(1);
-    gpoolConcatLayer->setName(gpoolConcatLayerName.c_str());
-
-    if(forceFP32) {
-      if(gpoolSumLayer) {
-        gpoolSumLayer->setPrecision(DataType::kFLOAT);
-      }
-      if(gpoolMaskAddLayer) {
-        gpoolMaskAddLayer->setPrecision(DataType::kFLOAT);
-      }
-      if(gpoolMaskShiftLayer) {
-        gpoolMaskShiftLayer->setPrecision(DataType::kFLOAT);
-      }
-      gpoolMeanLayer->setPrecision(DataType::kFLOAT);
-      gpoolMeanScaleLayer->setPrecision(DataType::kFLOAT);
-      gpoolConcatInputLayer3->setPrecision(DataType::kFLOAT);
-      gpoolConcatLayer->setPrecision(DataType::kFLOAT);
-    }
-
-    return gpoolConcatLayer;
-  }
-
-  ILayer* applyMaskLayer(ILayer* inputLayer, bool forceFP32 = false) {
-    if(!model->requireExactNNLen) {
-      auto maskLayer =
-        model->network->addElementWise(*inputLayer->getOutput(0), *inputMask, ElementWiseOperation::kPROD);
-      auto maskLayerName = string(inputLayer->getName()) + "/mask";
-      maskLayer->setName(maskLayerName.c_str());
-      if(forceFP32) {
-        maskLayer->setPrecision(DataType::kFLOAT);
-      }
-      return maskLayer;
-    } else {
-      return inputLayer;
-    }
-  }
-
-  ILayer* applyCastLayer(ILayer* inputLayer, DataType dataType) {
-    auto castLayer = model->network->addCast(*inputLayer->getOutput(0), dataType);
-    auto castLayerName = string(inputLayer->getName()) + "/cast";
-    castLayer->setName(castLayerName.c_str());
-    return castLayer;
-  }
 };
 
 // The builder's autotuner reports tactics that fail to compile or execute as ERROR-severity
 // "Skipping tactic ... due to exception ..." messages, but these are recoverable: the autotuner
 // moves on to other tactics, and if none work the build fails afterward with its own error.
 // Such messages can mention cask convolution execution failures that would otherwise match the
-// genuine GPU-health fatal checks below (observed on TensorRT 10.16 building on multiple
-// heterogeneous GPUs), so exempt them rather than killing the process mid-build.
+// genuine GPU-health fatal checks below, so exempt them rather than killing the process mid-build.
 static bool isRecoverableTacticSkipMessage(const string& msg) {
   return msg.find("Skipping tactic") != string::npos && msg.find("due to exception") != string::npos;
 }
@@ -1188,8 +307,6 @@ struct ComputeHandle {
 
     trtLogger.setLogger(logger);
 
-    const bool useOnnxEmit = ctx->useOnnx;
-
     auto builder = unique_ptr<IBuilder>(createInferBuilder(trtLogger));
     if(!builder) {
       throw StringError("TensorRT backend: failed to create builder");
@@ -1199,19 +316,9 @@ struct ComputeHandle {
       throw StringError("TensorRT backend: failed to create builder config");
     }
 
-    usingFP16 = false;
-    if(builder->platformHasFastFp16()) {
-      if(ctx->useFP16Mode == enabled_t::True || ctx->useFP16Mode == enabled_t::Auto) {
-        config->setFlag(BuilderFlag::kFP16);
-        usingFP16 = true;
-      }
-    } else if(ctx->useFP16Mode == enabled_t::True) {
-      throw StringError("CUDA device does not support useFP16=true");
-    }
-    // The ONNX path may pin specific layers to FP32 below and needs the constraint to be hard
-    // (kOBEY) so TensorRT cannot silently fall back to an FP16 path. The ModelParser path uses the
-    // softer kPREFER. We set the flag after building the network, once forceObeyPrecision is known.
-    bool forceObeyPrecision = false;
+    // TensorRT 11 supports only strongly typed networks. FP16 is therefore encoded explicitly in
+    // the emitted ONNX graph rather than selected through the removed kFP16 builder flag.
+    usingFP16 = ctx->useFP16Mode == enabled_t::True || ctx->useFP16Mode == enabled_t::Auto;
 
     // Debug plan/engine dump (trtDumpDebugPlanToDir). Build a base path inside that dir, disambiguated
     // by board size + precision + exact/max so the multiple engines built in one process don't collide.
@@ -1224,8 +331,7 @@ struct ComputeHandle {
         (usingFP16 ? "_fp16" : "_fp32") + (requireExactNNLen ? "_exact" : "_max");
     }
 
-    auto network = unique_ptr<INetworkDefinition>(
-      builder->createNetworkV2(1U << static_cast<int>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH)));
+    auto network = unique_ptr<INetworkDefinition>(builder->createNetworkV2(0));
     if(!network) {
       throw StringError("TensorRT backend: failed to create network definition");
     }
@@ -1233,114 +339,71 @@ struct ComputeHandle {
     if(!profile) {
       throw StringError("TensorRT backend: failed to create optimization profile");
     }
-    // Build the network by emitting ONNX from the ModelDesc and parsing it with nvonnxparser (the
-    // default; supports convnets and transformers), or via the hand-built ModelParser when
-    // trtDisableOnnx is set (convnets only). Both produce the same raw-head outputs, so downstream
-    // getOutput decoding is identical.
-    unique_ptr<TRTModel> model;
+    // Build the strongly typed network by emitting ONNX from the ModelDesc and parsing it with
+    // nvonnxparser. The serialized bytes and parser must outlive buildSerializedNetwork below.
+    TRTBuildState buildState;
     // These must outlive buildSerializedNetwork below: nvonnxparser::parse() does not necessarily
     // deep-copy initializer weights, so the parsed INetworkDefinition may reference data inside
     // onnxBytes (and the parser object) until the engine is actually built. Keeping them at this
     // scope avoids a use-after-free that manifests as all-NaN engine outputs.
     string onnxBytes;
     unique_ptr<nvonnxparser::IParser> onnxParser;
-    if(useOnnxEmit) {
-      logger->write("TensorRT backend: building network via ONNX emitter");
-      const ModelDesc& desc = loadedModel->modelDesc;
-      OnnxModelBuilder::Result onnxResult = OnnxModelBuilder::build(desc, ctx->nnXLen, ctx->nnYLen, requireExactNNLen, ctx->transformerNHWC, logger);
-      onnxBytes = std::move(onnxResult.serializedModel);
+    logger->write("TensorRT backend: building strongly typed network via ONNX emitter");
+    const ModelDesc& desc = loadedModel->modelDesc;
+    OnnxModelBuilder::Result onnxResult = OnnxModelBuilder::build(
+      desc, ctx->nnXLen, ctx->nnYLen, requireExactNNLen, ctx->transformerNHWC, usingFP16, logger);
+    onnxBytes = std::move(onnxResult.serializedModel);
 
-      if(dumpDebugPlan) {
-        string onnxPath = dumpDebugBasePath + ".onnx";
-        ofstream dumpOut;
-        FileUtils::open(dumpOut, onnxPath, ios::binary);
-        dumpOut.write(onnxBytes.data(), (std::streamsize)onnxBytes.size());
-        dumpOut.close();
-        logger->write("TensorRT backend: dumped emitted ONNX to " + onnxPath);
-      }
-
-      onnxParser.reset(nvonnxparser::createParser(*network, trtLogger));
-      if(!onnxParser)
-        throw StringError("TensorRT backend: failed to create ONNX parser");
-      if(!onnxParser->parse(onnxBytes.data(), onnxBytes.size())) {
-        string msg = "TensorRT backend: failed to parse emitted ONNX model:";
-        for(int i = 0; i < onnxParser->getNbErrors(); i++)
-          msg += "\n  " + string(onnxParser->getError(i)->desc());
-        throw StringError(msg);
-      }
-
-      // Constrain all graph outputs to linear FP32, matching what ModelParser sets on its outputs.
-      // getOutput does a flat cudaMemcpy of each output buffer assuming linear layout, so without
-      // this the parser may leave outputs in a reformatted layout and the copy reads garbage.
-      for(int i = 0; i < network->getNbOutputs(); i++) {
-        ITensor* out = network->getOutput(i);
-        out->setType(DataType::kFLOAT);
-        out->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
-      }
-
-      // Force the numerically-sensitive regions to FP32: every RMSNorm reduction (square->reduce->
-      // sqrt, which sums over many elements and loses too much precision in FP16) plus the trunk-tip
-      // norm and policy/value heads. The emitter records these layer names; we pin them via per-layer
-      // setPrecision + kOBEY_PRECISION_CONSTRAINTS (a hard constraint) so correctness does not depend
-      // on TensorRT declining to fuse a numerically-equivalent FP16 path back in. This matches the
-      // FP32-forcing the hand-built ModelParser path already does for its heads/gpool.
-      std::set<string> fp32Names;
-      fp32Names.insert(onnxResult.trunkTipAndHeadNodeNames.begin(), onnxResult.trunkTipAndHeadNodeNames.end());
-      fp32Names.insert(onnxResult.rmsNormNodeNames.begin(), onnxResult.rmsNormNodeNames.end());
-      int pinned = 0;
-      for(int i = 0; i < network->getNbLayers(); i++) {
-        ILayer* layer = network->getLayer(i);
-        const char* lname = layer->getName();
-        if(lname != nullptr && fp32Names.count(string(lname))) {
-          layer->setPrecision(DataType::kFLOAT);
-          for(int o = 0; o < layer->getNbOutputs(); o++)
-            layer->setOutputType(o, DataType::kFLOAT);
-          pinned++;
-        }
-      }
-      forceObeyPrecision = true;
-      logger->write(Global::strprintf("TensorRT backend: pinned %d layers to FP32 (rmsnorm + heads)", pinned));
-
-      // Set optimization profile dims for each input the parser created.
-      auto setProfile = [&](const char* name, Dims4 minDims, Dims4 optMaxDims) {
-        profile->setDimensions(name, OptProfileSelector::kMIN, minDims);
-        profile->setDimensions(name, OptProfileSelector::kOPT, optMaxDims);
-        profile->setDimensions(name, OptProfileSelector::kMAX, optMaxDims);
-      };
-      setProfile("InputMask", Dims4(1, 1, ctx->nnYLen, ctx->nnXLen), Dims4(maxBatchSize, 1, ctx->nnYLen, ctx->nnXLen));
-      setProfile("InputSpatial", Dims4(1, desc.numInputChannels, ctx->nnYLen, ctx->nnXLen), Dims4(maxBatchSize, desc.numInputChannels, ctx->nnYLen, ctx->nnXLen));
-      setProfile("InputGlobal", Dims4(1, desc.numInputGlobalChannels, 1, 1), Dims4(maxBatchSize, desc.numInputGlobalChannels, 1, 1));
-
-      model = make_unique<TRTModel>();
-      model->nnXLen = ctx->nnXLen;
-      model->nnYLen = ctx->nnYLen;
-      model->profile = profile;
-      model->network = move(network);
-      model->rawModel = loadedModel;
-      model->maxBatchSize = maxBatchSize;
-      model->requireExactNNLen = requireExactNNLen;
-      model->modelVersion = desc.modelVersion;
-      // tuneHash buckets the timing cache. This is the ONNX path's descriptor: the "onnxsalt" prefix
-      // already separates it from the ModelParser path (which builds its own "salt"-prefixed tuneDesc),
-      // and the "nhwc" field distinguishes the NHWC vs NCHW trunk layout (different layer signatures),
-      // so the two layouts don't share a timing-cache file full of mutual misses.
-      string tuneDesc = Global::strprintf(
-        "\"onnxsalt\"(%d)\"nhwc\"(%d)\"model\"(%d,%d,%d)",
-        ModelParser::tuneSalt, ctx->transformerNHWC ? 1 : 0,
-        desc.modelVersion, desc.numInputChannels, desc.numInputGlobalChannels);
-      SHA2::get256(tuneDesc.c_str(), model->tuneHash);
+    if(dumpDebugPlan) {
+      string onnxPath = dumpDebugBasePath + ".onnx";
+      ofstream dumpOut;
+      FileUtils::open(dumpOut, onnxPath, ios::binary);
+      dumpOut.write(onnxBytes.data(), (std::streamsize)onnxBytes.size());
+      dumpOut.close();
+      logger->write("TensorRT backend: dumped emitted ONNX to " + onnxPath);
     }
-    else {
-      auto modelParser = make_unique<ModelParser>();
-      model = modelParser->build(
-        move(network), profile, loadedModel, ctx->nnXLen, ctx->nnYLen, maxBatchSize, requireExactNNLen);
-    }
-    debugOutputs = model->debugOutputs;
-    config->addOptimizationProfile(profile);
 
-    // Honor per-layer precision constraints. The ONNX path pins some layers to FP32 and needs a hard
-    // constraint (kOBEY) so TensorRT cannot fall back to FP16; the ModelParser path uses kPREFER.
-    config->setFlag(forceObeyPrecision ? BuilderFlag::kOBEY_PRECISION_CONSTRAINTS : BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
+    onnxParser.reset(nvonnxparser::createParser(*network, trtLogger));
+    if(!onnxParser)
+      throw StringError("TensorRT backend: failed to create ONNX parser");
+    if(!onnxParser->parse(onnxBytes.data(), onnxBytes.size())) {
+      string msg = "TensorRT backend: failed to parse emitted ONNX model:";
+      for(int i = 0; i < onnxParser->getNbErrors(); i++)
+        msg += "\n  " + string(onnxParser->getError(i)->desc());
+      throw StringError(msg);
+    }
+
+    // getOutput does a flat cudaMemcpy of each FP32 output buffer assuming linear layout.
+    for(int i = 0; i < network->getNbOutputs(); i++)
+      network->getOutput(i)->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
+
+    // Set optimization profile dims for each input the parser created.
+    auto setProfile = [&](const char* name, Dims4 minDims, Dims4 optMaxDims) {
+      if(
+        !profile->setDimensions(name, OptProfileSelector::kMIN, minDims) ||
+        !profile->setDimensions(name, OptProfileSelector::kOPT, optMaxDims) ||
+        !profile->setDimensions(name, OptProfileSelector::kMAX, optMaxDims)
+      )
+        throw StringError("TensorRT backend: failed to set optimization profile for " + string(name));
+    };
+    setProfile("InputMask", Dims4(1, 1, ctx->nnYLen, ctx->nnXLen), Dims4(maxBatchSize, 1, ctx->nnYLen, ctx->nnXLen));
+    setProfile(
+      "InputSpatial",
+      Dims4(1, desc.numInputChannels, ctx->nnYLen, ctx->nnXLen),
+      Dims4(maxBatchSize, desc.numInputChannels, ctx->nnYLen, ctx->nnXLen));
+    setProfile(
+      "InputGlobal",
+      Dims4(1, desc.numInputGlobalChannels, 1, 1),
+      Dims4(maxBatchSize, desc.numInputGlobalChannels, 1, 1));
+
+    buildState.network = move(network);
+    string tuneDesc = Global::strprintf(
+      "\"onnxsalt\"(%d)\"nhwc\"(%d)\"fp\"(%d)\"model\"(%d,%d,%d)",
+      trtTuneSalt, ctx->transformerNHWC ? 1 : 0, usingFP16 ? 16 : 32,
+      desc.modelVersion, desc.numInputChannels, desc.numInputGlobalChannels);
+    SHA2::get256(tuneDesc.c_str(), buildState.tuneHash);
+    if(config->addOptimizationProfile(profile) < 0)
+      throw StringError("TensorRT backend: failed to add optimization profile");
 
     if(prop->major >= 8) {
       // This is to avoid tactics that have shape switching overhead
@@ -1382,13 +445,9 @@ struct ComputeHandle {
 #ifdef CACHE_TENSORRT_PLAN
       // The plan cache stores a fully serialized engine, reused only when the model SHA256 (appended
       // to the blob and verified on read) AND paramStr both match. paramStr must therefore encode
-      // every knob that changes the built engine: lib/device/salt, board+batch+precision, and the
-      // backend build mode (ONNX vs ModelParser, and NHWC vs NCHW for the ONNX path). The
-      // build-mode tag is folded into both the filename (for human readability) and paramStr.
-      string buildModeStr = Global::strprintf(
-        "%s%s",
-        ctx->useOnnx ? "onnx" : "prsr",
-        (ctx->useOnnx && ctx->transformerNHWC) ? "nh" : "");
+      // every knob that changes the built engine: lib/device/salt, board+batch+precision, and
+      // NHWC vs NCHW for transformer trunks.
+      string buildModeStr = ctx->transformerNHWC ? "onnxnh" : "onnx";
       const char* lenStr = requireExactNNLen ? "ex" : "mx";
       auto planCacheFile = Global::strprintf(
         "%s/trt-%d_gpu-%s_net-%s_s%d_%s_%s%dx%d_b%d_fp%d",
@@ -1396,7 +455,7 @@ struct ComputeHandle {
         getInferLibVersion(),
         deviceIdent,
         loadedModel->modelDesc.name.c_str(),
-        ModelParser::tuneSalt,
+        trtTuneSalt,
         buildModeStr.c_str(),
         lenStr,
         ctx->nnYLen,
@@ -1407,7 +466,7 @@ struct ComputeHandle {
         "_%d_%s_s%d_%s_%s_%d_%d_%d_%d",
         getInferLibVersion(),
         deviceIdent,
-        ModelParser::tuneSalt,
+        trtTuneSalt,
         buildModeStr.c_str(),
         lenStr,
         ctx->nnYLen,
@@ -1441,7 +500,7 @@ struct ComputeHandle {
 
       if(plan.size() <= 0) {
         logger->write("Creating new plan cache");
-        auto planBuffer = unique_ptr<IHostMemory>(builder->buildSerializedNetwork(*model->network, *config));
+        auto planBuffer = unique_ptr<IHostMemory>(builder->buildSerializedNetwork(*buildState.network, *config));
         if(!planBuffer) {
           throw StringError("TensorRT backend: failed to create plan");
         }
@@ -1466,7 +525,7 @@ struct ComputeHandle {
       // Truncated to 6 bytes
       char tuneIdent[6 * 2 + 1];
       for(int i = 0; i < 6; i++) {
-        sprintf(tuneIdent + i * 2, "%02x", static_cast<unsigned char>(model->tuneHash[i]));
+        sprintf(tuneIdent + i * 2, "%02x", static_cast<unsigned char>(buildState.tuneHash[i]));
       }
       tuneIdent[sizeof(tuneIdent) - 1] = 0;
 
@@ -1504,7 +563,7 @@ struct ComputeHandle {
 
       unique_ptr<IHostMemory> planBuffer;
       if(invalidTimingCache || !timingCacheBlob.size()) {
-        planBuffer.reset(builder->buildSerializedNetwork(*model->network, *config));
+        planBuffer.reset(builder->buildSerializedNetwork(*buildState.network, *config));
         if(!planBuffer) {
           throw StringError("TensorRT backend: failed to create plan");
         }
@@ -1515,7 +574,7 @@ struct ComputeHandle {
         tuneMutex.unlock();
       } else {
         tuneMutex.unlock();
-        planBuffer.reset(builder->buildSerializedNetwork(*model->network, *config));
+        planBuffer.reset(builder->buildSerializedNetwork(*buildState.network, *config));
         if(!planBuffer) {
           throw StringError("TensorRT backend: failed to create plan");
         }
@@ -1576,11 +635,13 @@ struct ComputeHandle {
       size_t bytes = accumulate(dims.d + 1, dims.d + dims.nbDims, static_cast<size_t>(maxBatchSize) * sizeof(float), multiplies<>());
       CUDA_ERR("ComputeHandle", cudaMalloc(&buffer, bytes));
       buffers.emplace(make_pair(name, buffer));
-      exec->setTensorAddress(name, buffer);
+      if(!exec->setTensorAddress(name, buffer))
+        throw StringError("TensorRT backend: failed to set tensor address for " + string(name));
     }
 
-    exec->setOptimizationProfileAsync(0, cudaStreamPerThread);
-    cudaStreamSynchronize(cudaStreamPerThread);
+    if(!exec->setOptimizationProfileAsync(0, cudaStreamPerThread))
+      throw StringError("TensorRT backend: failed to select optimization profile");
+    CUDA_ERR("ComputeHandle", cudaStreamSynchronize(cudaStreamPerThread));
     trtErrorRecorder.clear();
   }
 
@@ -2002,16 +1063,21 @@ void NeuralNet::getOutput(
   auto spatialInputDims = gpuHandle->getBufferDynamicShape("InputSpatial", batchSize);
   auto globalInputDims = gpuHandle->getBufferDynamicShape("InputGlobal", batchSize);
 
-  gpuHandle->exec->setInputShape("InputMask", maskInputDims);
-  gpuHandle->exec->setInputShape("InputSpatial", spatialInputDims);
-  gpuHandle->exec->setInputShape("InputGlobal", globalInputDims);
+  if(
+    !gpuHandle->exec->setInputShape("InputMask", maskInputDims) ||
+    !gpuHandle->exec->setInputShape("InputSpatial", spatialInputDims) ||
+    !gpuHandle->exec->setInputShape("InputGlobal", globalInputDims)
+  )
+    throw StringError("TensorRT backend: failed to set input shapes");
 
   if(numMetaFeatures > 0) {
     auto metaInputDims = gpuHandle->getBufferDynamicShape("InputMeta", batchSize);
-    gpuHandle->exec->setInputShape("InputMeta", metaInputDims);
+    if(!gpuHandle->exec->setInputShape("InputMeta", metaInputDims))
+      throw StringError("TensorRT backend: failed to set InputMeta shape");
   }
 
-  gpuHandle->exec->enqueueV3(cudaStreamPerThread);
+  if(!gpuHandle->exec->enqueueV3(cudaStreamPerThread))
+    throw StringError("TensorRT backend: enqueueV3 failed");
 
   CUDA_ERR(
     "getOutput",
