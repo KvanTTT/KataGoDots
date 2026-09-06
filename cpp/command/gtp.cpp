@@ -1151,6 +1151,10 @@ struct GTPEngine {
     if(humanEval != NULL)
       humanEval->clearStats();
     TimeControls tc = pla == P_BLACK ? bTimeControls : wTimeControls;
+    //A partly spent delay describes only the move we are about to make, so consume it here. Unless the
+    //controller reports otherwise again, the move after this one gets the whole of its delay.
+    if(tc.incrementIsDelay)
+      (pla == P_BLACK ? bTimeControls : wTimeControls).delayTimeLeft = tc.increment;
 
     if(!isGenmoveParams) {
       bot->setParams(genmoveParams);
@@ -2252,14 +2256,26 @@ int MainCmds::gtp(const vector<string>& args) {
     }
   };
 
+  //Time control to start with, until the GTP controller tells us otherwise via time_settings and friends.
   //If nobody specified any time limit in any way, then assume a relatively fast time control
   if(!cfg.contains("maxPlayouts") && !cfg.contains("maxVisits") && !cfg.contains("maxTime")) {
-    double mainTime = 1.0;
-    double byoYomiTime = 5.0;
-    int byoYomiPeriods = 5;
-    TimeControls tc = TimeControls::canadianOrByoYomiTime(mainTime,byoYomiTime,byoYomiPeriods,1);
-    engine->bTimeControls = tc;
-    engine->wTimeControls = tc;
+    TimeControls timeControl;
+    if (initialRules.isDots) {
+      //Dots is normally played with some main time for the whole game plus a per-move time, where the
+      //per-move time is spent first and only what overflows it is charged to the main time. Unused
+      //per-move time is not banked. That is Bronstein delay - see the comment on TimeControls for why
+      //it is the same thing as the simple delay just described.
+      constexpr double mainTime = 0.0;
+      constexpr double perMoveTime = 10.0;
+      timeControl = TimeControls::bronsteinDelayTime(mainTime,perMoveTime);
+    } else {
+      double mainTime = 1.0;
+      double byoYomiTime = 5.0;
+      int byoYomiPeriods = 5;
+      timeControl = TimeControls::canadianOrByoYomiTime(mainTime,byoYomiTime,byoYomiPeriods,1);
+    }
+    engine->bTimeControls = timeControl;
+    engine->wTimeControls = timeControl;
   }
 
   //Check for unused config keys
@@ -2867,14 +2883,21 @@ int MainCmds::gtp(const vector<string>& args) {
     }
 
     else if(command == "time_settings") {
-      double mainTime;
-      double byoYomiTime;
-      int byoYomiStones;
+      //Dots has no byo-yomi, so it uses the arguments that its own time controls are stated in:
+      //"time_settings <main time> <per-move time>", which is a Bronstein delay. Every move gets
+      //per-move time for free and only what overflows it is charged to the main time.
       bool success = false;
+      bool isDots = engine->currentRules.isDots;
+      double mainTime;
+      double byoYomiOrPerMoveTime;
+      int byoYomiStones = 0;
       try {
         mainTime = parseTime(pieces,0,"main time");
-        byoYomiTime = parseTime(pieces,1,"byo-yomi per-period time");
-        byoYomiStones = parseByoYomiStones(pieces,2);
+        byoYomiOrPerMoveTime = parseTime(pieces,1,
+          isDots ? "per-move time" : "byo-yomi per-period time");
+        if (!isDots) {
+          byoYomiStones = parseByoYomiStones(pieces,2);
+        }
         success = true;
       }
       catch(const StringError& e) {
@@ -2882,16 +2905,27 @@ int MainCmds::gtp(const vector<string>& args) {
         response = e.what();
       }
       if(success) {
-        TimeControls tc;
+        TimeControls timeControl;
         //This means no time limits, according to gtp spec
-        if(byoYomiStones == 0 && byoYomiTime > 0.0)
-          tc = TimeControls();
-        else if(byoYomiStones == 0)
-          tc = TimeControls::absoluteTime(mainTime);
-        else
-          tc = TimeControls::canadianOrByoYomiTime(mainTime,byoYomiTime,1,byoYomiStones);
-        engine->bTimeControls = tc;
-        engine->wTimeControls = tc;
+        if (isDots) {
+          //Neither kind of time given means no time limits at all
+          if(mainTime <= 0.0 && byoYomiOrPerMoveTime <= 0.0) {
+            timeControl = TimeControls();
+          } else {
+            timeControl = TimeControls::bronsteinDelayTime(mainTime,byoYomiOrPerMoveTime);
+          }
+        } else {
+          if(byoYomiStones == 0 && byoYomiOrPerMoveTime > 0.0) {
+            timeControl = TimeControls();
+          } else if(byoYomiStones == 0) {
+            timeControl = TimeControls::absoluteTime(mainTime);
+          } else {
+            timeControl = TimeControls::canadianOrByoYomiTime(mainTime,byoYomiOrPerMoveTime,1,byoYomiStones);
+          }
+        }
+
+        engine->bTimeControls = timeControl;
+        engine->wTimeControls = timeControl;
       }
     }
 
@@ -2907,13 +2941,15 @@ int MainCmds::gtp(const vector<string>& args) {
       response += "fischer";
       response += " ";
       response += "fischer-capped";
+      response += " ";
+      response += "bronstein";
     }
 
     else if(command == "kgs-time_settings" || command == "kata-time_settings") {
       if(pieces.size() < 1) {
         responseIsError = true;
         if(command == "kata-time_settings")
-          response = "Expected 'none', 'absolute', 'byoyomi', 'canadian', 'fischer', or 'fischer-capped' as first argument for kata-time_settings";
+          response = "Expected 'none', 'absolute', 'byoyomi', 'canadian', 'fischer', 'fischer-capped', or 'bronstein' as first argument for kata-time_settings";
         else
           response = "Expected 'none', 'absolute', 'byoyomi', or 'canadian' as first argument for kgs-time_settings";
       }
@@ -3015,6 +3051,26 @@ int MainCmds::gtp(const vector<string>& args) {
             engine->wTimeControls = tc;
           }
         }
+        else if(what == "bronstein" && command == "kata-time_settings") {
+          double mainTime;
+          double delay;
+          TimeControls tc;
+          bool success = false;
+          try {
+            mainTime = parseTime(pieces,1,"main time");
+            delay = parseTime(pieces,2,"delay time");
+            tc = TimeControls::bronsteinDelayTime(mainTime,delay);
+            success = true;
+          }
+          catch(const StringError& e) {
+            responseIsError = true;
+            response = e.what();
+          }
+          if(success) {
+            engine->bTimeControls = tc;
+            engine->wTimeControls = tc;
+          }
+        }
         else if(what == "fischer-capped" && command == "kata-time_settings") {
           double mainTime;
           double increment;
@@ -3046,7 +3102,7 @@ int MainCmds::gtp(const vector<string>& args) {
         else {
           responseIsError = true;
           if(command == "kata-time_settings")
-            response = "Expected 'none', 'absolute', 'byoyomi', 'canadian', 'fischer', or 'fischer-capped' as first argument for kata-time_settings";
+            response = "Expected 'none', 'absolute', 'byoyomi', 'canadian', 'fischer', 'fischer-capped', or 'bronstein' as first argument for kata-time_settings";
           else
             response = "Expected 'none', 'absolute', 'byoyomi', or 'canadian' as first argument for kgs-time_settings";
         }
@@ -3056,21 +3112,37 @@ int MainCmds::gtp(const vector<string>& args) {
     else if(command == "time_left") {
       Player pla;
       double time;
-      int stones;
-      if(pieces.size() != 3
-         || !PlayerIO::tryParsePlayer(pieces[0],pla)
-         || !Global::tryStringToDouble(pieces[1],time)
-         || !Global::tryStringToInt(pieces[2],stones)
-         ) {
+      int stones = 0;
+      double perMoveTimeLeft = 0.0;
+      //A Bronstein delay - the Dots default - has no overtime periods, so the third argument reports the
+      //time left in this move's per-move delay rather than the stones left in a period, and like every
+      //other time it is a float. Zero means the controller does not track the delay, in which case the
+      //whole of it is still ahead of us.
+      bool thirdArgIsPerMoveTime = engine->currentRules.isDots;
+      bool argsAreValid = pieces.size() == 3
+        && PlayerIO::tryParsePlayer(pieces[0],pla)
+        && Global::tryStringToDouble(pieces[1],time);
+      if(argsAreValid) {
+        thirdArgIsPerMoveTime = (pla == P_BLACK ? engine->bTimeControls : engine->wTimeControls).incrementIsDelay;
+        argsAreValid = thirdArgIsPerMoveTime
+          ? Global::tryStringToDouble(pieces[2],perMoveTimeLeft)
+          : Global::tryStringToInt(pieces[2],stones);
+      }
+      if(!argsAreValid) {
         responseIsError = true;
-        response = "Expected player and float time and int stones for time_left but got '" + Global::concat(pieces," ") + "'";
+        response = string("Expected player and float time and ") + (thirdArgIsPerMoveTime ? "float per-move time" : "int stones")
+          + " for time_left but got '" + Global::concat(pieces," ") + "'";
       }
       //Be slightly tolerant of negative time left
       else if(isnan(time) || time < -10.0 || time > TimeControls::MAX_USER_INPUT_TIME) {
         responseIsError = true;
         response = "invalid time";
       }
-      else if(stones < 0 || stones > 100000) {
+      else if(thirdArgIsPerMoveTime && (isnan(perMoveTimeLeft) || perMoveTimeLeft < 0.0 || perMoveTimeLeft > TimeControls::MAX_USER_INPUT_TIME)) {
+        responseIsError = true;
+        response = "invalid per-move time";
+      }
+      else if(!thirdArgIsPerMoveTime && (stones < 0 || stones > 100000)) {
         responseIsError = true;
         response = "invalid stones";
       }
@@ -3081,8 +3153,19 @@ int MainCmds::gtp(const vector<string>& args) {
           response = "stones left in period is > 0 but the time control used does not have any overtime periods";
         }
         else {
+          //Per-move delay plus main time, no overtime periods to speak of
+          if(thirdArgIsPerMoveTime) {
+            tc.mainTimeLeft = time;
+            //Zero means the controller is not tracking the delay, so all of it is still available. More
+            //than the delay is not extra time either, since only up to the delay is ever refunded.
+            tc.delayTimeLeft = perMoveTimeLeft <= 0.0 ? tc.increment : std::min(perMoveTimeLeft, tc.increment);
+            tc.inOvertime = false;
+            tc.numPeriodsLeftIncludingCurrent = tc.originalNumPeriods;
+            tc.numStonesLeftInPeriod = 0;
+            tc.timeLeftInPeriod = 0;
+          }
           //Main time
-          if(stones == 0) {
+          else if(stones == 0) {
             tc.mainTimeLeft = time;
             tc.inOvertime = false;
             tc.numPeriodsLeftIncludingCurrent = tc.originalNumPeriods;

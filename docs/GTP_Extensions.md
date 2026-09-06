@@ -59,6 +59,15 @@ In addition to a basic set of [GTP commands](https://www.lysator.liu.se/~gunnar/
       * This is an extension for playing on KGS, via kgsGtp.
       * As specified by kgsGtp docs, `RULES` should be one of `chinese | aga | japanese | new_zealand`.
       * Has the same behavior as `kata-set-rules` except that `chinese` maps to `chinese-kgs` above.
+   * `time_settings MAINTIME PERMOVETIME`
+      * For Dots only. Dots has no byo-yomi, so instead of the standard GTP `MAINTIME BYOYOMITIME BYOYOMISTONES`, the standard `time_settings` command takes the two times that Dots time controls are actually stated in: `MAINTIME` seconds for the whole game plus `PERMOVETIME` seconds for every move. Each move spends its per-move time first and only what overflows it is charged to the main time, and unused per-move time is not banked. This is a Bronstein delay, and is exactly what `kata-time_settings bronstein MAINTIME PERMOVETIME` sets.
+      * `time_settings 0 0` means no time limits at all.
+      * No third argument is read. For Go, `time_settings` continues to behave exactly as the GTP standard specifies.
+   * `time_left COLOR TIME PERMOVETIMELEFT`
+      * Whenever the time control in force is a Bronstein delay - which is what a Dots game starts on unless the GTP config sets a search limit of its own, and which can be set for any game via `kata-time_settings bronstein` - the third argument of the standard GTP `time_left` command reports the time left in the current move's delay instead of the number of stones left in a period, and like every other time it is a float rather than an integer.
+      * `0` means the controller is not tracking the delay, in which case the whole of it is assumed to still be available. A value larger than the delay is clamped to the delay, since only up to the delay is ever refunded.
+      * A reported delay describes only the move that immediately follows it. Afterwards the whole delay is assumed again, unless the controller reports otherwise.
+      * Under every other time control `time_left` is unchanged, and the third argument is the integer number of stones - or, for `byoyomi`, of periods - left.
    * `kgs-time_settings KIND ...`
       * This is an extension for playing on KGS, via kgsGtp.
       * It is not clear if other implementations will support floating-point values for times, however, KataGo does support them. Values must still be non-negative and finite, and values up to at least 2^31-1 are supported.
@@ -77,10 +86,13 @@ In addition to a basic set of [GTP commands](https://www.lysator.liu.se/~gunnar/
           * `MAINTIMELIMIT` is a cap such that after adding the increment, if the main time is now larger than the limit, it is reduced to the limit. If this limit is used it must be `>= MAINTIME`.
           * `MAXTIMEPERMOVE` is a limit on the maximum time that may be spent on any individual move.
           * Setting either of these two floats to a negative value such as `-1` indicates that the value is unused and there is no such limit.
+        * `bronstein` should be followed by two floats `MAINTIME DELAY` specifying the original main time in seconds and a per-move delay in seconds. Unlike `fischer`, the delay is refunded only up to the time actually spent on the move, so unused delay is never banked. Equivalently, and how it is usually presented to players, every move gets `DELAY` seconds for free and only what overflows that is charged to the main time.
+          * This is the time control that Dots is normally played with, and a Dots game starts on it unless the GTP config sets `maxVisits`, `maxPlayouts` or `maxTime` of its own.
+          * Unlike with `absolute` and `fischer`, the controller does NOT report `0` for the third argument of the `time_left` command under this setting. See `time_left` above.
       * Additionally, unlike `time_settings` or `kgs-time_settings` which demand integer values, for `kata-time_settings`, floating point values are explicitly allowed for all times, periods, or increments. Values must be finite and non-negative. An implementation should continue to support values at least up to 2^31-1.
       * More time settings might be added in the future.
    * `kata-list_time_settings`
-      * Reports all time settings supported by `kata-time_settings`, separated by whitespace. Currently the list is `none absolute byo-yomi canadian fischer`.
+      * Reports all time settings supported by `kata-time_settings`, separated by whitespace. Currently the list is `none absolute byoyomi canadian fischer fischer-capped bronstein`.
       * GTP controllers that use `kata-time_settings` are advised to use this command to check if their time setting is supported.
    * `lz-analyze [player (optional)] [interval (optional)] KEYVALUEPAIR KEYVALUEPAIR ...`
       * Begin searching and optionally outputting live analysis to stdout. Assumes the normal player to move next unless otherwise specified.

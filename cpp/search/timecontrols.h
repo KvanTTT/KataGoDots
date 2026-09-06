@@ -12,12 +12,21 @@ struct TimeControls {
 
     Fisher: Always in main time. After every move, increment is added.
 
+    Bronstein delay: Always in main time. After every move, only the time actually used is added back,
+    up to increment. Unused per-move time is therefore never banked, which is the whole difference from
+    Fischer. Equivalently, and how it is usually presented to players, every move gets increment seconds
+    for free and only what overflows that is charged to the main time - that presentation is called
+    simple or US delay, and leaves exactly the same time on the clock.
+
     Byoyomi: Either in main time, or in overtime. In overtime, we have numPeriodsLeft many periods,
     each one of perPeriodTime long, and does not get used up if we play numStonesPerPeriod stones during
     that period. numPeriodsLeft
   */
   double originalMainTime;
   double increment;
+  //If true, increment is refunded only up to the time actually used, i.e. Bronstein delay rather than
+  //Fischer. Meaningless unless increment > 0.
+  bool incrementIsDelay;
   double mainTimeLimit;
   double maxTimePerMove;
   int originalNumPeriods;
@@ -25,6 +34,10 @@ struct TimeControls {
   double perPeriodTime;
 
   double mainTimeLeft;
+  //How much of this move's delay is still unspent. Refilled to increment at the start of every move,
+  //so it is only ever less than increment if the controller reports a move already partly thought on.
+  //Meaningless unless incrementIsDelay.
+  double delayTimeLeft;
   bool inOvertime;
   int numPeriodsLeftIncludingCurrent;
   int numStonesLeftInPeriod;
@@ -46,6 +59,7 @@ struct TimeControls {
   static TimeControls absoluteTime(double mainTime);
   static TimeControls fischerTime(double mainTime, double increment);
   static TimeControls fischerCappedTime(double mainTime, double increment, double mainTimeLimit, double maxTimePerMove);
+  static TimeControls bronsteinDelayTime(double mainTime, double delay);
   static TimeControls canadianOrByoYomiTime(
     double mainTime,
     double perPeriodTime,

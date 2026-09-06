@@ -6,6 +6,7 @@
 TimeControls::TimeControls()
   :originalMainTime(TimeControls::UNLIMITED_TIME_DEFAULT),
    increment(0.0),
+   incrementIsDelay(false),
    mainTimeLimit(TimeControls::UNLIMITED_TIME_DEFAULT_LARGE),
    maxTimePerMove(TimeControls::UNLIMITED_TIME_DEFAULT_LARGE),
    originalNumPeriods(0),
@@ -13,6 +14,7 @@ TimeControls::TimeControls()
    perPeriodTime(0.0),
 
    mainTimeLeft(TimeControls::UNLIMITED_TIME_DEFAULT),
+   delayTimeLeft(0.0),
    inOvertime(false),
    numPeriodsLeftIncludingCurrent(0),
    numStonesLeftInPeriod(0),
@@ -32,12 +34,14 @@ TimeControls TimeControls::absoluteTime(double mainTime) {
   TimeControls tc;
   tc.originalMainTime = mainTime;
   tc.increment = 0.0;
+  tc.incrementIsDelay = false;
   tc.mainTimeLimit = TimeControls::UNLIMITED_TIME_DEFAULT_LARGE;
   tc.maxTimePerMove = TimeControls::UNLIMITED_TIME_DEFAULT_LARGE;
   tc.originalNumPeriods = 0;
   tc.numStonesPerPeriod = 0;
   tc.perPeriodTime = 0.0;
   tc.mainTimeLeft = mainTime;
+  tc.delayTimeLeft = 0.0;
   tc.inOvertime = false;
   tc.numPeriodsLeftIncludingCurrent = 0;
   tc.numStonesLeftInPeriod = 0;
@@ -49,12 +53,14 @@ TimeControls TimeControls::fischerTime(double mainTime, double increment) {
   TimeControls tc;
   tc.originalMainTime = mainTime;
   tc.increment = increment;
+  tc.incrementIsDelay = false;
   tc.mainTimeLimit = TimeControls::UNLIMITED_TIME_DEFAULT_LARGE;
   tc.maxTimePerMove = TimeControls::UNLIMITED_TIME_DEFAULT_LARGE;
   tc.originalNumPeriods = 0;
   tc.numStonesPerPeriod = 0;
   tc.perPeriodTime = 0.0;
   tc.mainTimeLeft = mainTime;
+  tc.delayTimeLeft = 0.0;
   tc.inOvertime = false;
   tc.numPeriodsLeftIncludingCurrent = 0;
   tc.numStonesLeftInPeriod = 0;
@@ -68,12 +74,33 @@ TimeControls TimeControls::fischerCappedTime(double mainTime, double increment, 
   TimeControls tc;
   tc.originalMainTime = mainTime;
   tc.increment = increment;
+  tc.incrementIsDelay = false;
   tc.mainTimeLimit = mainTimeLimit;
   tc.maxTimePerMove = maxTimePerMove;
   tc.originalNumPeriods = 0;
   tc.numStonesPerPeriod = 0;
   tc.perPeriodTime = 0.0;
   tc.mainTimeLeft = mainTime;
+  tc.delayTimeLeft = 0.0;
+  tc.inOvertime = false;
+  tc.numPeriodsLeftIncludingCurrent = 0;
+  tc.numStonesLeftInPeriod = 0;
+  tc.timeLeftInPeriod = 0;
+  return tc;
+}
+
+TimeControls TimeControls::bronsteinDelayTime(double mainTime, double delay) {
+  TimeControls tc;
+  tc.originalMainTime = mainTime;
+  tc.increment = delay;
+  tc.incrementIsDelay = true;
+  tc.mainTimeLimit = TimeControls::UNLIMITED_TIME_DEFAULT_LARGE;
+  tc.maxTimePerMove = TimeControls::UNLIMITED_TIME_DEFAULT_LARGE;
+  tc.originalNumPeriods = 0;
+  tc.numStonesPerPeriod = 0;
+  tc.perPeriodTime = 0.0;
+  tc.mainTimeLeft = mainTime;
+  tc.delayTimeLeft = delay;
   tc.inOvertime = false;
   tc.numPeriodsLeftIncludingCurrent = 0;
   tc.numStonesLeftInPeriod = 0;
@@ -90,12 +117,14 @@ TimeControls TimeControls::canadianOrByoYomiTime(
   TimeControls tc;
   tc.originalMainTime = mainTime;
   tc.increment = 0.0;
+  tc.incrementIsDelay = false;
   tc.mainTimeLimit = TimeControls::UNLIMITED_TIME_DEFAULT_LARGE;
   tc.maxTimePerMove = TimeControls::UNLIMITED_TIME_DEFAULT_LARGE;
   tc.originalNumPeriods = numPeriods;
   tc.numStonesPerPeriod = numStonesPerPeriod;
   tc.perPeriodTime = perPeriodTime;
   tc.mainTimeLeft = mainTime;
+  tc.delayTimeLeft = 0.0;
   tc.inOvertime = false;
   tc.numPeriodsLeftIncludingCurrent = numPeriods;
   tc.numStonesLeftInPeriod = 0;
@@ -107,7 +136,9 @@ std::string TimeControls::toDebugString(const Board& board, const BoardHistory& 
   std::ostringstream out;
   out << "originalMainTime " << originalMainTime;
   if(increment != 0)
-    out << " increment " << increment;
+    out << (incrementIsDelay ? " delay " : " increment ") << increment;
+  if(incrementIsDelay && delayTimeLeft != increment)
+    out << " delayTimeLeft " << delayTimeLeft;
   if(mainTimeLimit < TimeControls::UNLIMITED_TIME_THRESHOLD)
     out << " mainTimeLimit " << mainTimeLimit;
   if(maxTimePerMove < TimeControls::UNLIMITED_TIME_THRESHOLD)
@@ -149,7 +180,9 @@ std::string TimeControls::toDebugString() const {
   std::ostringstream out;
   out << "originalMainTime " << originalMainTime;
   if(increment != 0)
-    out << "increment " << increment;
+    out << (incrementIsDelay ? "delay " : "increment ") << increment;
+  if(incrementIsDelay && delayTimeLeft != increment)
+    out << " delayTimeLeft " << delayTimeLeft;
   if(mainTimeLimit < TimeControls::UNLIMITED_TIME_THRESHOLD)
     out << " mainTimeLimit " << mainTimeLimit;
   if(maxTimePerMove < TimeControls::UNLIMITED_TIME_THRESHOLD)
@@ -308,8 +341,24 @@ void TimeControls::getTime(const Board& board, const BoardHistory& hist, double 
     if(mainTimeLimit < originalMainTime)
       throw StringError("TimeControls: mainTimeLimit is smaller than original mainTime");
 
+    //Bronstein delay refunds only the time actually used, up to increment, so unlike Fischer the
+    //increment is never spent out of the main time and is never banked either. Every move therefore
+    //has increment seconds that are free but expire, plus all of the main time as a reserve.
+    if(incrementIsDelay) {
+      //Normally the whole delay is still ahead of us, but a controller can report a move we have already
+      //spent part of the delay on, and it can never be worth more than the delay itself.
+      double delayLeft = std::max(0.0, std::min(delayTimeLeft, increment));
+      //Anything short of the delay left is time we simply lose, no matter how much main time is left.
+      minTime = delayLeft;
+      //The whole main time is spendable here, rather than mainTimeLeft - increment as under Fischer,
+      //because spending the delay does not draw down the main time at all.
+      //Apply lagbuffer an extra time to the reserve, ensuring we get extra buffering
+      double reserveMainTime = applyLagBuffer(std::max(0.0, mainTimeLeft), lagBufferToUse);
+      recommendedTime = delayLeft + divideTimeEvenlyForGame(reserveMainTime,true,false);
+      maxTime = std::min(std::max(0.0, mainTimeLeft) + delayLeft, delayLeft + reserveMainTime / 5.0);
+    }
     //Note that some GTP controllers might give us a negative mainTimeLeft in weird cases. We tolerate this and do the best we can.
-    if(mainTimeLeft <= increment) {
+    else if(mainTimeLeft <= increment) {
       minTime = std::min(std::max(0.0, mainTimeLeft * 0.5), std::max(0.0, mainTimeLeft + increment - mainTimeLimit));
       //Apply lagbuffer an extra time to the mainTimeLeft, ensuring we get extra buffering
       recommendedTime = applyLagBuffer(mainTimeLeft, lagBufferToUse);
