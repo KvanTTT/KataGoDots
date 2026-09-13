@@ -41,6 +41,9 @@ struct AnalyzeRequest {
   double reportDuringSearchEvery;
   double firstReportDuringSearchAfter;
 
+  //The clock the search of this query is played on, unlimited unless the query states one.
+  TimeControls timeControls;
+
   vector<int> avoidMoveUntilByLocBlack;
   vector<int> avoidMoveUntilByLocWhite;
 
@@ -243,6 +246,7 @@ int MainCmds::analysis(const vector<string>& args) {
     "komi",
     "whiteHandicapBonus",
     "overrideSettings",
+    "timeControl",
     "maxVisits",
     "analysisPVLen",
     "rootFpuReductionMax",
@@ -408,13 +412,13 @@ int MainCmds::analysis(const vector<string>& args) {
             reportAnalysis(request,search,isDuringSearch);
           };
           chosenMoveLoc = bot->genMoveSynchronousAnalyze(
-            pla, TimeControls(), searchFactor,
+            pla, request->timeControls, searchFactor,
             request->reportDuringSearchEvery, request->firstReportDuringSearchAfter,
             callback, onSearchBegun
           );
         }
         else {
-          chosenMoveLoc = bot->genMoveSynchronous(pla, TimeControls(), searchFactor, onSearchBegun);
+          chosenMoveLoc = bot->genMoveSynchronous(pla, request->timeControls, searchFactor, onSearchBegun);
         }
 
         if(logSearchInfo) {
@@ -656,6 +660,7 @@ int MainCmds::analysis(const vector<string>& args) {
       rbase.reportDuringSearch = false;
       rbase.reportDuringSearchEvery = 1e30;
       rbase.firstReportDuringSearchAfter = 1e30;
+      rbase.timeControls = TimeControls();
       rbase.priority = 0;
       rbase.avoidMoveUntilByLocBlack.clear();
       rbase.avoidMoveUntilByLocWhite.clear();
@@ -1092,6 +1097,82 @@ int MainCmds::analysis(const vector<string>& args) {
           continue;
         rbase.reportDuringSearch = true;
       }
+      //The clock of the search, stated the way the `time_settings` and `time_left` commands of GTP state
+      //it: the main time of the whole game plus the time of every move, which is spent before the main
+      //one and is not banked when it's left, that is a Bronstein delay. Both times zeroed mean no clock
+      //at all, the same way `time_settings 0 0` does, and so does a query that states none.
+      if(input.find("timeControl") != input.end()) {
+        if(!input["timeControl"].is_object()) {
+          reportErrorForId(rbase.id, "timeControl", "Must be an object");
+          continue;
+        }
+        json timeControl = input["timeControl"];
+        static const vector<string> knownTimeControlFields = {
+          "mainTime","perMoveTime","mainTimeLeft","perMoveTimeLeft"
+        };
+        bool suc = true;
+        for(auto it = timeControl.begin(); it != timeControl.end(); ++it) {
+          if(!contains(knownTimeControlFields,it.key())) {
+            reportErrorForId(rbase.id, "timeControl", "Unknown field: " + it.key());
+            suc = false;
+            break;
+          }
+        }
+        if(!suc)
+          continue;
+
+        const char* timeErrorMessage = "Must be a number of seconds from 0 to 1e25";
+        double mainTime = 0.0;
+        double perMoveTime = 0.0;
+        if(suc && timeControl.find("mainTime") != timeControl.end())
+          suc = parseDouble(timeControl, "mainTime", mainTime, 0.0, TimeControls::MAX_USER_INPUT_TIME, timeErrorMessage);
+        if(suc && timeControl.find("perMoveTime") != timeControl.end())
+          suc = parseDouble(timeControl, "perMoveTime", perMoveTime, 0.0, TimeControls::MAX_USER_INPUT_TIME, timeErrorMessage);
+
+        //What is left of either time defaults to the whole of it, that is to a game that is just starting
+        double mainTimeLeft = mainTime;
+        double perMoveTimeLeft = perMoveTime;
+        if(suc && timeControl.find("mainTimeLeft") != timeControl.end())
+          suc = parseDouble(timeControl, "mainTimeLeft", mainTimeLeft, 0.0, TimeControls::MAX_USER_INPUT_TIME, timeErrorMessage);
+        if(suc && timeControl.find("perMoveTimeLeft") != timeControl.end())
+          suc = parseDouble(timeControl, "perMoveTimeLeft", perMoveTimeLeft, 0.0, TimeControls::MAX_USER_INPUT_TIME, timeErrorMessage);
+        if(!suc)
+          continue;
+
+        if(mainTime <= 0.0 && perMoveTime <= 0.0)
+          rbase.timeControls = TimeControls();
+        else {
+          rbase.timeControls = perMoveTime > 0.0
+            ? TimeControls::bronsteinDelayTime(mainTime,perMoveTime)
+            : TimeControls::absoluteTime(mainTime);
+          rbase.timeControls.mainTimeLeft = mainTimeLeft;
+          //Zero means the time of the move is not tracked, in which case the whole of it is still ahead
+          //of us, and more than it is no extra time either, since only up to it is ever refunded
+          if(perMoveTime > 0.0)
+            rbase.timeControls.delayTimeLeft = perMoveTimeLeft <= 0.0 ? perMoveTime : std::min(perMoveTimeLeft,perMoveTime);
+        }
+      }
+      //A stated clock is the whole of the limit of the search: the caps of the config are the defaults
+      //of a query that states no limit at all, and they are far smaller than any clock, so they would
+      //stop the search almost at once and leave the time of the move unspent. Only the limits a query
+      //states itself are kept, and the search then stops at whichever of them and the clock comes first.
+      if(!rbase.timeControls.isEffectivelyUnlimitedTime()) {
+        auto queryStatesLimit = [&input](const char* field) {
+          if(input.find(field) != input.end())
+            return true;
+          auto overrideSettings = input.find("overrideSettings");
+          return overrideSettings != input.end() && overrideSettings->is_object() &&
+            overrideSettings->find(field) != overrideSettings->end();
+        };
+        //A search params that is left alone is the unlimited one
+        const SearchParams noLimits;
+        if(!queryStatesLimit("maxVisits"))
+          rbase.params.maxVisits = noLimits.maxVisits;
+        if(!queryStatesLimit("maxPlayouts"))
+          rbase.params.maxPlayouts = noLimits.maxPlayouts;
+        if(!queryStatesLimit("maxTime"))
+          rbase.params.maxTime = noLimits.maxTime;
+      }
       if(input.find("priority") != input.end()) {
         if(input.find("priorities") != input.end()) {
           reportErrorForId(rbase.id, "priority", "Cannot specify both priority and priorities");
@@ -1260,6 +1341,7 @@ int MainCmds::analysis(const vector<string>& args) {
           newRequest->reportDuringSearch = rbase.reportDuringSearch;
           newRequest->reportDuringSearchEvery = rbase.reportDuringSearchEvery;
           newRequest->firstReportDuringSearchAfter = rbase.firstReportDuringSearchAfter;
+          newRequest->timeControls = rbase.timeControls;
           newRequest->priority = priority;
           newRequest->avoidMoveUntilByLocBlack = rbase.avoidMoveUntilByLocBlack;
           newRequest->avoidMoveUntilByLocWhite = rbase.avoidMoveUntilByLocWhite;
