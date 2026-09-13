@@ -3110,7 +3110,12 @@ int MainCmds::gtp(const vector<string>& args) {
     }
 
     else if(command == "time_left") {
-      Player pla;
+      //The player may be left out, in which case the clock reported is the one of the player to move,
+      //the same assumption genmove makes. Which form was used is told apart by whether the first
+      //argument parses as a player at all, since a time never does.
+      Player pla = engine->bot->getRootHist().presumedNextMovePla;
+      const bool playerIsExplicit = !pieces.empty() && PlayerIO::tryParsePlayer(pieces[0],pla);
+      const size_t timeIdx = playerIsExplicit ? 1 : 0;
       double time;
       int stones = 0;
       double perMoveTimeLeft = 0.0;
@@ -3119,18 +3124,17 @@ int MainCmds::gtp(const vector<string>& args) {
       //other time it is a float. Zero means the controller does not track the delay, in which case the
       //whole of it is still ahead of us.
       bool thirdArgIsPerMoveTime = engine->currentRules.isDots;
-      bool argsAreValid = pieces.size() == 3
-        && PlayerIO::tryParsePlayer(pieces[0],pla)
-        && Global::tryStringToDouble(pieces[1],time);
+      bool argsAreValid = pieces.size() == timeIdx + 2
+        && Global::tryStringToDouble(pieces[timeIdx],time);
       if(argsAreValid) {
         thirdArgIsPerMoveTime = (pla == P_BLACK ? engine->bTimeControls : engine->wTimeControls).incrementIsDelay;
         argsAreValid = thirdArgIsPerMoveTime
-          ? Global::tryStringToDouble(pieces[2],perMoveTimeLeft)
-          : Global::tryStringToInt(pieces[2],stones);
+          ? Global::tryStringToDouble(pieces[timeIdx+1],perMoveTimeLeft)
+          : Global::tryStringToInt(pieces[timeIdx+1],stones);
       }
       if(!argsAreValid) {
         responseIsError = true;
-        response = string("Expected player and float time and ") + (thirdArgIsPerMoveTime ? "float per-move time" : "int stones")
+        response = string("Expected optional player and float time and ") + (thirdArgIsPerMoveTime ? "float per-move time" : "int stones")
           + " for time_left but got '" + Global::concat(pieces," ") + "'";
       }
       //Be slightly tolerant of negative time left
