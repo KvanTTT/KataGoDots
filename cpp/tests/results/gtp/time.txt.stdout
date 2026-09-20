@@ -447,3 +447,48 @@ White originalMainTime 60 increment 10 mainTimeLimit 60 maxTimePerMove 7 mainTim
 = Black originalMainTime 60 increment 10 mainTimeLimit 60 maxTimePerMove 7 mainTimeLeft 60 inOvertime 0 minRecMax 6 6 6 rrec0 6 rreclimit 6 rreclimit2 6
 White originalMainTime 60 increment 10 mainTimeLimit 60 maxTimePerMove 7 mainTimeLeft 30 inOvertime 0 minRecMax 0 6 6 rrec0 6 rreclimit 6 rreclimit2 6
 
+= 
+
+= Black originalMainTime 60 delay 10 mainTimeLeft 60 inOvertime 0 minRecMax 9 9.41295 20.8 rrec0 9.41295 rreclimit 9.41295 rreclimit2 9.41295
+White originalMainTime 60 delay 10 mainTimeLeft 60 inOvertime 0 minRecMax 9 9.41295 20.8 rrec0 9.41295 rreclimit 9.41295 rreclimit2 9.41295
+
+= 
+
+= 
+
+= Black originalMainTime 60 delay 10 delayTimeLeft 3.5 mainTimeLeft 40 inOvertime 0 minRecMax 2.5 2.77297 10.3 rrec0 2.77297 rreclimit 2.77297 rreclimit2 2.77297
+White originalMainTime 60 delay 10 mainTimeLeft 30 inOvertime 0 minRecMax 9 9.20297 14.8 rrec0 9.20297 rreclimit 9.20297 rreclimit2 9.20297
+
+= 
+
+= Black originalMainTime 60 delay 10 delayTimeLeft 1.25 mainTimeLeft 25 inOvertime 0 minRecMax 0.625 0.70899 5.05 rrec0 0.70899 rreclimit 0.70899 rreclimit2 0.70899
+White originalMainTime 60 delay 10 mainTimeLeft 30 inOvertime 0 minRecMax 9 9.20297 14.8 rrec0 9.20297 rreclimit 9.20297 rreclimit2 9.20297
+
+= 
+
+= Black originalMainTime 60 delay 10 mainTimeLeft -5 inOvertime 0 minRecMax 8 8 8 rrec0 8 rreclimit 8 rreclimit2 8
+White originalMainTime 60 delay 10 mainTimeLeft 30 inOvertime 0 minRecMax 9 9.20297 14.8 rrec0 9.20297 rreclimit 9.20297 rreclimit2 9.20297
+
+= 
+
+= Black originalMainTime 0 delay 10 mainTimeLeft 0 inOvertime 0 minRecMax 8 8 8 rrec0 8 rreclimit 8 rreclimit2 8
+White originalMainTime 0 delay 10 mainTimeLeft 0 inOvertime 0 minRecMax 8 8 8 rrec0 8 rreclimit 8 rreclimit2 8
+
+= 
+
+= Black originalMainTime 0 delay 10 delayTimeLeft 2.5 mainTimeLeft 0 inOvertime 0 minRecMax 1.25 1.25 1.25 rrec0 1.25 rreclimit 1.25 rreclimit2 1.25
+White originalMainTime 0 delay 10 mainTimeLeft 0 inOvertime 0 minRecMax 8 8 8 rrec0 8 rreclimit 8 rreclimit2 8
+
+= 
+
+= Black originalMainTime 1e+30 mainTimeLeft 1e+30 inOvertime 0 minRecMax 0 5.5104e+27 2e+29 rrec0 5.5104e+27 rreclimit 5.5104e+27 rreclimit2 5.5104e+27
+White originalMainTime 1e+30 mainTimeLeft 1e+30 inOvertime 0 minRecMax 0 5.5104e+27 2e+29 rrec0 5.5104e+27 rreclimit 5.5104e+27 rreclimit2 5.5104e+27
+
+? Expected 'none', 'absolute', 'byoyomi', or 'canadian' as first argument for kgs-time_settings
+
+? Expected float for delay time as argument 2
+
+? Expected float for delay time as argument 2
+
+? Expected optional player and float time and int stones for time_left but got 'black 40 abc'
+
