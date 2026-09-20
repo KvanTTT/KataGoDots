@@ -325,7 +325,7 @@ White originalMainTime 20.5 originalNumPeriods 5 numStonesPerPeriod 1 perPeriodT
 = Black originalMainTime 20.5 originalNumPeriods 5 numStonesPerPeriod 1 perPeriodTime 5.8 mainTimeLeft 0 inOvertime 1 numPeriodsLeftIncludingCurrent 3 numStonesLeftInPeriod 1 timeLeftInPeriod 10 minRecMax 9 9 9 rrec0 9 rreclimit 9 rreclimit2 9
 White originalMainTime 20.5 originalNumPeriods 5 numStonesPerPeriod 1 perPeriodTime 5.8 mainTimeLeft 0 inOvertime 1 numPeriodsLeftIncludingCurrent 3 numStonesLeftInPeriod 1 minRecMax 4.8 4.8 4.8 rrec0 4.8 rreclimit 4.8 rreclimit2 4.8
 
-= none absolute byoyomi canadian fischer fischer-capped bronstein
+= none absolute byoyomi canadian fischer fischer-capped bronstein default
 
 = 
 

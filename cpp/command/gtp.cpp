@@ -374,6 +374,11 @@ struct GTPEngine {
 
   TimeControls bTimeControls;
   TimeControls wTimeControls;
+  //The time control the engine starts on, which is the one its config leaves it with. A controller that
+  //has taken the engine off it brings it back with "kata-time_settings default", there being no other way
+  //to state it: a config that leaves the clock to the controller states no search limit either, so zeroing
+  //the clock would leave the engine with no limit at all rather than with the limits of its config.
+  TimeControls initialTimeControls;
 
   //This move history doesn't get cleared upon consecutive moves by the same side, and is used
   //for undo, whereas the one in search does.
@@ -430,6 +435,7 @@ struct GTPEngine {
      isGenmoveParams(true),
      bTimeControls(),
      wTimeControls(),
+     initialTimeControls(),
      initialBoard(initialRules),
      initialPla(P_BLACK),
      moveHistory(),
@@ -2277,6 +2283,7 @@ int MainCmds::gtp(const vector<string>& args) {
     engine->bTimeControls = timeControl;
     engine->wTimeControls = timeControl;
   }
+  engine->initialTimeControls = engine->bTimeControls;
 
   //Check for unused config keys
   cfg.warnUnusedKeys(cerr,&logger);
@@ -2943,19 +2950,26 @@ int MainCmds::gtp(const vector<string>& args) {
       response += "fischer-capped";
       response += " ";
       response += "bronstein";
+      response += " ";
+      response += "default";
     }
 
     else if(command == "kgs-time_settings" || command == "kata-time_settings") {
       if(pieces.size() < 1) {
         responseIsError = true;
         if(command == "kata-time_settings")
-          response = "Expected 'none', 'absolute', 'byoyomi', 'canadian', 'fischer', 'fischer-capped', or 'bronstein' as first argument for kata-time_settings";
+          response = "Expected 'none', 'absolute', 'byoyomi', 'canadian', 'fischer', 'fischer-capped', 'bronstein', or 'default' as first argument for kata-time_settings";
         else
           response = "Expected 'none', 'absolute', 'byoyomi', or 'canadian' as first argument for kgs-time_settings";
       }
       else {
         string what = Global::toLower(Global::trim(pieces[0]));
-        if(what == "none") {
+        if(what == "default" && command == "kata-time_settings") {
+          //The clock of the config, which is the only way back to it once a controller has stated one
+          engine->bTimeControls = engine->initialTimeControls;
+          engine->wTimeControls = engine->initialTimeControls;
+        }
+        else if(what == "none") {
           TimeControls tc = TimeControls();
           engine->bTimeControls = tc;
           engine->wTimeControls = tc;
@@ -3102,7 +3116,7 @@ int MainCmds::gtp(const vector<string>& args) {
         else {
           responseIsError = true;
           if(command == "kata-time_settings")
-            response = "Expected 'none', 'absolute', 'byoyomi', 'canadian', 'fischer', 'fischer-capped', or 'bronstein' as first argument for kata-time_settings";
+            response = "Expected 'none', 'absolute', 'byoyomi', 'canadian', 'fischer', 'fischer-capped', 'bronstein', or 'default' as first argument for kata-time_settings";
           else
             response = "Expected 'none', 'absolute', 'byoyomi', or 'canadian' as first argument for kgs-time_settings";
         }
