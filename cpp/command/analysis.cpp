@@ -1272,8 +1272,17 @@ int MainCmds::analysis(const vector<string>& args) {
       if(initialPlayer == C_EMPTY) {
         if(moveHistory.size() > 0)
           initialPlayer = moveHistory[0].pla;
-        else if(rules.isDots)
-          initialPlayer = placements.empty() ? P_BLACK : getOpp(placements.back().pla);
+        else if(rules.isDots) {
+          //The dots of a start position are a position rather than a sequence of moves, so the player to
+          //move follows from how many of them each player has rather than from the order they are listed
+          //in: the player that has fewer dots moves, and the first player moves when both have as many.
+          //Every start position of Dots comes down to that, a single dot being followed by the other
+          //player whichever one it belongs to.
+          int firstPlayerLead = 0;
+          for(const Move& placement: placements)
+            firstPlayerLead += placement.pla == P_BLACK ? 1 : -1;
+          initialPlayer = firstPlayerLead > 0 ? P_WHITE : P_BLACK;
+        }
         else
           initialPlayer = BoardHistory::numHandicapStonesOnBoard(board) > 0 ? P_WHITE : P_BLACK;
       }
