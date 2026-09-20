@@ -930,7 +930,14 @@ int MainCmds::analysis(const vector<string>& args) {
 
 
       Rules rules;
-      const bool queryIsDots = input.value(DOTS_KEY, isDotsByDefault);
+      //Parsed rather than read as it is, because a value of another type would otherwise throw and take
+      //the whole engine down along with every query it's searching
+      bool queryIsDots = isDotsByDefault;
+      if(input.find(DOTS_KEY) != input.end()) {
+        bool suc = parseBoolean(input, DOTS_KEY.c_str(), queryIsDots, "Must be a boolean");
+        if(!suc)
+          continue;
+      }
       if(input.find("rules") != input.end()) {
         if(input["rules"].is_string()) {
           string s = input["rules"].get<string>();
