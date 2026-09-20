@@ -214,3 +214,26 @@ kata-debug-print-tc
 time_left black 60 0
 time_left white 30 0
 kata-debug-print-tc
+
+kata-time_settings bronstein 60 10
+kata-debug-print-tc
+time_left black 40 3.5
+time_left white 30 0
+kata-debug-print-tc
+time_left 25 1.25
+kata-debug-print-tc
+time_left black -5 10
+kata-debug-print-tc
+
+kata-time_settings bronstein 0 10
+kata-debug-print-tc
+time_left black 0 2.5
+kata-debug-print-tc
+
+kata-time_settings default
+kata-debug-print-tc
+
+kgs-time_settings default
+kata-time_settings bronstein 60
+kata-time_settings bronstein 60 abc
+time_left black 40 abc
