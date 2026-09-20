@@ -23682,6 +23682,48 @@ board9Late min rec max = 0 0 0 roundedrec(used0) 0 roundedrec(usedlimit) 0 round
 board19Early min rec max = 0 0 0 roundedrec(used0) 0 roundedrec(usedlimit) 0 roundedrec(usedlimit2) 0
 board19Late min rec max = 0 0 0 roundedrec(used0) 0 roundedrec(usedlimit) 0 roundedrec(usedlimit2) 0
 ===================================================================
+Basic 1h bronstein delay time controls, 10m left, 10s delay
+===================================================================
+board9Early min rec max = 9 24.8152 128.8 roundedrec(used0) 24.8152 roundedrec(usedlimit) 24.8152 roundedrec(usedlimit2) 24.8152
+board9Late min rec max = 9 46.7323 128.8 roundedrec(used0) 46.7323 roundedrec(usedlimit) 46.7323 roundedrec(usedlimit2) 46.7323
+board19Early min rec max = 9 13.1925 128.8 roundedrec(used0) 13.1925 roundedrec(usedlimit) 13.1925 roundedrec(usedlimit2) 13.1925
+board19Late min rec max = 9 20.2225 128.8 roundedrec(used0) 20.2225 roundedrec(usedlimit) 20.2225 roundedrec(usedlimit2) 20.2225
+===================================================================
+Basic 1h bronstein delay time controls, 15s left, 10s delay
+===================================================================
+board9Early min rec max = 9 9.36964 11.8 roundedrec(used0) 9.36964 roundedrec(usedlimit) 9.36964 roundedrec(usedlimit2) 9.36964
+board9Late min rec max = 9 9.88189 11.8 roundedrec(used0) 9.88189 roundedrec(usedlimit) 9.88189 roundedrec(usedlimit2) 9.88189
+board19Early min rec max = 9 9.09799 11.8 roundedrec(used0) 9.09799 roundedrec(usedlimit) 9.09799 roundedrec(usedlimit2) 9.09799
+board19Late min rec max = 9 9.2623 11.8 roundedrec(used0) 9.2623 roundedrec(usedlimit) 9.2623 roundedrec(usedlimit2) 9.2623
+===================================================================
+Basic 1h bronstein delay time controls, no time left, 10s delay
+===================================================================
+board9Early min rec max = 8 8 8 roundedrec(used0) 8 roundedrec(usedlimit) 8 roundedrec(usedlimit2) 8
+board9Late min rec max = 8 8 8 roundedrec(used0) 8 roundedrec(usedlimit) 8 roundedrec(usedlimit2) 8
+board19Early min rec max = 8 8 8 roundedrec(used0) 8 roundedrec(usedlimit) 8 roundedrec(usedlimit2) 8
+board19Late min rec max = 8 8 8 roundedrec(used0) 8 roundedrec(usedlimit) 8 roundedrec(usedlimit2) 8
+===================================================================
+Basic 1h bronstein delay time controls, no time left, 10s delay, larger lag buffer
+===================================================================
+board9Early min rec max = 5 5 5 roundedrec(used0) 5 roundedrec(usedlimit) 5 roundedrec(usedlimit2) 5
+board9Late min rec max = 5 5 5 roundedrec(used0) 5 roundedrec(usedlimit) 5 roundedrec(usedlimit2) 5
+board19Early min rec max = 5 5 5 roundedrec(used0) 5 roundedrec(usedlimit) 5 roundedrec(usedlimit2) 5
+board19Late min rec max = 5 5 5 roundedrec(used0) 5 roundedrec(usedlimit) 5 roundedrec(usedlimit2) 5
+===================================================================
+Basic 1h bronstein delay time controls, no time left, 10s delay, 4s of the delay already used
+===================================================================
+board9Early min rec max = 4 4 4 roundedrec(used0) 4 roundedrec(usedlimit) 4 roundedrec(usedlimit2) 4
+board9Late min rec max = 4 4 4 roundedrec(used0) 4 roundedrec(usedlimit) 4 roundedrec(usedlimit2) 4
+board19Early min rec max = 4 4 4 roundedrec(used0) 4 roundedrec(usedlimit) 4 roundedrec(usedlimit2) 4
+board19Late min rec max = 4 4 4 roundedrec(used0) 4 roundedrec(usedlimit) 4 roundedrec(usedlimit2) 4
+===================================================================
+Basic 1h bronstein delay time controls, -1s left, 10s delay
+===================================================================
+board9Early min rec max = 8 8 8 roundedrec(used0) 8 roundedrec(usedlimit) 8 roundedrec(usedlimit2) 8
+board9Late min rec max = 8 8 8 roundedrec(used0) 8 roundedrec(usedlimit) 8 roundedrec(usedlimit2) 8
+board19Early min rec max = 8 8 8 roundedrec(used0) 8 roundedrec(usedlimit) 8 roundedrec(usedlimit2) 8
+board19Late min rec max = 8 8 8 roundedrec(used0) 8 roundedrec(usedlimit) 8 roundedrec(usedlimit2) 8
+===================================================================
 Basic 1h byo yomi time controls, all time left, 1 period of 30s
 ===================================================================
 board9Early min rec max = 0 80.5485 749 roundedrec(used0) 80.5485 roundedrec(usedlimit) 80.5485 roundedrec(usedlimit2) 80.5485
