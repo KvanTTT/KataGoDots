@@ -441,6 +441,144 @@ oox.ox...
 
   {
     cout << "===================================================================" << endl;
+    cout << "Basic 1h bronstein delay time controls, 10m left, 10s delay" << endl;
+    cout << "===================================================================" << endl;
+
+    TimeControls timeControls;
+    timeControls.originalMainTime = 3600.0;
+    timeControls.increment = 10.0;
+    timeControls.incrementIsDelay = true;
+    timeControls.originalNumPeriods = 0;
+    timeControls.numStonesPerPeriod = 0;
+    timeControls.perPeriodTime = 0.0;
+    timeControls.mainTimeLeft = 600.0;
+    timeControls.delayTimeLeft = 10.0;
+    timeControls.inOvertime = false;
+    timeControls.numPeriodsLeftIncludingCurrent = 0;
+    timeControls.numStonesLeftInPeriod = 0;
+    timeControls.timeLeftInPeriod = 0.0;
+
+    double lagBuffer = 1.0;
+    tryTimeControlsOnBoards(timeControls,lagBuffer);
+  }
+
+  {
+    cout << "===================================================================" << endl;
+    cout << "Basic 1h bronstein delay time controls, 15s left, 10s delay" << endl;
+    cout << "===================================================================" << endl;
+
+    TimeControls timeControls;
+    timeControls.originalMainTime = 3600.0;
+    timeControls.increment = 10.0;
+    timeControls.incrementIsDelay = true;
+    timeControls.originalNumPeriods = 0;
+    timeControls.numStonesPerPeriod = 0;
+    timeControls.perPeriodTime = 0.0;
+    timeControls.mainTimeLeft = 15.0;
+    timeControls.delayTimeLeft = 10.0;
+    timeControls.inOvertime = false;
+    timeControls.numPeriodsLeftIncludingCurrent = 0;
+    timeControls.numStonesLeftInPeriod = 0;
+    timeControls.timeLeftInPeriod = 0.0;
+
+    double lagBuffer = 1.0;
+    tryTimeControlsOnBoards(timeControls,lagBuffer);
+  }
+
+  {
+    cout << "===================================================================" << endl;
+    cout << "Basic 1h bronstein delay time controls, no time left, 10s delay" << endl;
+    cout << "===================================================================" << endl;
+
+    TimeControls timeControls;
+    timeControls.originalMainTime = 3600.0;
+    timeControls.increment = 10.0;
+    timeControls.incrementIsDelay = true;
+    timeControls.originalNumPeriods = 0;
+    timeControls.numStonesPerPeriod = 0;
+    timeControls.perPeriodTime = 0.0;
+    timeControls.mainTimeLeft = 0.0;
+    timeControls.delayTimeLeft = 10.0;
+    timeControls.inOvertime = false;
+    timeControls.numPeriodsLeftIncludingCurrent = 0;
+    timeControls.numStonesLeftInPeriod = 0;
+    timeControls.timeLeftInPeriod = 0.0;
+
+    double lagBuffer = 1.0;
+    tryTimeControlsOnBoards(timeControls,lagBuffer);
+  }
+
+  {
+    cout << "===================================================================" << endl;
+    cout << "Basic 1h bronstein delay time controls, no time left, 10s delay, larger lag buffer" << endl;
+    cout << "===================================================================" << endl;
+
+    TimeControls timeControls;
+    timeControls.originalMainTime = 3600.0;
+    timeControls.increment = 10.0;
+    timeControls.incrementIsDelay = true;
+    timeControls.originalNumPeriods = 0;
+    timeControls.numStonesPerPeriod = 0;
+    timeControls.perPeriodTime = 0.0;
+    timeControls.mainTimeLeft = 0.0;
+    timeControls.delayTimeLeft = 10.0;
+    timeControls.inOvertime = false;
+    timeControls.numPeriodsLeftIncludingCurrent = 0;
+    timeControls.numStonesLeftInPeriod = 0;
+    timeControls.timeLeftInPeriod = 0.0;
+
+    double lagBuffer = 5.0;
+    tryTimeControlsOnBoards(timeControls,lagBuffer);
+  }
+
+  {
+    cout << "===================================================================" << endl;
+    cout << "Basic 1h bronstein delay time controls, no time left, 10s delay, 4s of the delay already used" << endl;
+    cout << "===================================================================" << endl;
+
+    TimeControls timeControls;
+    timeControls.originalMainTime = 3600.0;
+    timeControls.increment = 10.0;
+    timeControls.incrementIsDelay = true;
+    timeControls.originalNumPeriods = 0;
+    timeControls.numStonesPerPeriod = 0;
+    timeControls.perPeriodTime = 0.0;
+    timeControls.mainTimeLeft = 0.0;
+    timeControls.delayTimeLeft = 6.0;
+    timeControls.inOvertime = false;
+    timeControls.numPeriodsLeftIncludingCurrent = 0;
+    timeControls.numStonesLeftInPeriod = 0;
+    timeControls.timeLeftInPeriod = 0.0;
+
+    double lagBuffer = 1.0;
+    tryTimeControlsOnBoards(timeControls,lagBuffer);
+  }
+
+  {
+    cout << "===================================================================" << endl;
+    cout << "Basic 1h bronstein delay time controls, -1s left, 10s delay" << endl;
+    cout << "===================================================================" << endl;
+
+    TimeControls timeControls;
+    timeControls.originalMainTime = 3600.0;
+    timeControls.increment = 10.0;
+    timeControls.incrementIsDelay = true;
+    timeControls.originalNumPeriods = 0;
+    timeControls.numStonesPerPeriod = 0;
+    timeControls.perPeriodTime = 0.0;
+    timeControls.mainTimeLeft = -1.0;
+    timeControls.delayTimeLeft = 10.0;
+    timeControls.inOvertime = false;
+    timeControls.numPeriodsLeftIncludingCurrent = 0;
+    timeControls.numStonesLeftInPeriod = 0;
+    timeControls.timeLeftInPeriod = 0.0;
+
+    double lagBuffer = 1.0;
+    tryTimeControlsOnBoards(timeControls,lagBuffer);
+  }
+
+  {
+    cout << "===================================================================" << endl;
     cout << "Basic 1h byo yomi time controls, all time left, 1 period of 30s" << endl;
     cout << "===================================================================" << endl;
 

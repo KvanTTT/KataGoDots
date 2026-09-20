@@ -356,6 +356,11 @@ void TimeControls::getTime(const Board& board, const BoardHistory& hist, double 
       double reserveMainTime = applyLagBuffer(std::max(0.0, mainTimeLeft), lagBufferToUse);
       recommendedTime = delayLeft + divideTimeEvenlyForGame(reserveMainTime,true,false);
       maxTime = std::min(std::max(0.0, mainTimeLeft) + delayLeft, delayLeft + reserveMainTime / 5.0);
+
+      //Overrunning the delay is normally just a withdrawal from the main time reserve, but once there is
+      //no reserve left it loses the game outright, so buffer harder when we are living on the delay alone.
+      if(mainTimeLeft < lagBufferToUse)
+        lagBufferToUse *= 2.0;
     }
     //Note that some GTP controllers might give us a negative mainTimeLeft in weird cases. We tolerate this and do the best we can.
     else if(mainTimeLeft <= increment) {
