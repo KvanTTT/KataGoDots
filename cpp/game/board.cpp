@@ -2788,6 +2788,9 @@ bool Location::tryOfString(const string& str, const int x_size, const int y_size
     if(!Global::tryStringToInt(s.substr(commaIndex + 1), y))
       return false;
 
+    if(x < 0 || y < 0 || x >= x_size || y >= y_size)
+      return false;
+
     result = getLoc(x, y, x_size);
     return true;
   }
@@ -2798,6 +2801,9 @@ bool Location::tryOfString(const string& str, const int x_size, const int y_size
       return false;
     int y;
     if(!Global::tryStringToInt(s.substr(dashPos + 1), y))
+      return false;
+
+    if(x < 1 || y < 1 || x > x_size || y > y_size)
       return false;
 
     result = getLoc(x - 1, y_size - y, x_size);
