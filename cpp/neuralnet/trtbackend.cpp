@@ -107,8 +107,8 @@ ComputeContext* NeuralNet::createComputeContext(
   context->useFP16Mode = useFP16Mode;
   context->homeDataDirOverride = homeDataDirOverride;
   // The TensorRT backend builds its network by emitting ONNX from the model and parsing it with
-  // nvonnxparser (the default). trtDisableOnnx=true falls back to the hand-built ModelParser, which
-  // supports convnets only (transformer models will error in createComputeHandle).
+  // nvonnxparser (the default). On TensorRT 10, trtDisableOnnx=true falls back to the hand-built
+  // ModelParser for convnets. TensorRT 11 requires ONNX because it removed ModelParser's weak-typing APIs.
   context->useOnnx = !cfg.getOrDefaultBool("trtDisableOnnx", false);
   // ONNX transformer emitter layout. Default is NHWC (whole trunk channel-last with NCHW<->NHWC
   // conversions around it). Equal or very slightly better than NCHW in accuracy and in throughput
@@ -180,6 +180,10 @@ struct TRTModel {
   TRTModel& operator=(const TRTModel&) = delete;
 };
 
+// Preserve TensorRT 10's cache keys. TensorRT 11 emits a different, strongly typed graph.
+static constexpr int trtTuneSalt = NV_TENSORRT_MAJOR >= 11 ? 9 : 8;
+
+#if NV_TENSORRT_MAJOR < 11
 struct ModelParser {
   unique_ptr<TRTModel> model;
 
@@ -200,7 +204,7 @@ struct ModelParser {
 
   // Bump this when between katago versions we want to forcibly drop old timing caches and plan caches.
   // Bumped 7->8 for the TensorRT ONNX overhaul (ONNX emitter as default path, NHWC trunk, FP32 pinning).
-  static constexpr int tuneSalt = 8;
+  static constexpr int tuneSalt = trtTuneSalt;
 
   unique_ptr<TRTModel> build(
     unique_ptr<INetworkDefinition> net,
@@ -1037,6 +1041,7 @@ struct ModelParser {
     return castLayer;
   }
 };
+#endif  // NV_TENSORRT_MAJOR < 11
 
 // The builder's autotuner reports tactics that fail to compile or execute as ERROR-severity
 // "Skipping tactic ... due to exception ..." messages, but these are recoverable: the autotuner
@@ -1200,6 +1205,7 @@ struct ComputeHandle {
     }
 
     usingFP16 = false;
+#if NV_TENSORRT_MAJOR < 11
     if(builder->platformHasFastFp16()) {
       if(ctx->useFP16Mode == enabled_t::True || ctx->useFP16Mode == enabled_t::Auto) {
         config->setFlag(BuilderFlag::kFP16);
@@ -1208,10 +1214,15 @@ struct ComputeHandle {
     } else if(ctx->useFP16Mode == enabled_t::True) {
       throw StringError("CUDA device does not support useFP16=true");
     }
-    // The ONNX path may pin specific layers to FP32 below and needs the constraint to be hard
-    // (kOBEY) so TensorRT cannot silently fall back to an FP16 path. The ModelParser path uses the
-    // softer kPREFER. We set the flag after building the network, once forceObeyPrecision is known.
+#else
+    // TensorRT 11 removed platformHasFastFp16 and precision builder flags. Its supported
+    // GPUs are Turing or newer, which have native FP16 tensor-core execution.
+    usingFP16 = ctx->useFP16Mode != enabled_t::False;
+#endif
+#if NV_TENSORRT_MAJOR < 11
+    // TRT 10 needs an explicit precision-constraint flag for the FP32 layers below.
     bool forceObeyPrecision = false;
+#endif
 
     // Debug plan/engine dump (trtDumpDebugPlanToDir). Build a base path inside that dir, disambiguated
     // by board size + precision + exact/max so the multiple engines built in one process don't collide.
@@ -1225,7 +1236,11 @@ struct ComputeHandle {
     }
 
     auto network = unique_ptr<INetworkDefinition>(
+#if NV_TENSORRT_MAJOR < 11
       builder->createNetworkV2(1U << static_cast<int>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH)));
+#else
+      builder->createNetworkV2(0));
+#endif
     if(!network) {
       throw StringError("TensorRT backend: failed to create network definition");
     }
@@ -1247,7 +1262,14 @@ struct ComputeHandle {
     if(useOnnxEmit) {
       logger->write("TensorRT backend: building network via ONNX emitter");
       const ModelDesc& desc = loadedModel->modelDesc;
-      OnnxModelBuilder::Result onnxResult = OnnxModelBuilder::build(desc, ctx->nnXLen, ctx->nnYLen, requireExactNNLen, ctx->transformerNHWC, logger);
+      OnnxModelBuilder::Result onnxResult = OnnxModelBuilder::build(
+        desc, ctx->nnXLen, ctx->nnYLen, requireExactNNLen, ctx->transformerNHWC,
+#if NV_TENSORRT_MAJOR < 11
+        false,
+#else
+        usingFP16,
+#endif
+        logger);
       onnxBytes = std::move(onnxResult.serializedModel);
 
       if(dumpDebugPlan) {
@@ -1274,10 +1296,13 @@ struct ComputeHandle {
       // this the parser may leave outputs in a reformatted layout and the copy reads garbage.
       for(int i = 0; i < network->getNbOutputs(); i++) {
         ITensor* out = network->getOutput(i);
+#if NV_TENSORRT_MAJOR < 11
         out->setType(DataType::kFLOAT);
+#endif
         out->setAllowedFormats(1U << static_cast<int>(TensorFormat::kLINEAR));
       }
 
+#if NV_TENSORRT_MAJOR < 11
       // Force the numerically-sensitive regions to FP32: every RMSNorm reduction (square->reduce->
       // sqrt, which sums over many elements and loses too much precision in FP16) plus the trunk-tip
       // norm and policy/value heads. The emitter records these layer names; we pin them via per-layer
@@ -1300,6 +1325,10 @@ struct ComputeHandle {
       }
       forceObeyPrecision = true;
       logger->write(Global::strprintf("TensorRT backend: pinned %d layers to FP32 (rmsnorm + heads)", pinned));
+#else
+      if(usingFP16)
+        logger->write("TensorRT backend: using explicit FP16 trunk and FP32 RMSNorm/head ONNX types");
+#endif
 
       // Set optimization profile dims for each input the parser created.
       auto setProfile = [&](const char* name, Dims4 minDims, Dims4 optMaxDims) {
@@ -1326,21 +1355,26 @@ struct ComputeHandle {
       // so the two layouts don't share a timing-cache file full of mutual misses.
       string tuneDesc = Global::strprintf(
         "\"onnxsalt\"(%d)\"nhwc\"(%d)\"model\"(%d,%d,%d)",
-        ModelParser::tuneSalt, ctx->transformerNHWC ? 1 : 0,
+        trtTuneSalt, ctx->transformerNHWC ? 1 : 0,
         desc.modelVersion, desc.numInputChannels, desc.numInputGlobalChannels);
       SHA2::get256(tuneDesc.c_str(), model->tuneHash);
     }
     else {
+#if NV_TENSORRT_MAJOR < 11
       auto modelParser = make_unique<ModelParser>();
       model = modelParser->build(
         move(network), profile, loadedModel, ctx->nnXLen, ctx->nnYLen, maxBatchSize, requireExactNNLen);
+#else
+      throw StringError("TensorRT 11 requires the ONNX builder; remove trtDisableOnnx=true");
+#endif
     }
     debugOutputs = model->debugOutputs;
     config->addOptimizationProfile(profile);
 
-    // Honor per-layer precision constraints. The ONNX path pins some layers to FP32 and needs a hard
-    // constraint (kOBEY) so TensorRT cannot fall back to FP16; the ModelParser path uses kPREFER.
+#if NV_TENSORRT_MAJOR < 11
+    // The ONNX path needs a hard constraint; the ModelParser path uses kPREFER.
     config->setFlag(forceObeyPrecision ? BuilderFlag::kOBEY_PRECISION_CONSTRAINTS : BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
+#endif
 
     if(prop->major >= 8) {
       // This is to avoid tactics that have shape switching overhead
@@ -1396,7 +1430,7 @@ struct ComputeHandle {
         getInferLibVersion(),
         deviceIdent,
         loadedModel->modelDesc.name.c_str(),
-        ModelParser::tuneSalt,
+        trtTuneSalt,
         buildModeStr.c_str(),
         lenStr,
         ctx->nnYLen,
@@ -1407,7 +1441,7 @@ struct ComputeHandle {
         "_%d_%s_s%d_%s_%s_%d_%d_%d_%d",
         getInferLibVersion(),
         deviceIdent,
-        ModelParser::tuneSalt,
+        trtTuneSalt,
         buildModeStr.c_str(),
         lenStr,
         ctx->nnYLen,
