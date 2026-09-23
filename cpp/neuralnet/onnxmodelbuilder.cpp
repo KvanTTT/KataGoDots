@@ -1,6 +1,10 @@
 #include "../neuralnet/onnxmodelbuilder.h"
 
 #include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <map>
+#include <set>
 
 #include "../core/global.h"
 #include "../core/test.h"
@@ -13,6 +17,129 @@
 using namespace std;
 
 namespace {
+
+// ONNX FLOAT16 initializers use little-endian IEEE 754 binary16 in raw_data.
+uint16_t floatToHalfBits(float value) {
+  uint32_t bits;
+  std::memcpy(&bits, &value, sizeof(bits));
+  uint16_t sign = static_cast<uint16_t>((bits >> 16) & 0x8000);
+  int exponent = static_cast<int>((bits >> 23) & 0xff) - 127 + 15;
+  uint32_t mantissa = bits & 0x7fffff;
+  if(exponent >= 31)
+    return static_cast<uint16_t>(sign | 0x7c00 | (mantissa ? 0x0200 : 0));
+  if(exponent <= 0) {
+    if(exponent < -10)
+      return sign;
+    mantissa |= 0x800000;
+    int shift = 14 - exponent;
+    uint32_t rounded = (mantissa + ((1u << (shift - 1)) - 1) + ((mantissa >> shift) & 1)) >> shift;
+    return static_cast<uint16_t>(sign | rounded);
+  }
+  mantissa += 0x0fff + ((mantissa >> 13) & 1);
+  if(mantissa & 0x800000) {
+    mantissa = 0;
+    exponent++;
+  }
+  if(exponent >= 31)
+    return static_cast<uint16_t>(sign | 0x7c00);
+  return static_cast<uint16_t>(sign | (exponent << 10) | (mantissa >> 13));
+}
+
+// TensorRT 11 has no weak typing or per-layer precision flags. Keep the public I/O in FP32,
+// run the trunk in FP16, and make every sensitive RMSNorm/head operation explicitly FP32.
+// Casts on graph edges also prevent precision-changing fusions across these boundaries.
+void makeExplicitMixedPrecision(onnx::GraphProto* graph, const std::set<string>& fp32Nodes) {
+  std::map<string, int> valueType;
+  std::map<string, const onnx::TensorProto*> floatInitializers;
+  std::map<string, string> halfInitializers;
+  std::map<std::pair<string, int>, string> castOutputs;
+  for(const auto& input : graph->input())
+    valueType[input.name()] = input.type().tensor_type().elem_type();
+  for(const auto& init : graph->initializer()) {
+    valueType[init.name()] = init.data_type();
+    if(init.data_type() == onnx::TensorProto::FLOAT)
+      floatInitializers[init.name()] = &init;
+  }
+
+  google::protobuf::RepeatedPtrField<onnx::NodeProto> originalNodes;
+  originalNodes.Swap(graph->mutable_node());
+  int castIndex = 0;
+  for(const auto& original : originalNodes) {
+    const int targetType = fp32Nodes.count(original.name()) ? onnx::TensorProto::FLOAT : onnx::TensorProto::FLOAT16;
+    onnx::NodeProto node(original);
+    for(int i = 0; i < node.input_size(); i++) {
+      const string input = node.input(i);
+      auto typeIt = valueType.find(input);
+      if(typeIt == valueType.end())
+        throw StringError("OnnxModelBuilder: unknown input while typing graph: " + input);
+      if(typeIt->second == onnx::TensorProto::INT64 || typeIt->second == targetType)
+        continue;
+      if(typeIt->second != onnx::TensorProto::FLOAT && typeIt->second != onnx::TensorProto::FLOAT16)
+        throw StringError("OnnxModelBuilder: unsupported tensor type in mixed precision graph");
+
+      // Keep weights as initializers of the proper type. Some TensorRT Conv/MatMul parser paths
+      // require constant weights and cannot accept even a foldable Cast node on that input.
+      auto initIt = floatInitializers.find(input);
+      if(initIt != floatInitializers.end() && targetType == onnx::TensorProto::FLOAT16) {
+        auto halfIt = halfInitializers.find(input);
+        if(halfIt == halfInitializers.end()) {
+          const onnx::TensorProto& source = *initIt->second;
+          onnx::TensorProto* half = graph->add_initializer();
+          half->CopyFrom(source);
+          half->set_name(input + "/fp16");
+          half->set_data_type(onnx::TensorProto::FLOAT16);
+          string raw;
+          raw.reserve(static_cast<size_t>(source.float_data_size()) * 2);
+          for(float f : source.float_data()) {
+            uint16_t bits = floatToHalfBits(f);
+            raw.push_back(static_cast<char>(bits & 0xff));
+            raw.push_back(static_cast<char>(bits >> 8));
+          }
+          half->clear_float_data();
+          half->set_raw_data(raw);
+          halfIt = halfInitializers.emplace(input, half->name()).first;
+        }
+        node.set_input(i, halfIt->second);
+        continue;
+      }
+
+      const auto key = std::make_pair(input, targetType);
+      auto castIt = castOutputs.find(key);
+      if(castIt == castOutputs.end()) {
+        string castName = input + "/cast_" + Global::intToString(castIndex++);
+        onnx::NodeProto* cast = graph->add_node();
+        cast->set_op_type("Cast");
+        cast->set_name(castName);
+        cast->add_input(input);
+        cast->add_output(castName);
+        onnx::AttributeProto* to = cast->add_attribute();
+        to->set_name("to");
+        to->set_type(onnx::AttributeProto::INT);
+        to->set_i(targetType);
+        valueType[castName] = targetType;
+        castIt = castOutputs.emplace(key, castName).first;
+      }
+      node.set_input(i, castIt->second);
+    }
+    graph->add_node()->Swap(&node);
+    for(const string& output : original.output())
+      valueType[output] = targetType;
+  }
+  for(const auto& output : graph->output()) {
+    if(valueType.at(output.name()) != onnx::TensorProto::FLOAT)
+      throw StringError("OnnxModelBuilder: mixed precision graph output is not FP32: " + output.name());
+  }
+
+  // Most FP32 initializers have been replaced by their FP16 copies. Drop unused originals so
+  // the serialized ONNX does not carry both full sets of model weights.
+  std::set<string> usedInitializers;
+  for(const auto& node : graph->node())
+    for(const string& input : node.input())
+      usedInitializers.insert(input);
+  for(int i = graph->initializer_size() - 1; i >= 0; i--)
+    if(!usedInitializers.count(graph->initializer(i).name()))
+      graph->mutable_initializer()->DeleteSubrange(i, 1);
+}
 
 // Builder that accumulates ONNX nodes and initializers into a single GraphProto, handing back
 // tensor names as it goes. Tensors are float32; transformerNHWC selects a channel-last NHWC trunk
@@ -812,6 +939,7 @@ Result build(
   int nnYLen,
   bool requireExactNNLen,
   bool transformerNHWC,
+  bool explicitFP16,
   Logger* logger
 ) {
   if(desc.metaEncoderVersion > 0)
@@ -1056,6 +1184,12 @@ Result build(
   }
 
   b.recordNodesSince(trunkTipAndHeadStart, b.trunkTipAndHeadNodeNames);
+
+  if(explicitFP16) {
+    std::set<string> fp32Nodes(b.trunkTipAndHeadNodeNames.begin(), b.trunkTipAndHeadNodeNames.end());
+    fp32Nodes.insert(b.rmsNormNodeNames.begin(), b.rmsNormNodeNames.end());
+    makeExplicitMixedPrecision(graph, fp32Nodes);
+  }
 
   // DEBUG (kept commented out): expose every internal node output as an extra FP32 graph output so the
   // backend can dump per-layer activations for FP16-vs-FP32 *numerical* divergence analysis. This is
