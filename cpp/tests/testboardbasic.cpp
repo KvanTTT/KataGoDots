@@ -304,6 +304,26 @@ BC50 BC50 x 52 y 20
     expect(name,out,expected);
   }
 
+  // Out-of-range coordinates must not alias another point or a special move.
+  {
+    constexpr int xSize = 39;
+    constexpr int ySize = 32;
+    Loc loc = Board::NULL_LOC;
+    testAssert(Location::tryOfString("1-1", xSize, ySize, loc));
+    testAssert(loc == Location::getLoc(0, ySize - 1, xSize));
+    testAssert(Location::tryOfString("39-32", xSize, ySize, loc));
+    testAssert(loc == Location::getLoc(xSize - 1, 0, xSize));
+    testAssert(Location::tryOfString("(0,0)", xSize, ySize, loc));
+    testAssert(loc == Location::getLoc(0, 0, xSize));
+    testAssert(Location::tryOfString("(38,31)", xSize, ySize, loc));
+    testAssert(loc == Location::getLoc(xSize - 1, ySize - 1, xSize));
+
+    for(const string& invalid : {"0-1", "40-1", "41-16", "1-0", "1-33", "2-33",
+                                 "(-1,0)", "(39,0)", "(0,-1)", "(1,-1)", "(0,32)"}) {
+      testAssert(!Location::tryOfString(invalid, xSize, ySize, loc));
+    }
+  }
+
 
   //============================================================================
   {
