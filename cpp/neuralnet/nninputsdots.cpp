@@ -17,7 +17,8 @@ void NNInputs::fillRowV7Dots(
   bool useNHWC,
   float* rowBin,
   float* rowGlobal,
-  const bool selfplay
+  const bool selfplay,
+  std::vector<Loc>* outputReasonableMoves
 ) {
   assert(nnXLen <= NNPos::MAX_BOARD_LEN_X);
   assert(nnYLen <= NNPos::MAX_BOARD_LEN_Y);
@@ -56,8 +57,10 @@ void NNInputs::fillRowV7Dots(
 
   const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
 
-  const vector<Loc> reasonableNonGroundMoves = hist.getReasonableMoves(board, nextPlayer, Board::PASS_LOC, false, &capturesAndTerritoriesInfos);
-  const bool hasReasonableNonGroundMove = !reasonableNonGroundMoves.empty();
+  vector<Loc> reasonableMoves = hist.getReasonableMoves(board, nextPlayer, Board::NULL_LOC, false, &capturesAndTerritoriesInfos);
+  const bool hasReasonableNonGroundMove = !reasonableMoves.empty() && reasonableMoves.front() != Board::PASS_LOC;
+  if (outputReasonableMoves != nullptr)
+    *outputReasonableMoves = std::move(reasonableMoves);
 
   for(int y = 0; y<ySize; y++) {
     for(int x = 0; x<xSize; x++) {
@@ -117,7 +120,7 @@ void NNInputs::fillRowV7Dots(
 
   testAssert(deadDotsCount == board.numBlackCaptures + board.numWhiteCaptures);
 
-  int maxTurnsOfHistoryToInclude = 5;
+  int maxTurnsOfHistoryToInclude = std::min(5, std::max(0, nnInputParams.maxHistory));
   const vector<Move>& moveHistory = hist.moveHistory;
   if (!hasReasonableNonGroundMove) {
     // Don't include history for non-resultative games: when there are no reasonable non-ground moves to play

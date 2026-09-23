@@ -228,4 +228,24 @@ void ThreadTest::runTests() {
       testAssert(totalSq.load() == 2LL * 10000LL * 10001LL * 20001LL / 6);
     }
   }
+
+  {
+    ThreadSafeQueue<int> queue;
+    testAssert(queue.forcePush(1));
+    std::vector<int> buf;
+    testAssert(queue.waitPopUpToN(buf, 3));
+    std::thread writer([&]() {
+      testAssert(queue.forcePush(2));
+      testAssert(queue.forcePush(3));
+    });
+    queue.waitPopMoreUpToNFor(buf, 3, std::chrono::seconds(1));
+    writer.join();
+    testAssert(buf == std::vector<int>({1, 2, 3}));
+
+    buf.clear();
+    testAssert(queue.forcePush(4));
+    testAssert(queue.waitPopUpToN(buf, 3));
+    queue.waitPopMoreUpToNFor(buf, 3, std::chrono::milliseconds(1));
+    testAssert(buf == std::vector<int>({4}));
+  }
 }

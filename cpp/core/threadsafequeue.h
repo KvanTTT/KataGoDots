@@ -10,6 +10,7 @@
 #include "../core/multithread.h"
 #include "../core/test.h"
 
+#include <chrono>
 #include <queue>
 
 template<typename T>
@@ -186,6 +187,30 @@ class ThreadSafeContainer
     if(size >= maxSize && size < maxSize + n)
       notFullCondVar.notify_all();
     return true;
+  }
+
+  // Gather additional queued items for a bounded time after the first pop.
+  inline void waitPopMoreUpToNFor(std::vector<T>& buf, size_t n, std::chrono::steady_clock::duration maxWait)
+  {
+    testAssert(!buf.empty());
+    std::unique_lock<std::mutex> lock(mutex);
+    const auto deadline = std::chrono::steady_clock::now() + maxWait;
+    while(buf.size() < n) {
+      if(sizeUnsynchronized() == 0) {
+        if(closed || readOnly || !notEmptyCondVar.wait_until(lock, deadline, [&] {
+          return closed || readOnly || sizeUnsynchronized() > 0;
+        }))
+          break;
+      }
+      if(closed)
+        break;
+      const size_t size = sizeUnsynchronized();
+      const size_t numToPop = std::min(size, n - buf.size());
+      for(size_t i = 0; i<numToPop; i++)
+        buf.push_back(popUnsynchronized());
+      if(size >= maxSize && size - numToPop < maxSize)
+        notFullCondVar.notify_all();
+    }
   }
 
 };

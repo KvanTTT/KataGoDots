@@ -1926,7 +1926,6 @@ void NeuralNet::getOutput(
     const float* rowSpatial = inputBufs[nIdx]->rowSpatialBuf.data();
     const float* rowMeta = inputBufs[nIdx]->rowMetaBuf.data();
     const bool hasRowMeta = inputBufs[nIdx]->hasRowMeta;
-    copy(rowGlobal, rowGlobal + numGlobalFeatures, rowGlobalInput);
     std::copy(rowGlobal,rowGlobal+numGlobalFeatures,rowGlobalInput);
     if(numMetaFeatures > 0) {
       testAssert(rowMeta != NULL);

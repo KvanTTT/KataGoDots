@@ -81,6 +81,7 @@ namespace Tests {
 
   //testnninputs.cpp
   void runNNInputsV3V4Tests();
+  void runDotsNNInputsTests();
 
   //testsymmetries.cpp
   void runBasicSymmetryTests();
