@@ -87,6 +87,19 @@ def read_npz_training_data(
                 qValueTargetsNCMove = None
         del npz
 
+        expected_spatial_shape = (pos_len_y, pos_len_x)
+        if valueTargetsNCHW.shape[-2:] != expected_spatial_shape:
+            raise ValueError(
+                f"{npz_file}: valueTargetsNCHW has spatial shape {valueTargetsNCHW.shape[-2:]}, "
+                f"expected {expected_spatial_shape}; check -pos-len-x and -pos-len-y"
+            )
+        expected_policy_size = pos_len_x * pos_len_y + 1
+        if policyTargetsNCMove.shape[-1] != expected_policy_size:
+            raise ValueError(
+                f"{npz_file}: policyTargetsNCMove has {policyTargetsNCMove.shape[-1]} moves, "
+                f"expected {expected_policy_size}"
+            )
+
         binaryInputNCHW = np.unpackbits(binaryInputNCHWPacked,axis=2)
         assert len(binaryInputNCHW.shape) == 3
         assert binaryInputNCHW.shape[2] == ((pos_len_x * pos_len_y + 7) // 8) * 8
