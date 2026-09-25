@@ -1084,7 +1084,7 @@ struct ConvLayer {
   const int nnYLen;
   const int paddedNNXYLen;
 
-  bool usingHGemmWmmaNHCW; // For 1x1 convs
+  bool usingHGemmWmmaNCHW; // For 1x1 convs
 
   int numTilesX;
   int numTilesY;
@@ -1121,7 +1121,7 @@ struct ConvLayer {
       throw StringError("OpenCL backend: Encountered convolution dilation factors other than 1, not supported");
 
     //Initial values unless overrided below
-    usingHGemmWmmaNHCW = false;
+    usingHGemmWmmaNCHW = false;
     numTilesX = 0;
     numTilesY = 0;
     inTileXYSize = 0;
@@ -1138,7 +1138,7 @@ struct ConvLayer {
       filter = createReadOnlyBuffer(handle,transWeights,useFP16);
       if(handle->usingFP16TensorCoresFor1x1) {
         if(inChannels % handle->getHGemmWmmaNCHWRequiredCDivisor() == 0 && outChannels % handle->getHGemmWmmaNCHWRequiredCDivisor() == 0) {
-          usingHGemmWmmaNHCW = true;
+          usingHGemmWmmaNCHW = true;
         }
       }
     }
@@ -1272,7 +1272,7 @@ struct ConvLayer {
 
   void apply(ComputeHandleInternal* handle, int batchSize, cl_mem input, cl_mem output, cl_mem convWorkspace, cl_mem convWorkspace2) const {
     if(convXSize == 1 && convYSize == 1) {
-      if(!usingHGemmWmmaNHCW) {
+      if(!usingHGemmWmmaNCHW) {
         int filterStride = 0; //Reuse same filter for all matrices in batch
         int inputStride = paddedNNXYLen * inChannels;
         int outputStride = paddedNNXYLen * outChannels;
@@ -2265,7 +2265,7 @@ struct TransformerMatMulLayer {
   const int inChannels;
   const int outChannels;
   const int paddedNNXYLen;
-  bool usingHGemmWmmaNHCW;
+  bool usingHGemmWmmaNCHW;
 
   cl_mem filter;
 
@@ -2277,7 +2277,7 @@ struct TransformerMatMulLayer {
     inChannels(desc->inChannels),
     outChannels(desc->outChannels),
     paddedNNXYLen(handle->paddedNNXYLen),
-    usingHGemmWmmaNHCW(false)
+    usingHGemmWmmaNCHW(false)
   {
     testAssert(desc->weights.size() == (size_t)(inChannels * outChannels));
     // MatMulLayerDesc weights are (inC, outC): weights[ic * outC + oc]
@@ -2288,7 +2288,7 @@ struct TransformerMatMulLayer {
 
     if(handle->usingFP16TensorCoresFor1x1) {
       if(inChannels % handle->getHGemmWmmaNCHWRequiredCDivisor() == 0 && outChannels % handle->getHGemmWmmaNCHWRequiredCDivisor() == 0) {
-        usingHGemmWmmaNHCW = true;
+        usingHGemmWmmaNCHW = true;
       }
     }
   }
@@ -2301,7 +2301,7 @@ struct TransformerMatMulLayer {
   // This is identical to a 1x1 convolution: output[n,oc,xy] = sum_ic input[n,ic,xy] * weight[ic,oc]
   void apply(ComputeHandleInternal* handle, int batchSize, cl_mem input, cl_mem output, cl_mem mask, cl_mem convWorkspace) const {
     (void)mask;
-    if(!usingHGemmWmmaNHCW) {
+    if(!usingHGemmWmmaNCHW) {
       (void)convWorkspace;
       int filterStride = 0; // Reuse same filter for all batch elements
       int inputStride = paddedNNXYLen * inChannels;
@@ -3825,6 +3825,22 @@ void NeuralNet::printDevices() {
       " (score " + Global::intToString(device.defaultDesirability) + ")";
     cout << msg << endl;
   }
+}
+
+std::string NeuralNet::getRuntimeBackendDetail(ConfigParser& cfg) {
+  (void)cfg;
+  return std::string();
+}
+
+NeuralNet::BatchPolicy NeuralNet::getBatchPolicy(ConfigParser& cfg) {
+  (void)cfg;
+  return NeuralNet::BatchPolicy::Dynamic;
+}
+
+int NeuralNet::getNumEffectiveDevices(ConfigParser& cfg, const std::vector<int>& gpuIdxByServerThread) {
+  (void)cfg;
+  std::set<int> distinctDevices(gpuIdxByServerThread.begin(), gpuIdxByServerThread.end());
+  return std::max(1, (int)distinctDevices.size());
 }
 
 //--------------------------------------------------------------

@@ -721,13 +721,12 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
   {
     Setup::initializeSession(cfg);
     const int expectedConcurrentEvals = numTotalThreads;
-    const int defaultMaxBatchSize = std::max(8,((numTotalThreads+3)/4)*4);
     const bool defaultRequireExactNNLen = false;
     const bool disableFP16 = false;
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       nnModelFile,nnModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_ANALYSIS
     );
   }
@@ -735,10 +734,12 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
 
   string searchRandSeed = Global::uint64ToString(seedRand.nextUInt64());
   SearchParams params = SearchParams::basicDecentParams();
-  //Pass-alive computation mode, applied uniformly to game replay/adjudication, featurization,
-  //training targets, and the searches below. Auto resolves to the model's declared preference.
+  //BoardHistoryModes, applied uniformly to game replay/adjudication, featurization,
+  //training targets, and the searches below. Auto resolves to the model's declared preferences.
   params.alwaysComputePassAliveUnderSuicideRules = cfg.getOrDefaultEnabled("alwaysComputePassAliveUnderSuicideRules", params.alwaysComputePassAliveUnderSuicideRules);
-  const bool alwaysComputePassAliveUnderSuicideRules = Search::resolveAlwaysComputePassAliveUnderSuicideRules(params, nnEval);
+  if(cfg.contains("excludeTerritoryAdjacentToAtari"))
+    params.excludeTerritoryAdjacentToAtari = cfg.getEnabled("excludeTerritoryAdjacentToAtari");
+  const BoardHistoryModes historyModes = Search::resolveHistoryModes(params, nnEval);
   params.maxVisits = maxVisits;
   params.chosenMoveTemperatureEarly = 0.1;
   params.chosenMoveTemperature = 0.1;
@@ -1410,7 +1411,7 @@ int MainCmds::writetrainingdata(const vector<string>& args) {
     try {
       //Set up before replaying so game replay/adjudication, featurization, and targets are all uniform
       //with each other and with the searches (whose setPosition resolves to the same value from params).
-      hist = sgf->setupInitialBoardAndHist(rules, nextPla, alwaysComputePassAliveUnderSuicideRules);
+      hist = sgf->setupInitialBoardAndHist(rules, nextPla, historyModes);
       board = hist.initialBoard;
     }
     catch(const StringError& e) {

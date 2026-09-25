@@ -59,6 +59,8 @@ struct SearchThread {
 
   NNResultBuf nnResultBuf;
   std::vector<MoreNodeStats> statsBuf;
+  //Scratch space for choosing a root focus move by weight.
+  std::vector<double> rootFocusCumWeightsBuf;
 
   double upperBoundVisitsLeft;
 
@@ -99,8 +101,31 @@ struct Search {
   std::vector<int> avoidMoveUntilByLocWhite;
   bool avoidMoveUntilRescaleRoot; // When avoiding moves at the root, rescale the root policy to sum to 1.
 
+  //External user-specified moves at the root that should receive extra search. With probability prob, each playout
+  //from the root is redirected into one of these moves as a weightless visit, which does not count as a visit of the
+  //root or contribute to the root's value, and does not count toward visit or playout limits. The move is chosen at
+  //random with probability proportional to its weight. Weights are parallel to moves.
+  //prob is capped at MAX_ROOT_FOCUS_PROB so that visit and playout limits are still reached.
+  struct FocusMoves {
+    std::vector<Loc> moves;
+    std::vector<double> weights;
+    double prob;
+  };
+  static constexpr double MAX_ROOT_FOCUS_PROB = 0.99;
+  static constexpr double MAX_ROOT_FOCUS_WEIGHT = 1e30;
+  //Null if no focus is active. May be replaced at any time, including while a search is running. Search threads
+  //load it once per playout at the root. A replaced struct is kept in rootFocusToCleanUp and only freed at the end
+  //of a search or on destruction, so that a thread that loaded the old pointer can keep using it.
+  std::atomic<FocusMoves*> rootFocus;
+  std::mutex rootFocusCleanupMutex;
+  std::vector<FocusMoves*> rootFocusToCleanUp;
+
   //If rootSymmetryPruning==true and the board is symmetric, mask all the equivalent copies of each move except one.
   bool rootSymDupLoc[Board::MAX_ARR_SIZE];
+  //For each location, the location that the search actually explores for a move there at the root. Equal to the
+  //location itself unless rootSymDupLoc masks it, in which case it is the unmasked equivalent copy, or NULL_LOC
+  //if there is none. Recomputed at the start of each search.
+  Loc rootSymRepresentativeLoc[Board::MAX_ARR_SIZE];
   //If rootSymmetryPruning==true, symmetries under which the root board and history are invariant, including some heuristics for ko and encore-related state.
   std::vector<int> rootSymmetries;
   std::vector<int> rootPruneOnlySymmetries;
@@ -224,6 +249,10 @@ struct Search {
   void setRootHintLoc(Loc hintLoc);
   void setAvoidMoveUntilByLoc(const std::vector<int>& bVec, const std::vector<int>& wVec);
   void setAvoidMoveUntilRescaleRoot(bool b);
+  //Does not clear search. Pass empty vectors to cancel any focus. Weights must be parallel to moves and positive.
+  //Unlike the other setters, this is safe to call at any time, including concurrently with a running search,
+  //and takes effect for subsequent playouts of that search.
+  void setRootFocus(const std::vector<Loc>& moves, const std::vector<double>& weights, double prob);
   void setAlwaysIncludeOwnerMap(bool b);
   void setRootSymmetryPruningOnly(const std::vector<int>& rootPruneOnlySymmetries);
   void setParams(const SearchParams& params);
@@ -231,6 +260,10 @@ struct Search {
   //Resolve a false/auto/true alwaysComputePassAliveUnderSuicideRules setting against what a neural net
   //declares that it expects. Auto resolves to the net's declaration (false if nnEval is NULL).
   static bool resolveAlwaysComputePassAliveUnderSuicideRules(const SearchParams& params, const NNEvaluator* nnEval);
+  //Same, for the excludeTerritoryAdjacentToAtari setting.
+  static bool resolveExcludeTerritoryAdjacentToAtari(const SearchParams& params, const NNEvaluator* nnEval);
+  //Resolve all the BoardHistoryModes settings at once.
+  static BoardHistoryModes resolveHistoryModes(const SearchParams& params, const NNEvaluator* nnEval);
   void setExternalPatternBonusTable(std::unique_ptr<PatternBonusTable>&& table);
   void setCopyOfExternalPatternBonusTable(const std::unique_ptr<PatternBonusTable>& table);
   void setExternalEvalCache(const std::shared_ptr<EvalCacheTable>& cache);
@@ -421,6 +454,8 @@ private:
   static constexpr double POLICY_ILLEGAL_SELECTION_VALUE = -1e50;
   static constexpr double FUTILE_VISITS_PRUNE_VALUE = -1e40;
   static constexpr double EVALUATING_SELECTION_VALUE_PENALTY = 1e20;
+  //Above any other selection value, including the forced 1e20 values used for rootHintLoc and rootDesiredPerChildVisitsCoeff.
+  static constexpr double ROOT_FOCUS_SELECTION_VALUE = 1e30;
 
   //----------------------------------------------------------------------------------------
   // Dirichlet noise and temperature
@@ -451,6 +486,8 @@ private:
   // searchhelpers.cpp
   //----------------------------------------------------------------------------------------
   bool isAllowedRootMove(Loc moveLoc) const;
+  void computeRootSymRepresentativeLocs();
+  void cleanUpOldRootFocus();
   double getPatternBonus(Hash128 patternBonusHash, Player prevMovePla) const;
   double getEndingWhiteScoreBonus(const SearchNode& parent, Loc moveLoc) const;
   bool shouldSuppressPass(const SearchNode* n) const;
@@ -664,13 +701,13 @@ private:
   // Initialization and core search logic
   // search.cpp
   //----------------------------------------------------------------------------------------
-  //Enforce the invariant that rootHistory's alwaysComputePassAliveUnderSuicideRules always matches
-  //what searchParams and nnEvaluator resolve to, regardless of any history set into this Search.
-  //Clears search if this changes the flag, since all graph hashes and in-tree adjudication change.
+  //Enforce the invariant that rootHistory's modes always match what searchParams and nnEvaluator
+  //resolve to, regardless of any history set into this Search.
+  //Clears search if this changes the modes, since all graph hashes and in-tree adjudication change.
   //Called by every setter that installs or rebuilds rootHistory or changes params or nnEvaluator.
-  void applyPassAliveModeToRootHistory();
-  //Copy of nnInputParams for querying humanEvaluator, overriding the pass-alive featurization mode
-  //with the human net's own resolution, which may differ from the mode the search is using.
+  void applyHistoryModesToRootHistory();
+  //Copy of nnInputParams for querying humanEvaluator, overriding the featurization modes
+  //with the human net's own resolution, which may differ from the modes the search is using.
   MiscNNInputParams paramsForHumanEvaluator(const MiscNNInputParams& nnInputParams) const;
   void computeRootValues(); // Helper for begin search
   void recursivelyRecomputeStats(SearchNode& node); // Helper for search initialization

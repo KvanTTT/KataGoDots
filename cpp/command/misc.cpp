@@ -87,13 +87,12 @@ int MainCmds::sampleinitializations(const vector<string>& args) {
     {
       Setup::initializeSession(cfg);
       const int expectedConcurrentEvals = params.numThreads;
-      const int defaultMaxBatchSize = std::max(8,((params.numThreads+3)/4)*4);
       const bool defaultRequireExactNNLen = false;
       const bool disableFP16 = false;
       const string expectedSha256 = "";
       nnEval = Setup::initializeNNEvaluator(
         modelFile,modelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-        Board::MAX_LEN_X,Board::MAX_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+        Board::MAX_LEN_X,Board::MAX_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
         Setup::SETUP_FOR_GTP
       );
     }
@@ -195,13 +194,12 @@ int MainCmds::evalrandominits(const vector<string>& args) {
     {
       Setup::initializeSession(cfg);
       const int expectedConcurrentEvals = params.numThreads;
-      const int defaultMaxBatchSize = std::max(8,((params.numThreads+3)/4)*4);
       const bool defaultRequireExactNNLen = false;
       const bool disableFP16 = false;
       const string expectedSha256 = "";
       nnEval = Setup::initializeNNEvaluator(
         modelFile,modelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-        Board::MAX_LEN_X,Board::MAX_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+        Board::MAX_LEN_X,Board::MAX_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
         Setup::SETUP_FOR_GTP
       );
     }
@@ -224,7 +222,7 @@ int MainCmds::evalrandominits(const vector<string>& args) {
     Player pla = P_BLACK;
     //Keep pass-alive computations (e.g. endGameIfAllPassAlive below) consistent with how the bot's
     //own searches are performing them.
-    BoardHistory hist(board,pla,rules,0,evalBot->getRootHist().alwaysComputePassAliveUnderSuicideRules);
+    BoardHistory hist(board,pla,rules,0,evalBot->getRootHist().modes);
     int numInitialMovesToPlay = (int)gameRand.nextUInt(200);
     double temperature = 1.0;
     for(int i = 0; i<numInitialMovesToPlay; i++) {
@@ -291,13 +289,12 @@ int MainCmds::searchentropyanalysis(const vector<string>& args) {
   {
     Setup::initializeSession(cfg);
     const int expectedConcurrentEvals = params.numThreads;
-    const int defaultMaxBatchSize = std::max(8,((params.numThreads+3)/4)*4);
     const bool defaultRequireExactNNLen = false;
     const bool disableFP16 = false;
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       modelFile,modelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-      Board::MAX_LEN_X,Board::MAX_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      Board::MAX_LEN_X,Board::MAX_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_GTP
     );
   }
@@ -376,7 +373,7 @@ int MainCmds::searchentropyanalysis(const vector<string>& args) {
 
     Player pla;
     Rules rules = sgfObj->getRulesOrFailAllowUnspecified(Rules::getSimpleTerritory());
-    BoardHistory hist = sgfObj->setupInitialBoardAndHist(rules, pla, bot->getRootHist().alwaysComputePassAliveUnderSuicideRules);
+    BoardHistory hist = sgfObj->setupInitialBoardAndHist(rules, pla, bot->getRootHist().modes);
     Board board = hist.initialBoard;
 
     for(int i = 0; i < turnIdx; i++) {
@@ -559,12 +556,11 @@ int MainCmds::selfplaysurprisedump(const vector<string>& args) {
   {
     const int expectedConcurrentEvals = cfg.getInt("numSearchThreads") * numGameThreads;
     const bool defaultRequireExactNNLen = minBoardXSizeUsed == maxBoardXSizeUsed && minBoardYSizeUsed == maxBoardYSizeUsed;
-    const int defaultMaxBatchSize = -1;
     const bool disableFP16 = false;
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       modelFile,modelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      maxBoardXSizeUsed,maxBoardYSizeUsed,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      maxBoardXSizeUsed,maxBoardYSizeUsed,Setup::MaxBatchSizeRequest::requireFromConfig(),defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_OTHER
     );
   }

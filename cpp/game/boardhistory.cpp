@@ -26,6 +26,24 @@ static Hash128 getKoHashAfterMoveNonEncore(const Rules& rules, Hash128 posHashAf
 
 BoardHistory::BoardHistory() : BoardHistory(Rules::DEFAULT_GO) {}
 
+BoardHistoryModes::BoardHistoryModes()
+  :alwaysComputePassAliveUnderSuicideRules(false),
+   excludeTerritoryAdjacentToAtari(false)
+{}
+
+BoardHistoryModes::BoardHistoryModes(bool alwaysPassAliveSuicide, bool excludeTerritoryAdjAtari)
+  :alwaysComputePassAliveUnderSuicideRules(alwaysPassAliveSuicide),
+   excludeTerritoryAdjacentToAtari(excludeTerritoryAdjAtari)
+{}
+
+bool BoardHistoryModes::operator==(const BoardHistoryModes& other) const {
+  return alwaysComputePassAliveUnderSuicideRules == other.alwaysComputePassAliveUnderSuicideRules
+    && excludeTerritoryAdjacentToAtari == other.excludeTerritoryAdjacentToAtari;
+}
+bool BoardHistoryModes::operator!=(const BoardHistoryModes& other) const {
+  return !(*this == other);
+}
+
 BoardHistory::BoardHistory(const Rules& newRules)
   : rules(newRules),
     moveHistory(),
@@ -39,7 +57,7 @@ BoardHistory::BoardHistory(const Rules& newRules)
     assumeMultipleStartingBlackMovesAreHandicap(false),
     whiteHasMoved(false),
     overrideNumHandicapStones(-1),
-    alwaysComputePassAliveUnderSuicideRules(false),
+    modes(),
     currentRecentBoardIdx(0),
     presumedNextMovePla(P_BLACK),
     consecutiveEndingPasses(0),
@@ -76,9 +94,9 @@ BoardHistory::BoardHistory(const Rules& newRules)
 BoardHistory::~BoardHistory()
 {}
 
-BoardHistory::BoardHistory(const Board& board) : BoardHistory(board, P_BLACK, board.rules, 0, false) {}
+BoardHistory::BoardHistory(const Board& board) : BoardHistory(board, P_BLACK, board.rules, 0, BoardHistoryModes(false,false)) {}
 
-BoardHistory::BoardHistory(const Board& board, Player pla, const Rules& r, int ePhase, bool alwaysPassAliveSuicide)
+BoardHistory::BoardHistory(const Board& board, Player pla, const Rules& r, int ePhase, const BoardHistoryModes& modes_)
   :rules(r),
    moveHistory(),
    preventEncoreHistory(),
@@ -91,7 +109,7 @@ BoardHistory::BoardHistory(const Board& board, Player pla, const Rules& r, int e
    assumeMultipleStartingBlackMovesAreHandicap(false),
    whiteHasMoved(false),
    overrideNumHandicapStones(-1),
-   alwaysComputePassAliveUnderSuicideRules(alwaysPassAliveSuicide),
+   modes(modes_),
    recentBoards(),
    currentRecentBoardIdx(0),
    presumedNextMovePla(pla),
@@ -136,7 +154,7 @@ BoardHistory::BoardHistory(const BoardHistory& other)
    assumeMultipleStartingBlackMovesAreHandicap(other.assumeMultipleStartingBlackMovesAreHandicap),
    whiteHasMoved(other.whiteHasMoved),
    overrideNumHandicapStones(other.overrideNumHandicapStones),
-   alwaysComputePassAliveUnderSuicideRules(other.alwaysComputePassAliveUnderSuicideRules),
+   modes(other.modes),
    currentRecentBoardIdx(other.currentRecentBoardIdx),
    presumedNextMovePla(other.presumedNextMovePla),
    consecutiveEndingPasses(other.consecutiveEndingPasses),
@@ -178,7 +196,7 @@ BoardHistory& BoardHistory::operator=(const BoardHistory& other)
   assumeMultipleStartingBlackMovesAreHandicap = other.assumeMultipleStartingBlackMovesAreHandicap;
   whiteHasMoved = other.whiteHasMoved;
   overrideNumHandicapStones = other.overrideNumHandicapStones;
-  alwaysComputePassAliveUnderSuicideRules = other.alwaysComputePassAliveUnderSuicideRules;
+  modes = other.modes;
   recentBoards = other.recentBoards;
   currentRecentBoardIdx = other.currentRecentBoardIdx;
   presumedNextMovePla = other.presumedNextMovePla;
@@ -223,7 +241,7 @@ BoardHistory::BoardHistory(BoardHistory&& other) noexcept
   assumeMultipleStartingBlackMovesAreHandicap(other.assumeMultipleStartingBlackMovesAreHandicap),
   whiteHasMoved(other.whiteHasMoved),
   overrideNumHandicapStones(other.overrideNumHandicapStones),
-  alwaysComputePassAliveUnderSuicideRules(other.alwaysComputePassAliveUnderSuicideRules),
+  modes(other.modes),
   currentRecentBoardIdx(other.currentRecentBoardIdx),
   presumedNextMovePla(other.presumedNextMovePla),
   consecutiveEndingPasses(other.consecutiveEndingPasses),
@@ -262,7 +280,7 @@ BoardHistory& BoardHistory::operator=(BoardHistory&& other) noexcept
   assumeMultipleStartingBlackMovesAreHandicap = other.assumeMultipleStartingBlackMovesAreHandicap;
   whiteHasMoved = other.whiteHasMoved;
   overrideNumHandicapStones = other.overrideNumHandicapStones;
-  alwaysComputePassAliveUnderSuicideRules = other.alwaysComputePassAliveUnderSuicideRules;
+  modes = other.modes;
   recentBoards = other.recentBoards;
   currentRecentBoardIdx = other.currentRecentBoardIdx;
   presumedNextMovePla = other.presumedNextMovePla;
@@ -308,7 +326,7 @@ void BoardHistory::clear(const Board& board, Player pla, const Rules& r, int ePh
   assumeMultipleStartingBlackMovesAreHandicap = false;
   whiteHasMoved = false;
   overrideNumHandicapStones = -1;
-  //Deliberately does NOT reset alwaysComputePassAliveUnderSuicideRules - see boardhistory.h.
+  //Deliberately does NOT reset modes - see boardhistory.h.
 
   //This makes it so that if we ask for recent boards with a lookback beyond what we have a history for,
   //we simply return copies of the starting board.
@@ -382,7 +400,7 @@ void BoardHistory::clear(const Board& board, Player pla, const Rules& r, int ePh
 }
 
 BoardHistory BoardHistory::copyToInitial() const {
-  BoardHistory hist(initialBoard, initialPla, rules, initialEncorePhase, alwaysComputePassAliveUnderSuicideRules);
+  BoardHistory hist(initialBoard, initialPla, rules, initialEncorePhase, modes);
   hist.setInitialTurnNumber(initialTurnNumber);
   hist.setAssumeMultipleStartingBlackMovesAreHandicap(assumeMultipleStartingBlackMovesAreHandicap);
   hist.setOverrideNumHandicapStones(overrideNumHandicapStones);
@@ -404,12 +422,12 @@ void BoardHistory::setOverrideNumHandicapStones(int n) {
 }
 
 
-void BoardHistory::setAlwaysComputePassAliveUnderSuicideRules(bool b) {
-  alwaysComputePassAliveUnderSuicideRules = b;
+void BoardHistory::setModes(const BoardHistoryModes& modes_) {
+  modes = modes_;
 }
 
 bool BoardHistory::suicideLegalForPassAlive() const {
-  return rules.multiStoneSuicideLegal || alwaysComputePassAliveUnderSuicideRules;
+  return rules.multiStoneSuicideLegal || modes.alwaysComputePassAliveUnderSuicideRules;
 }
 
 static int numHandicapStonesOnBoardHelper(const Board& board, const int blackNonPassTurnsToStart) {
@@ -665,6 +683,7 @@ int BoardHistory::countAreaScoreWhiteMinusBlack(const Board& board, Color area[B
       area,whiteMinusBlackIndependentLifeRegionCount,
       keepTerritories,
       keepStones,
+      modes.excludeTerritoryAdjacentToAtari,
       suicideLegalForPassAlive()
     );
     if(rules.taxRule == Rules::TAX_ALL)
@@ -709,6 +728,7 @@ int BoardHistory::countTerritoryAreaScoreWhiteMinusBlack(const Board& board, Col
     area,whiteMinusBlackIndependentLifeRegionCount,
     keepTerritories,
     keepStones,
+    modes.excludeTerritoryAdjacentToAtari,
     suicideLegalForPassAlive()
   );
 
@@ -1419,12 +1439,12 @@ Hash128 BoardHistory::getSituationAndSimpleKoAndPrevPosHash(const Board& board, 
 }
 
 Hash128 BoardHistory::getSituationRulesAndKoHash(const Board& board, const BoardHistory& hist, Player nextPlayer, double drawEquivalentWinsForWhite) {
-  return getSituationRulesAndKoHash(board, hist, nextPlayer, drawEquivalentWinsForWhite, hist.alwaysComputePassAliveUnderSuicideRules);
+  return getSituationRulesAndKoHash(board, hist, nextPlayer, drawEquivalentWinsForWhite, hist.modes);
 }
 
 Hash128 BoardHistory::getSituationRulesAndKoHash(
   const Board& board, const BoardHistory& hist, Player nextPlayer, double drawEquivalentWinsForWhite,
-  bool alwaysComputePassAliveUnderSuicideRules
+  const BoardHistoryModes& modes
 ) {
   int xSize = board.x_size;
   int ySize = board.y_size;
@@ -1501,8 +1521,14 @@ Hash128 BoardHistory::getSituationRulesAndKoHash(
   //Fold in whether pass-alive computations are being performed as if suicide were legal, when that
   //differs from what the suicide rule alone would give. When the rules already have suicide legal
   //the flag is a no-op, and we deliberately don't fold it then, so that caches can be shared.
-  if(alwaysComputePassAliveUnderSuicideRules && !hist.rules.multiStoneSuicideLegal)
+  if(modes.alwaysComputePassAliveUnderSuicideRules && !hist.rules.multiStoneSuicideLegal)
     hash ^= Rules::ZOBRIST_PASS_ALIVE_UNDER_SUICIDE_HASH;
+
+  //Fold in whether territory scoring excludes points adjacent to atari, but only under the rules
+  //where the flag has any effect (territory scoring with no seki tax), so that caches can be shared
+  //between the modes under all other rules.
+  if(modes.excludeTerritoryAdjacentToAtari && hist.rules.scoringRule == Rules::SCORING_TERRITORY && hist.rules.taxRule == Rules::TAX_NONE)
+    hash ^= Rules::ZOBRIST_EXCLUDE_TERRITORY_ADJ_ATARI_HASH;
 
   return hash;
 }

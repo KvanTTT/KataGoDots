@@ -283,13 +283,12 @@ int MainCmds::samplesgfs(const vector<string>& args) {
 
     Setup::initializeSession(cfg);
     const int expectedConcurrentEvals = numThreads;
-    const int defaultMaxBatchSize = std::max(8,((numThreads+3)/4)*4);
     const bool defaultRequireExactNNLen = false;
     const bool disableFP16 = false;
     const string expectedSha256 = "";
     valueFluctuationNNEval = Setup::initializeNNEvaluator(
       valueFluctuationModelFile,valueFluctuationModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_ANALYSIS
     );
     logger.write("Loaded neural net");
@@ -431,7 +430,7 @@ int MainCmds::samplesgfs(const vector<string>& args) {
       Player nextPla;
       Rules rules = compactSgf.getRulesOrFailAllowUnspecified(Rules::getSimpleTerritory());
       //Featurize per the model's own declaration (no user-level search params in this mode).
-      BoardHistory hist = compactSgf.setupInitialBoardAndHist(rules, nextPla, valueFluctuationNNEval->modelPreferPassAliveUnderSuicideRules());
+      BoardHistory hist = compactSgf.setupInitialBoardAndHist(rules, nextPla, BoardHistoryModes(valueFluctuationNNEval->modelPreferPassAliveUnderSuicideRules(), valueFluctuationNNEval->modelPreferExcludeTerritoryAdjacentToAtari()));
       Board board = hist.initialBoard;
 
       if(valueFluctuationMakeKomiFair) {
@@ -1025,13 +1024,12 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
   {
     Setup::initializeSession(cfg);
     const int expectedConcurrentEvals = params.numThreads;
-    const int defaultMaxBatchSize = std::max(8,((params.numThreads+3)/4)*4);
     const bool defaultRequireExactNNLen = false;
     const bool disableFP16 = false;
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       nnModelFile,nnModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_ANALYSIS
     );
   }
@@ -1384,9 +1382,8 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
 
     Player nextPla;
     //Keep pass-alive computations and featurization consistent with how the search performs them.
-    BoardHistory hist = sgf.setupInitialBoardAndHist(rules, nextPla, search->getRootHist().alwaysComputePassAliveUnderSuicideRules);
+    BoardHistory hist = sgf.setupInitialBoardAndHist(rules, nextPla, search->getRootHist().modes);
     Board board = hist.initialBoard;
-
     if(!gameInit->isAllowedBSize(board.x_size,board.y_size)) {
       numFilteredSgfs.fetch_add(1);
       return;
@@ -1681,7 +1678,7 @@ int MainCmds::dataminesgfs(const vector<string>& args) {
     int encorePhase = 0;
     Player pla = sample.nextPla;
     //Keep pass-alive computations and featurization consistent with how the search performs them.
-    BoardHistory hist(board,pla,rules,encorePhase,search->getRootHist().alwaysComputePassAliveUnderSuicideRules);
+    BoardHistory hist(board,pla,rules,encorePhase,search->getRootHist().modes);
     int numSampleMoves = (int)sample.moves.size();
     for(int i = 0; i<numSampleMoves; i++) {
       if(!hist.isLegal(board,sample.moves[i].loc,sample.moves[i].pla))
@@ -2002,13 +1999,12 @@ int MainCmds::trystartposes(const vector<string>& args) {
   {
     Setup::initializeSession(cfg);
     const int expectedConcurrentEvals = params.numThreads;
-    const int defaultMaxBatchSize = std::max(8,((params.numThreads+3)/4)*4);
     const bool defaultRequireExactNNLen = false;
     const bool disableFP16 = false;
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       nnModelFile,nnModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_ANALYSIS
     );
   }
@@ -2187,13 +2183,12 @@ int MainCmds::viewstartposes(const vector<string>& args) {
     {
       Setup::initializeSession(cfg);
       const int expectedConcurrentEvals = params.numThreads;
-      const int defaultMaxBatchSize = std::max(8,((params.numThreads+3)/4)*4);
       const bool defaultRequireExactNNLen = false;
       const bool disableFP16 = false;
       const string expectedSha256 = "";
       nnEval = Setup::initializeNNEvaluator(
         modelFile,modelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-        Board::MAX_LEN_X,Board::MAX_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+        Board::MAX_LEN_X,Board::MAX_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
         Setup::SETUP_FOR_GTP
       );
     }
@@ -2354,13 +2349,12 @@ int MainCmds::checksgfhintpolicy(const vector<string>& args) {
   {
     Setup::initializeSession(cfg);
     const int expectedConcurrentEvals = 1;
-    const int defaultMaxBatchSize = 8;
     const bool defaultRequireExactNNLen = false;
     const bool disableFP16 = false;
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       nnModelFile,nnModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_ANALYSIS
     );
   }
@@ -2413,7 +2407,7 @@ int MainCmds::checksgfhintpolicy(const vector<string>& args) {
           Player nextPla;
           BoardHistory histBefore;
           //Featurize per the model's own declaration (this command has no search params to consult).
-          bool suc = priorPosSample.tryGetCurrentBoardHistory(rules,nextPla,histBefore,nnEval->modelPreferPassAliveUnderSuicideRules());
+          bool suc = priorPosSample.tryGetCurrentBoardHistory(rules,nextPla,histBefore,BoardHistoryModes(nnEval->modelPreferPassAliveUnderSuicideRules(), nnEval->modelPreferExcludeTerritoryAdjacentToAtari()));
           if(!suc) {
             logger.write("WARNING: unable to get current history for pos, skipping: " + Sgf::PositionSample::toJsonLine(priorPosSample));
             continue;
@@ -2508,13 +2502,12 @@ int MainCmds::genposesfromselfplayinit(const vector<string>& args) {
   {
     Setup::initializeSession(cfg);
     const int expectedConcurrentEvals = params.numThreads;
-    const int defaultMaxBatchSize = std::max(8,((params.numThreads+3)/4)*4);
     const bool defaultRequireExactNNLen = false;
     const bool disableFP16 = false;
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       nnModelFile,nnModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_ANALYSIS
     );
   }

@@ -134,7 +134,7 @@ struct Sgf {
     Sgf::PositionSample previousPosition(double newWeight) const;
     bool hasPreviousPositions(int numPrevious) const;
 
-    bool tryGetCurrentBoardHistory(const Rules& rules, Player& nextPlaToMove, BoardHistory& hist, bool alwaysComputePassAliveUnderSuicideRules) const;
+    bool tryGetCurrentBoardHistory(const Rules& rules, Player& nextPlaToMove, BoardHistory& hist, const BoardHistoryModes& modes) const;
 
     int64_t getCurrentTurnNumber() const;
 
@@ -250,12 +250,12 @@ struct CompactSgf {
   Rules getRulesOrFailAllowUnspecified(const Rules& defaultRules) const;
   Rules getRulesOrWarn(const Rules& defaultRules, const std::function<void(const std::string& msg)>& f) const;
 
-  BoardHistory setupInitialBoardAndHist(const Rules& initialRules, Player& nextPla, bool alwaysComputePassAliveUnderSuicideRules) const;
+  BoardHistory setupInitialBoardAndHist(const Rules& initialRules, Player& nextPla, const BoardHistoryModes& modes) const;
   void playMovesAssumeLegal(Board& board, Player& nextPla, BoardHistory& hist, int64_t turnIdx) const;
-  std::pair<BoardHistory, Board> setupBoardAndHistAssumeLegal(const Rules& initialRules, Player& nextPla, int64_t turnIdx, bool alwaysComputePassAliveUnderSuicideRules) const;
+  std::pair<BoardHistory, Board> setupBoardAndHistAssumeLegal(const Rules& initialRules, Player& nextPla, int64_t turnIdx, const BoardHistoryModes& modes) const;
   //These throw a StringError upon illegal move.
   void playMovesTolerant(Board& board, Player& nextPla, BoardHistory& hist, int64_t turnIdx, bool preventEncore) const;
-  std::pair<BoardHistory, Board> setupBoardAndHistTolerant(const Rules& initialRules, Player& nextPla, int64_t turnIdx, bool preventEncore, bool alwaysComputePassAliveUnderSuicideRules) const;
+  std::pair<BoardHistory, Board> setupBoardAndHistTolerant(const Rules& initialRules, Player& nextPla, int64_t turnIdx, bool preventEncore, const BoardHistoryModes& modes) const;
 };
 
 namespace WriteSgf {

@@ -122,6 +122,9 @@ void AsyncBot::setAvoidMoveUntilRescaleRoot(bool b) {
   stopAndWait();
   search->setAvoidMoveUntilRescaleRoot(b);
 }
+void AsyncBot::setRootFocus(const std::vector<Loc>& moves, const std::vector<double>& weights, double prob) {
+  search->setRootFocus(moves,weights,prob);
+}
 void AsyncBot::setRootHintLoc(Loc loc) {
   stopAndWait();
   search->setRootHintLoc(loc);

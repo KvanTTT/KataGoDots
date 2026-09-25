@@ -47,6 +47,12 @@ struct AnalyzeRequest {
   vector<int> avoidMoveUntilByLocBlack;
   vector<int> avoidMoveUntilByLocWhite;
 
+  //Root focus moves, their relative weights, and the probability that each root playout is redirected into one of them.
+  //The set_focus action may change these while the request is open, under openRequestsMutex.
+  vector<Loc> focusMoves;
+  vector<double> focusWeights;
+  double focusProb;
+
   //Starts with STATUS_IN_QUEUE.
   //Thread that grabs it from queue it changes it to STATUS_POPPED
   //Once search is fully started thread sticks in its own thread index
@@ -57,6 +63,9 @@ struct AnalyzeRequest {
   static constexpr int STATUS_TERMINATED = -3;
   std::atomic<int> status;
 };
+
+//Used when focusMoves is specified without focusProb.
+static constexpr double DEFAULT_FOCUS_PROB = 0.5;
 
 
 int MainCmds::analysis(const vector<string>& args) {
@@ -172,18 +181,18 @@ int MainCmds::analysis(const vector<string>& args) {
     const bool defaultRequireExactNNLen = false;
     //A config that doesn't specify `nnMaxBatchSize` is served with a batch that fits the search threads,
     //so that a config of another command (a GTP one) may be used for an analysis as it is
-    const int defaultMaxBatchSize = expectedConcurrentEvals;
+    const Setup::MaxBatchSizeRequest maxBatchSizeRequest = Setup::MaxBatchSizeRequest::fromConcurrency();
     const bool disableFP16 = false;
     const string expectedSha256 = "";
     nnEval = Setup::initializeNNEvaluator(
       modelFile,modelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,maxBatchSizeRequest,defaultRequireExactNNLen,disableFP16,
       Setup::SETUP_FOR_ANALYSIS
     );
     if(humanModelFile != "") {
       humanEval = Setup::initializeNNEvaluator(
         humanModelFile,humanModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-        NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+        NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,maxBatchSizeRequest,defaultRequireExactNNLen,disableFP16,
         Setup::SETUP_FOR_ANALYSIS
       );
       if(!humanEval->requiresSGFMetadata()) {
@@ -262,24 +271,30 @@ int MainCmds::analysis(const vector<string>& args) {
     "firstReportDuringSearchAfter",
     "priority",
     "allowMoves",
-    "avoidMoves"
+    "avoidMoves",
+    "focusMoves",
+    "focusWeights",
+    "focusProb",
+    "targetId"
   };
 
   ThreadSafeQueue<string*> toWriteQueue;
-  auto writeLoop = [&toWriteQueue,&logAllResponses,&logger]() {
+  auto writeLoop = [&toWriteQueue]() {
     while(true) {
       string* message;
       bool suc = toWriteQueue.waitPop(message);
       if(!suc)
         break;
       cout << *message << endl;
-      if(logAllResponses)
-        logger.write("Response: " + *message);
       delete message;
     }
   };
 
-  auto pushToWrite = [&toWriteQueue](string* s) {
+  auto pushToWrite = [&toWriteQueue,&logAllResponses,&logger](string* s) {
+    //Log on the thread that produced the response, rather than on the write thread, so that the log order
+    //of a response relative to the request or error that produced it does not depend on thread timing.
+    if(logAllResponses)
+      logger.write("Response: " + *s);
     bool suc = toWriteQueue.forcePush(s);
     if(!suc)
       delete s;
@@ -395,13 +410,19 @@ int MainCmds::analysis(const vector<string>& args) {
         double searchFactor = 1.0;
 
         //Handle termination between the time we pop and the search starts
-        std::function<void()> onSearchBegun = [&request,&bot,&threadIdx]() {
+        std::function<void()> onSearchBegun = [&request,&bot,&threadIdx,&openRequestsMutex]() {
           //Try to record that we're handling this request and indicate that the search is started by this thread
           int expected2 = AnalyzeRequest::STATUS_POPPED;
           //If it was terminated, then stop our search
           if(!request->status.compare_exchange_strong(expected2, threadIdx, std::memory_order_acq_rel)) {
             testAssert(expected2 == AnalyzeRequest::STATUS_TERMINATED);
             bot->stopWithoutWait();
+          }
+          //Apply the focus only now that our thread index is recorded, so that a set_focus action either updated
+          //the fields we read here or saw our thread index and set the focus on the bot itself. See setRequestFocus.
+          {
+            std::lock_guard<std::mutex> lock(openRequestsMutex);
+            bot->setRootFocus(request->focusMoves,request->focusWeights,request->focusProb);
           }
         };
 
@@ -502,6 +523,42 @@ int MainCmds::analysis(const vector<string>& args) {
       //Terminate it by thread index
       bots[threadIdx]->stopWithoutWait();
     }
+  };
+
+  //Parse an optional focusWeights field, which must be an array of positive numbers parallel to focusMoves.
+  auto parseFocusWeights = [&reportErrorForId](const string& id, const json& dict, size_t numFocusMoves, vector<double>& buf) {
+    const json& weights = dict["focusWeights"];
+    if(!weights.is_array() || weights.size() != numFocusMoves) {
+      reportErrorForId(id, "focusWeights", "Must be an array of positive numbers with the same length as focusMoves");
+      return false;
+    }
+    buf.clear();
+    for(const json& elt : weights) {
+      double weight = 0.0;
+      if(elt.is_number())
+        weight = elt.get<double>();
+      if(!isfinite(weight) || weight <= 0.0) {
+        reportErrorForId(id, "focusWeights", "Must be an array of positive numbers with the same length as focusMoves");
+        return false;
+      }
+      buf.push_back(weight);
+    }
+    return true;
+  };
+
+  //Change the focus of a request. Must be called with openRequestsMutex held, which guarantees that the request is
+  //still open and so any thread index in its status still refers to the bot searching it.
+  //The fields are written before the status is read here, while the analyzing thread stores its thread index into
+  //the status before it reads the fields under the same mutex. So either the thread sees the new fields when it
+  //starts, or we see the thread index and set the focus on its bot directly. Setting the focus on a bot whose search
+  //for this request has just ended is harmless, since the next request resets it.
+  auto setRequestFocus = [&bots](AnalyzeRequest* request, const vector<Loc>& focusMoves, const vector<double>& focusWeights, double focusProb) {
+    request->focusMoves = focusMoves;
+    request->focusWeights = focusWeights;
+    request->focusProb = focusProb;
+    int status = request->status.load(std::memory_order_acquire);
+    if(status >= 0)
+      bots[status]->setRootFocus(focusMoves,focusWeights,focusProb);
   };
 
   auto requestLoop = [&]() {
@@ -639,8 +696,95 @@ int MainCmds::analysis(const vector<string>& args) {
           }
           pushToWrite(new string(input.dump()));
         }
+        else if(action == "set_focus") {
+          string targetId;
+          if(input.find("targetId") != input.end() && input["targetId"].is_string()) {
+            targetId = input["targetId"].get<string>();
+          }
+          else {
+            reportErrorForId(rbase.id, "targetId", "Requests for a set_focus action must have a string \"targetId\" field");
+            continue;
+          }
+
+          bool hasTurnNumbers = false;
+          vector<int> turnNumbers;
+          if(input.find("turnNumbers") != input.end()) {
+            try {
+              turnNumbers = input["turnNumbers"].get<vector<int> >();
+              hasTurnNumbers = true;
+            }
+            catch(nlohmann::detail::exception&) {
+              reportErrorForId(rbase.id, "turnNumbers", "If provided, must be an array of integers indicating turns to change the focus of");
+              continue;
+            }
+          }
+
+          vector<string> focusMoveStrs;
+          if(input.find("focusMoves") != input.end()) {
+            try {
+              focusMoveStrs = input["focusMoves"].get<vector<string> >();
+            }
+            catch(nlohmann::detail::exception&) {
+              reportErrorForId(rbase.id, "focusMoves", "Must be an array of GTP board vertices");
+              continue;
+            }
+          }
+
+          vector<double> focusWeights(focusMoveStrs.size(), 1.0);
+          if(input.find("focusWeights") != input.end()) {
+            if(!parseFocusWeights(rbase.id, input, focusMoveStrs.size(), focusWeights))
+              continue;
+          }
+
+          double focusProb = DEFAULT_FOCUS_PROB;
+          if(input.find("focusProb") != input.end()) {
+            bool valid = input["focusProb"].is_number();
+            if(valid) {
+              focusProb = input["focusProb"].get<double>();
+              valid = isfinite(focusProb) && focusProb >= 0.0 && focusProb <= 1.0;
+            }
+            if(!valid) {
+              reportErrorForId(rbase.id, "focusProb", "Must be a number from 0.0 to 1.0");
+              continue;
+            }
+          }
+
+          bool failed = false;
+          {
+            std::lock_guard<std::mutex> lock(openRequestsMutex);
+            std::set<int> turnNumbersSet(turnNumbers.begin(),turnNumbers.end());
+            //The board size is only known per request, so parse the moves against each matching request's own board,
+            //and apply the updates only if all of them parse.
+            vector<std::pair<AnalyzeRequest*,vector<Loc> > > updates;
+            for(auto it = openRequests.begin(); it != openRequests.end(); ++it) {
+              AnalyzeRequest* request = it->second;
+              if(request->id != targetId || (hasTurnNumbers && turnNumbersSet.find(request->turnNumber) == turnNumbersSet.end()))
+                continue;
+              vector<Loc> focusMoves;
+              for(const string& s: focusMoveStrs) {
+                Loc loc;
+                if(!Location::tryOfString(s, request->board.x_size, request->board.y_size, loc) || loc == Board::NULL_LOC) {
+                  reportErrorForId(rbase.id, "focusMoves", "Could not parse board location: " + s);
+                  failed = true;
+                  break;
+                }
+                focusMoves.push_back(loc);
+              }
+              if(failed)
+                break;
+              updates.push_back(std::make_pair(request,focusMoves));
+            }
+            if(!failed) {
+              for(size_t i = 0; i<updates.size(); i++)
+                setRequestFocus(updates[i].first, updates[i].second, focusWeights, focusProb);
+            }
+          }
+          if(failed)
+            continue;
+          pushToWrite(new string(input.dump()));
+        }
         else {
-          reportError("'action' field must be 'query_version' or 'query_models' or 'clear_cache' or 'terminate' or 'terminate_all'");
+          reportError("'action' field must be 'query_version' or 'query_models' or 'clear_cache' or 'terminate' or 'terminate_all' or 'set_focus'");
         }
 
         continue;
@@ -664,6 +808,9 @@ int MainCmds::analysis(const vector<string>& args) {
       rbase.priority = 0;
       rbase.avoidMoveUntilByLocBlack.clear();
       rbase.avoidMoveUntilByLocWhite.clear();
+      rbase.focusMoves.clear();
+      rbase.focusWeights.clear();
+      rbase.focusProb = DEFAULT_FOCUS_PROB;
 
       auto parseInteger = [&rbase,&reportErrorForId](const json& dict, const char* field, int64_t& buf, int64_t min, int64_t max, const char* errorMessage) {
         try {
@@ -1264,6 +1411,23 @@ int MainCmds::analysis(const vector<string>& args) {
           continue;
       }
 
+if(input.find("focusMoves") != input.end()) {
+        bool suc = parseBoardLocs(input, "focusMoves", rbase.focusMoves, true);
+        if(!suc)
+          continue;
+      }
+      rbase.focusWeights.assign(rbase.focusMoves.size(), 1.0);
+      if(input.find("focusWeights") != input.end()) {
+        bool suc = parseFocusWeights(rbase.id, input, rbase.focusMoves.size(), rbase.focusWeights);
+        if(!suc)
+          continue;
+      }
+      if(input.find("focusProb") != input.end()) {
+        bool suc = parseDouble(input, "focusProb", rbase.focusProb, 0.0, 1.0, "Must be a number from 0.0 to 1.0");
+        if(!suc)
+          continue;
+      }
+
       Board board(boardXSize,boardYSize,rules);
       for(int i = 0; i<placements.size(); i++) {
         board.setStone(placements[i].loc,placements[i].pla);
@@ -1297,10 +1461,10 @@ int MainCmds::analysis(const vector<string>& args) {
       }
 
       Player nextPla = initialPlayer;
-      //Keep this request's history consistent with the pass-alive computation mode that the search
+      //Keep this request's history consistent with the BoardHistoryModes that the search
       //for this request will resolve to. (The search would re-stamp its own copy anyway, but this keeps
-      //any adjudication done during request setup/replay consistent with it.)
-      BoardHistory hist(board,nextPla,rules,0,Search::resolveAlwaysComputePassAliveUnderSuicideRules(rbase.params, nnEval));
+      //any adjudication done during request setup/replay consistent with them.)
+      BoardHistory hist(board,nextPla,rules,0,Search::resolveHistoryModes(rbase.params, nnEval));
       hist.setAssumeMultipleStartingBlackMovesAreHandicap(assumeMultipleStartingBlackMovesAreHandicap);
 
       if(warnUnusedFields) {
@@ -1361,6 +1525,9 @@ int MainCmds::analysis(const vector<string>& args) {
           newRequest->priority = priority;
           newRequest->avoidMoveUntilByLocBlack = rbase.avoidMoveUntilByLocBlack;
           newRequest->avoidMoveUntilByLocWhite = rbase.avoidMoveUntilByLocWhite;
+          newRequest->focusMoves = rbase.focusMoves;
+          newRequest->focusWeights = rbase.focusWeights;
+          newRequest->focusProb = rbase.focusProb;
           newRequest->status.store(AnalyzeRequest::STATUS_IN_QUEUE,std::memory_order_release);
           newRequests.push_back(newRequest);
         }

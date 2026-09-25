@@ -511,19 +511,18 @@ struct GTPEngine {
       }
 
       const int expectedConcurrentEvals = std::max(genmoveParams.numThreads, analysisParams.numThreads);
-      const int defaultMaxBatchSize = std::max(8,((expectedConcurrentEvals+3)/4)*4);
       const bool disableFP16 = false;
       const string expectedSha256 = "";
       nnEval = Setup::initializeNNEvaluator(
         nnModelFile,nnModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-        nnXLen,nnYLen,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+        nnXLen,nnYLen,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
         Setup::SETUP_FOR_GTP
       );
       logger.write("Loaded neural net with nnXLen " + Global::intToString(nnEval->getNNXLen()) + " nnYLen " + Global::intToString(nnEval->getNNYLen()));
       if(humanModelFile != "") {
         humanEval = Setup::initializeNNEvaluator(
           humanModelFile,humanModelFile,expectedSha256,cfg,logger,seedRand,expectedConcurrentEvals,
-          nnXLen,nnYLen,defaultMaxBatchSize,defaultRequireExactNNLen,disableFP16,
+          nnXLen,nnYLen,Setup::MaxBatchSizeRequest::fromConcurrency(),defaultRequireExactNNLen,disableFP16,
           Setup::SETUP_FOR_GTP
         );
         logger.write("Loaded human SL net with nnXLen " + Global::intToString(humanEval->getNNXLen()) + " nnYLen " + Global::intToString(humanEval->getNNYLen()));
@@ -577,7 +576,7 @@ struct GTPEngine {
 
       Board board(boardXSize,boardYSize,currentRules);
       const Player pla = board.setStartPos(seedRand);
-      BoardHistory hist(board,pla,currentRules,0,Search::resolveAlwaysComputePassAliveUnderSuicideRules(genmoveParams,nnEval));
+      BoardHistory hist(board,pla,currentRules,0,Search::resolveHistoryModes(genmoveParams,nnEval));
       hist.setInitialTurnNumber(board.numStonesOnBoard());
       const vector<Move> newMoveHistory;
       setPositionAndRules(pla,board,hist,board,pla,newMoveHistory);
@@ -611,7 +610,7 @@ struct GTPEngine {
     int newYSize = bot->getRootBoard().y_size;
     Board board(newXSize,newYSize,currentRules);
     const Player pla = board.setStartPos(gtpRand);
-    BoardHistory hist(board,pla,currentRules,0,Search::resolveAlwaysComputePassAliveUnderSuicideRules(genmoveParams,nnEval));
+    BoardHistory hist(board,pla,currentRules,0,Search::resolveHistoryModes(genmoveParams,nnEval));
     vector<Move> newMoveHistory;
     setPositionAndRules(pla,board,hist,board,pla,newMoveHistory);
     clearStatsForNewGame();
@@ -642,7 +641,7 @@ struct GTPEngine {
       }
     }
     constexpr Player pla = P_BLACK;
-    BoardHistory hist(board,pla,currentRules,0,Search::resolveAlwaysComputePassAliveUnderSuicideRules(genmoveParams,nnEval));
+    BoardHistory hist(board,pla,currentRules,0,Search::resolveHistoryModes(genmoveParams,nnEval));
     hist.setInitialTurnNumber(board.numStonesOnBoard()); // Heuristic to guess at what turn this is
     const vector<Move> newMoveHistory;
     setPositionAndRules(pla,board,hist,board,pla,newMoveHistory);
@@ -698,7 +697,7 @@ struct GTPEngine {
     const vector<Move> moveHistoryCopy = moveHistory;
 
     const Board undoneBoard = initialBoard;
-    BoardHistory undoneHist(undoneBoard,initialPla,currentRules,0,Search::resolveAlwaysComputePassAliveUnderSuicideRules(genmoveParams,nnEval));
+    BoardHistory undoneHist(undoneBoard,initialPla,currentRules,0,Search::resolveHistoryModes(genmoveParams,nnEval));
     undoneHist.setInitialTurnNumber(hist.initialTurnNumber);
     const vector<Move> emptyMoveHistory;
     setPositionAndRules(initialPla,undoneBoard,undoneHist,initialBoard,initialPla,emptyMoveHistory);
@@ -726,7 +725,7 @@ struct GTPEngine {
     vector<Move> moveHistoryCopy = moveHistory;
 
     Board board = initialBoard;
-    BoardHistory hist(board,initialPla,newRules,0,Search::resolveAlwaysComputePassAliveUnderSuicideRules(genmoveParams,nnEval));
+    BoardHistory hist(board,initialPla,newRules,0,Search::resolveHistoryModes(genmoveParams,nnEval));
     hist.setInitialTurnNumber(bot->getRootHist().initialTurnNumber);
     vector<Move> emptyMoveHistory;
     setPositionAndRules(initialPla,board,hist,initialBoard,initialPla,emptyMoveHistory);
@@ -748,18 +747,18 @@ struct GTPEngine {
   }
 
   //Re-replay the current game from the beginning under the currently resolved
-  //alwaysComputePassAliveUnderSuicideRules mode. Used when a runtime params change (kata-set-param)
-  //flips that mode - the bot's own rootHistory gets re-stamped by setParams, but re-stamping
-  //deliberately does not re-adjudicate game state recorded under the old mode (e.g. an
+  //BoardHistoryModes. Used when a runtime params change (kata-set-param)
+  //flips a mode - the bot's own rootHistory gets re-stamped by setParams, but re-stamping
+  //deliberately does not re-adjudicate game state recorded under the old modes (e.g. an
   //automatically detected game end), whereas replaying recomputes everything as if the engine had
-  //been using the new mode all along. This also keeps the state consistent with what a later
+  //been using the new modes all along. This also keeps the state consistent with what a later
   //rebuild-and-replay (undo, kata-set-rules) would produce.
-  void rereplayGameForPassAliveModeChange() {
+  void rereplayGameForHistoryModesChange() {
     testAssert(bot->getRootHist().rules == currentRules);
     vector<Move> moveHistoryCopy = moveHistory;
 
     Board board = initialBoard;
-    BoardHistory hist(board,initialPla,currentRules,0,Search::resolveAlwaysComputePassAliveUnderSuicideRules(genmoveParams,nnEval));
+    BoardHistory hist(board,initialPla,currentRules,0,Search::resolveHistoryModes(genmoveParams,nnEval));
     hist.setInitialTurnNumber(bot->getRootHist().initialTurnNumber);
     vector<Move> emptyMoveHistory;
     setPositionAndRules(initialPla,board,hist,initialBoard,initialPla,emptyMoveHistory);
@@ -808,6 +807,9 @@ struct GTPEngine {
     double secondsPerReport = TimeControls::UNLIMITED_TIME_DEFAULT;
     vector<int> avoidMoveUntilByLocBlack;
     vector<int> avoidMoveUntilByLocWhite;
+    vector<Loc> focusMoves;
+    vector<double> focusWeights;
+    double focusProb = 0.0;
   };
 
   void filterZeroVisitMoves(const AnalyzeArgs& args, vector<AnalysisData> buf) {
@@ -1203,6 +1205,7 @@ struct GTPEngine {
     lastSearchFactor = searchFactor;
 
     bot->setAvoidMoveUntilByLoc(args.avoidMoveUntilByLocBlack,args.avoidMoveUntilByLocWhite);
+    bot->setRootFocus(args.focusMoves,args.focusWeights,args.focusProb);
 
     //So that we can tell by the end of the search whether we still care for the result.
     int expectedSearchId = (genmoveExpectedId.load() + 1) & 0x3FFFFFFF;
@@ -1403,7 +1406,7 @@ struct GTPEngine {
     }
     testAssert(bot->getRootHist().rules == currentRules);
 
-    BoardHistory hist(board,pla,currentRules,0,Search::resolveAlwaysComputePassAliveUnderSuicideRules(genmoveParams,nnEval));
+    BoardHistory hist(board,pla,currentRules,0,Search::resolveHistoryModes(genmoveParams,nnEval));
 
     //Also switch the initial player, expecting white should be next.
     hist.clear(board,P_WHITE,currentRules,0);
@@ -1439,7 +1442,7 @@ struct GTPEngine {
 
     Board board(xSize,ySize,currentRules);
     Player pla = board.setStartPos(rand);
-    BoardHistory hist(board,pla,currentRules,0,Search::resolveAlwaysComputePassAliveUnderSuicideRules(genmoveParams,nnEval));
+    BoardHistory hist(board,pla,currentRules,0,Search::resolveHistoryModes(genmoveParams,nnEval));
     double extraBlackTemperature = 0.25;
     const auto& handicapLocs = PlayUtils::playExtraBlack(bot->getSearchStopAndWait(), n, board, hist, extraBlackTemperature, rand);
     //Also switch the initial player, expecting white should be next.
@@ -1469,6 +1472,7 @@ struct GTPEngine {
 
     std::function<void(const Search* search)> callback = getAnalyzeCallback(pla,args);
     bot->setAvoidMoveUntilByLoc(args.avoidMoveUntilByLocBlack,args.avoidMoveUntilByLocWhite);
+    bot->setRootFocus(args.focusMoves,args.focusWeights,args.focusProb);
     if(args.showOwnership || args.showOwnershipStdev || args.showMovesOwnership || args.showMovesOwnershipStdev)
       bot->setAlwaysIncludeOwnerMap(true);
     else
@@ -1686,10 +1690,13 @@ struct GTPEngine {
         nnInputParams.symmetry = symmetry;
         nnInputParams.policyOptimism = policyOptimism;
         //When evaluating the human model, featurize per its own resolution (which may differ from the
-        //main search's mode carried by the history), matching how in-search human evals featurize.
-        if(useHumanModel)
+        //main search's modes carried by the history), matching how in-search human evals featurize.
+        if(useHumanModel) {
           nnInputParams.passAliveSuicideRulesOverride =
             Search::resolveAlwaysComputePassAliveUnderSuicideRules(analysisParams, humanEval) ? 1 : 0;
+          nnInputParams.excludeTerritoryAdjAtariOverride =
+            Search::resolveExcludeTerritoryAdjacentToAtari(analysisParams, humanEval) ? 1 : 0;
+        }
         NNResultBuf buf;
         bool skipCache = true;
         bool includeOwnerMap = true;
@@ -1807,6 +1814,10 @@ static GTPEngine::AnalyzeArgs parseAnalyzeCommand(
   bool gotAllowMovesBlack = false;
   bool gotAvoidMovesWhite = false;
   bool gotAllowMovesWhite = false;
+  vector<Loc> focusMoves;
+  vector<double> focusWeights;
+  double focusProb = 0.0;
+  bool gotFocus = false;
 
   parseFailed = false;
 
@@ -1816,6 +1827,7 @@ static GTPEngine::AnalyzeArgs parseAnalyzeCommand(
 
   //interval <float interval in centiseconds>
   //avoid <player> <comma-separated moves> <until movenum>
+  //focus <comma-separated moves, each optionally suffixed with :weight> <probability>
   //minmoves <int min number of moves to show>
   //maxmoves <int max number of moves to show>
   //ownership <bool whether to show ownership or not>
@@ -1912,6 +1924,48 @@ static GTPEngine::AnalyzeArgs parseAnalyzeCommand(
 
       continue;
     }
+    else if(key == "focus") {
+      //Can only be specified once. Parse one more argument.
+      if(gotFocus || pieces.size() < numArgsParsed+1) {
+        parseFailed = true;
+        break;
+      }
+      gotFocus = true;
+      const string& probStr = pieces[numArgsParsed];
+      numArgsParsed += 1;
+
+      if(!Global::tryStringToDouble(probStr,focusProb) || isnan(focusProb) || focusProb < 0.0 || focusProb > 1.0) {
+        parseFailed = true;
+        break;
+      }
+      vector<string> locPieces = Global::split(value,',');
+      for(size_t i = 0; i<locPieces.size(); i++) {
+        string s = Global::trim(locPieces[i]);
+        if(s.size() <= 0)
+          continue;
+        //Each move may carry a weight after a colon, such as C3:2. Missing weights default to 1.
+        double weight = 1.0;
+        size_t colonPos = s.find(':');
+        if(colonPos != string::npos) {
+          string weightStr = s.substr(colonPos+1);
+          s = s.substr(0,colonPos);
+          if(!Global::tryStringToDouble(weightStr,weight) || !isfinite(weight) || weight <= 0.0) {
+            parseFailed = true;
+            break;
+          }
+        }
+        Loc loc;
+        if(!tryParseLoc(s,engine->bot->getRootBoard(),loc)) {
+          parseFailed = true;
+          break;
+        }
+        focusMoves.push_back(loc);
+        focusWeights.push_back(weight);
+      }
+      if(parseFailed)
+        break;
+      continue;
+    }
     else if(key == "minmoves" && Global::tryStringToInt(value,minMoves) &&
             minMoves >= 0 && minMoves < 1000000000) {
       continue;
@@ -1967,6 +2021,9 @@ static GTPEngine::AnalyzeArgs parseAnalyzeCommand(
   args.showNoResultValue = showNoResultValue;
   args.avoidMoveUntilByLocBlack = avoidMoveUntilByLocBlack;
   args.avoidMoveUntilByLocWhite = avoidMoveUntilByLocWhite;
+  args.focusMoves = focusMoves;
+  args.focusWeights = focusWeights;
+  args.focusProb = focusProb;
   return args;
 }
 
@@ -2866,15 +2923,15 @@ int MainCmds::gtp(const vector<string>& args) {
 
           SearchParams::failIfParamsDifferOnUnchangeableParameter(initialGenmoveParams,genmoveParams);
           SearchParams::failIfParamsDifferOnUnchangeableParameter(initialAnalysisParams,analysisParams);
-          bool oldPassAliveMode = Search::resolveAlwaysComputePassAliveUnderSuicideRules(engine->getGenmoveParams(),engine->nnEval);
+          BoardHistoryModes oldHistoryModes = Search::resolveHistoryModes(engine->getGenmoveParams(),engine->nnEval);
           engine->setGenmoveParamsIfChanged(genmoveParams);
           engine->setAnalysisParamsIfChanged(analysisParams);
-          //If the params change flipped the resolved pass-alive computation mode, re-replay the game
-          //so all recorded game state is recomputed under the new mode (re-stamping alone does not
-          //re-adjudicate). Done after both param sets are updated so the replay runs under the new mode.
-          bool newPassAliveMode = Search::resolveAlwaysComputePassAliveUnderSuicideRules(engine->getGenmoveParams(),engine->nnEval);
-          if(newPassAliveMode != oldPassAliveMode)
-            engine->rereplayGameForPassAliveModeChange();
+          //If the params change flipped any resolved BoardHistoryModes flag, re-replay the game
+          //so all recorded game state is recomputed under the new modes (re-stamping alone does not
+          //re-adjudicate). Done after both param sets are updated so the replay runs under the new modes.
+          BoardHistoryModes newHistoryModes = Search::resolveHistoryModes(engine->getGenmoveParams(),engine->nnEval);
+          if(newHistoryModes != oldHistoryModes)
+            engine->rereplayGameForHistoryModesChange();
           staticPDATakesPrecedence = cfg.contains("playoutDoublingAdvantage") && !cfg.contains("dynamicPlayoutDoublingAdvantageCapPerOppLead");
           engine->staticPDATakesPrecedence = staticPDATakesPrecedence;
           allowResignation = desiredAllowResignation;
@@ -3585,7 +3642,7 @@ int MainCmds::gtp(const vector<string>& args) {
         else {
           maybeSaveAvoidPatterns(false);
           Player pla = P_WHITE;
-          BoardHistory hist(board,pla,engine->getCurrentRules(),0,Search::resolveAlwaysComputePassAliveUnderSuicideRules(engine->getGenmoveParams(),engine->nnEval));
+          BoardHistory hist(board,pla,engine->getCurrentRules(),0,Search::resolveHistoryModes(engine->getGenmoveParams(),engine->nnEval));
           hist.setInitialTurnNumber(board.numStonesOnBoard()); //Should give more accurate temperaure and time control behavior
           vector<Move> newMoveHistory;
           engine->setPositionAndRules(pla,board,hist,board,pla,newMoveHistory);
@@ -3764,11 +3821,11 @@ int MainCmds::gtp(const vector<string>& args) {
             }
           }
 
-          //Set up with the pass-alive computation mode the bot will be using BEFORE replaying the
+          //Set up with the BoardHistoryModes the bot will be using BEFORE replaying the
           //moves, so that any game-end adjudication happening during the replay matches what the
           //same moves would give if entered via play commands on the bot's own history.
           BoardHistory sgfInitialHist = sgf->setupInitialBoardAndHist(
-            sgfRules, sgfInitialNextPla, Search::resolveAlwaysComputePassAliveUnderSuicideRules(engine->getGenmoveParams(), engine->nnEval)
+            sgfRules, sgfInitialNextPla, Search::resolveHistoryModes(engine->getGenmoveParams(), engine->nnEval)
           );
           sgfInitialBoard = sgfInitialHist.initialBoard;
           sgfInitialHist.setInitialTurnNumber(sgfInitialBoard.numStonesOnBoard()); //Should give more accurate temperaure and time control behavior

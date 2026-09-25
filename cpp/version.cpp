@@ -20,7 +20,7 @@ string Version::getAppName() {
 }
 
 string Version::getAppVersion() {
-  return "1.17.1";
+  return "1.18.2";
 }
 
 string Version::getBuildType() {
@@ -79,10 +79,15 @@ string Version::getAppFullInfo(bool csv) {
 #if defined(USE_AVX2)
     out << "Compiled with AVX2 and FMA instructions" << endl;
 #endif
+
 #if defined(CACHE_TENSORRT_PLAN) && defined(USE_TENSORRT_BACKEND)
     out << "Compiled with TensorRT plan cache" << endl;
 #elif defined(BUILD_DISTRIBUTED)
     out << "Compiled to support contributing to online distributed selfplay" << endl;
+#endif
+
+#if defined(HIP_VERSION_MAJOR) && defined(HIP_VERSION_MINOR) && defined(HIP_VERSION_PATCH)
+    out << "Compiled with HIP version " << HIP_VERSION_MAJOR << "." << HIP_VERSION_MINOR << "." << HIP_VERSION_PATCH << endl;
 #endif
   }
 
@@ -110,16 +115,24 @@ string Version::getBackend() {
   "CUDA"
 #elif defined(USE_TENSORRT_BACKEND)
   "TensorRT"
+#elif defined(USE_ROCM_BACKEND)
+  "ROCm"
 #elif defined(USE_METAL_BACKEND)
   "Metal"
 #elif defined(USE_OPENCL_BACKEND)
   "OpenCL"
 #elif defined(USE_EIGEN_BACKEND)
   "Eigen"
+#elif defined(USE_ONNX_BACKEND)
+  "ONNX"
 #else
   "dummy"
 #endif
   ;
+}
+
+string Version::getGitRevisionWithBackend() {
+  return getGitRevision() + "-" + Global::toLower(getBackend());
 }
 
 string Version::getCompilationDateTime(const bool csv) {

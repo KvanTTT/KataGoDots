@@ -73,7 +73,7 @@ Search::Search(const SearchParams &params, NNEvaluator* nnEval, Logger* lg, cons
     rootGraphHash(),
     rootHintLoc(Board::NULL_LOC),
     avoidMoveUntilByLocBlack(), avoidMoveUntilByLocWhite(), avoidMoveUntilRescaleRoot(false),
-    rootSymmetries(),
+    rootFocus(nullptr),rootFocusCleanupMutex(),rootFocusToCleanUp(),rootSymmetries(),
     rootPruneOnlySymmetries(),
     rootSafeArea(NULL),
     recentScoreCenter(0.0),
@@ -143,7 +143,7 @@ Search::Search(const SearchParams &params, NNEvaluator* nnEval, Logger* lg, cons
   mutexPool = new MutexPool(nodeTable->mutexPool->getNumMutexes());
 
   rootHistory.clear(rootBoard,rootPla, rules.isDots ? Rules::DEFAULT_DOTS : Rules::DEFAULT_GO,0);
-  applyPassAliveModeToRootHistory();
+  applyHistoryModesToRootHistory();
   if (!rootHistory.rules.isDots) {
     rootKoHashTable->recompute(rootHistory);
   }
@@ -152,6 +152,8 @@ Search::Search(const SearchParams &params, NNEvaluator* nnEval, Logger* lg, cons
 Search::~Search() {
   clearSearch();
 
+  cleanUpOldRootFocus();
+  delete rootFocus.load(std::memory_order_acquire);
   delete[] rootSafeArea;
   delete rootKoHashTable;
   delete valueWeightDistribution;
@@ -185,12 +187,27 @@ bool Search::resolveAlwaysComputePassAliveUnderSuicideRules(const SearchParams& 
   return nnEval != NULL && nnEval->modelPreferPassAliveUnderSuicideRules();
 }
 
-void Search::applyPassAliveModeToRootHistory() {
-  bool b = resolveAlwaysComputePassAliveUnderSuicideRules(searchParams, nnEvaluator);
-  if(rootHistory.alwaysComputePassAliveUnderSuicideRules != b) {
-    //Changing the mode changes graph hashes and in-tree adjudication, so no search state can be kept.
+bool Search::resolveExcludeTerritoryAdjacentToAtari(const SearchParams& params, const NNEvaluator* nnEval) {
+  if(params.excludeTerritoryAdjacentToAtari == enabled_t::True)
+    return true;
+  if(params.excludeTerritoryAdjacentToAtari == enabled_t::False)
+    return false;
+  return nnEval != NULL && nnEval->modelPreferExcludeTerritoryAdjacentToAtari();
+}
+
+BoardHistoryModes Search::resolveHistoryModes(const SearchParams& params, const NNEvaluator* nnEval) {
+  return BoardHistoryModes(
+    resolveAlwaysComputePassAliveUnderSuicideRules(params, nnEval),
+    resolveExcludeTerritoryAdjacentToAtari(params, nnEval)
+  );
+}
+
+void Search::applyHistoryModesToRootHistory() {
+  BoardHistoryModes m = resolveHistoryModes(searchParams, nnEvaluator);
+  if(rootHistory.modes != m) {
+    //Changing the modes changes graph hashes and in-tree adjudication, so no search state can be kept.
     clearSearch();
-    rootHistory.setAlwaysComputePassAliveUnderSuicideRules(b);
+    rootHistory.setModes(m);
   }
 }
 
@@ -200,13 +217,14 @@ void Search::setPosition(Player pla, const Board& board, const BoardHistory& his
   plaThatSearchIsFor = C_EMPTY;
   rootBoard = board;
   rootHistory = history;
-  applyPassAliveModeToRootHistory();
+  applyHistoryModesToRootHistory();
   assert(rootHistory.rules.isDots == rootBoard.isDots());
   if (!rootHistory.rules.isDots) {
     rootKoHashTable->recompute(rootHistory);
   }
   avoidMoveUntilByLocBlack.clear();
   avoidMoveUntilByLocWhite.clear();
+  setRootFocus(std::vector<Loc>(), std::vector<double>(), 0.0);
 }
 
 void Search::setPlayerAndClearHistory(Player pla) {
@@ -219,7 +237,7 @@ void Search::setPlayerAndClearHistory(Player pla) {
   bool assumeMultipleStartingBlackMovesAreHandicap = rootHistory.assumeMultipleStartingBlackMovesAreHandicap;
   rootHistory.clear(rootBoard,rootPla,rules,rootHistory.encorePhase);
   rootHistory.setAssumeMultipleStartingBlackMovesAreHandicap(assumeMultipleStartingBlackMovesAreHandicap);
-  applyPassAliveModeToRootHistory();
+  applyHistoryModesToRootHistory();
 
   if (!rootHistory.rules.isDots) {
     rootKoHashTable->recompute(rootHistory);
@@ -242,7 +260,7 @@ void Search::setKomiIfNew(float newKomi) {
     clearSearch();
     rootHistory.setKomi(newKomi);
   }
-  applyPassAliveModeToRootHistory();
+  applyHistoryModesToRootHistory();
 }
 
 void Search::setAvoidMoveUntilByLoc(const std::vector<int>& bVec, const std::vector<int>& wVec) {
@@ -255,6 +273,35 @@ void Search::setAvoidMoveUntilByLoc(const std::vector<int>& bVec, const std::vec
 
 void Search::setAvoidMoveUntilRescaleRoot(bool b) {
   avoidMoveUntilRescaleRoot = b;
+}
+
+void Search::setRootFocus(const std::vector<Loc>& moves, const std::vector<double>& weights, double prob) {
+  assert(moves.size() == weights.size());
+  //No need to clear the search. Focus only changes which child is selected by playouts from the root,
+  //so an existing tree remains valid.
+  FocusMoves* newFocus = nullptr;
+  if(moves.size() > 0 && prob > 0.0) {
+    newFocus = new FocusMoves();
+    newFocus->moves = moves;
+    newFocus->weights = weights;
+    for(size_t i = 0; i<newFocus->weights.size(); i++)
+      newFocus->weights[i] = std::min(newFocus->weights[i], MAX_ROOT_FOCUS_WEIGHT);
+    newFocus->prob = std::min(prob, MAX_ROOT_FOCUS_PROB);
+  }
+  //Search threads may still be using the old struct, so defer freeing it until no search is running.
+  FocusMoves* oldFocus = rootFocus.exchange(newFocus, std::memory_order_acq_rel);
+  if(oldFocus != nullptr) {
+    std::lock_guard<std::mutex> lock(rootFocusCleanupMutex);
+    rootFocusToCleanUp.push_back(oldFocus);
+  }
+}
+
+//Must not be called while a search is running.
+void Search::cleanUpOldRootFocus() {
+  std::lock_guard<std::mutex> lock(rootFocusCleanupMutex);
+  for(FocusMoves* focus: rootFocusToCleanUp)
+    delete focus;
+  rootFocusToCleanUp.clear();
 }
 
 void Search::setRootHintLoc(Loc loc) {
@@ -282,14 +329,14 @@ void Search::setRootSymmetryPruningOnly(const std::vector<int>& v) {
 void Search::setParams(const SearchParams& params) {
   clearSearch();
   searchParams = params;
-  applyPassAliveModeToRootHistory();
+  applyHistoryModesToRootHistory();
 }
 
 void Search::setParamsNoClearing(const SearchParams& params) {
   searchParams = params;
   //Deliberately overrides the "no clearing" if the resolved pass-alive mode actually changes,
   //since in that case no search state is valid to keep.
-  applyPassAliveModeToRootHistory();
+  applyHistoryModesToRootHistory();
 }
 
 void Search::setExternalPatternBonusTable(std::unique_ptr<PatternBonusTable>&& table) {
@@ -325,7 +372,7 @@ void Search::setNNEval(NNEvaluator* nnEval) {
     if(humanEvaluator->getNNXLen() != nnXLen || humanEvaluator->getNNYLen() != nnYLen)
       throw StringError("Search::setNNEval - humanEval has different nnXLen or nnYLen");
   }
-  applyPassAliveModeToRootHistory();
+  applyHistoryModesToRootHistory();
 }
 
 void Search::clearSearch() {
@@ -429,9 +476,10 @@ bool Search::makeMove(Loc moveLoc, Player movePla, bool preventEncore) {
     }
   }
 
-  //Explicitly clear avoid move arrays when we play a move - user needs to respecify them if they want them.
+  //Explicitly clear avoid move arrays and focus moves when we play a move - user needs to respecify them if they want them.
   avoidMoveUntilByLocBlack.clear();
   avoidMoveUntilByLocWhite.clear();
+  setRootFocus(std::vector<Loc>(), std::vector<double>(), 0.0);
 
   //If we're newly inferring some moves as handicap that we weren't before, clear since score will be wrong.
   if(rootHistory.whiteHandicapBonusScore != oldWhiteHandicapBonusScore)
@@ -657,6 +705,9 @@ void Search::runWholeSearch(
 
   //Relaxed load is fine since numPlayoutsShared should be synchronized already due to the joins
   lastSearchNumPlayouts = numPlayoutsShared.load(std::memory_order_relaxed);
+
+  //No search threads are running any more, so focus structs replaced during the search can be freed.
+  cleanUpOldRootFocus();
   effectiveSearchTimeCarriedOver += timer.getSeconds() - actualSearchStartTime;
 }
 
@@ -670,10 +721,7 @@ void Search::beginSearch(bool pondering) {
 
   //Invariant: every setter that installs or rebuilds rootHistory or changes params/nnEvaluator
   //re-stamps this flag, so it should always be consistent by the time a search begins.
-  testAssert(
-    rootHistory.alwaysComputePassAliveUnderSuicideRules ==
-    resolveAlwaysComputePassAliveUnderSuicideRules(searchParams, nnEvaluator)
-  );
+  testAssert(rootHistory.modes == resolveHistoryModes(searchParams, nnEvaluator));
 
   rootBoard.checkConsistency();
 
@@ -755,6 +803,8 @@ void Search::beginSearch(bool pondering) {
     rootSymmetries.clear();
     rootSymmetries.push_back(0);
   }
+
+  computeRootSymRepresentativeLocs();
 
   SearchThread dummyThread(-1, *this);
 

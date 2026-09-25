@@ -26,7 +26,7 @@ void Tests::runSgfTests() {
 
     Player pla;
 
-    const BoardHistory hist = sgf->setupInitialBoardAndHist(rules, pla, false);
+    const BoardHistory hist = sgf->setupInitialBoardAndHist(rules, pla, BoardHistoryModes(false,false));
     const Board& board = hist.initialBoard;
 
     vector<Move> remainingPlacementMoves;
@@ -65,7 +65,7 @@ void Tests::runSgfTests() {
     out << "pla " << PlayerIO::playerToString(pla,rules.isDots) << endl;
     hist.printDebugInfo(out,board);
 
-    auto [finalHist, finalBoard] = sgf->setupBoardAndHistAssumeLegal(rules, pla, sgf->moves.size(),false);
+    auto [finalHist, finalBoard] = sgf->setupBoardAndHistAssumeLegal(rules, pla, sgf->moves.size(),BoardHistoryModes(false,false));
     out << "Final board hist " << endl;
     out << "pla " << PlayerIO::playerToString(pla,rules.isDots) << endl;
     finalHist.printDebugInfo(out,finalBoard);
@@ -78,7 +78,7 @@ void Tests::runSgfTests() {
       std::unique_ptr<CompactSgf> sgf2 = CompactSgf::parse(out2.str());
       Player pla2;
       const Rules rules2 = sgf2->getRulesOrFail();
-      auto [hist2, board2] = sgf->setupBoardAndHistAssumeLegal(rules2, pla2, sgf2->moves.size(),false);
+      auto [hist2, board2] = sgf->setupBoardAndHistAssumeLegal(rules2, pla2, sgf2->moves.size(),BoardHistoryModes(false,false));
       testAssert(rules2 == rules);
       testAssert(board2.pos_hash == finalBoard.pos_hash);
       testAssert(hist2.moveHistory.size() == finalHist.moveHistory.size());

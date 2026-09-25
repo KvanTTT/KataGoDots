@@ -952,11 +952,11 @@ Hash128 NNInputs::getHash(
   const Board& board, const BoardHistory& hist, Player nextPlayer,
   const MiscNNInputParams& nnInputParams
 ) {
-  //Hash using the effective pass-alive computation mode for this eval, which is normally hist's own
+  //Hash using the effective BoardHistoryModes for this eval, which are normally hist's own
   //but may be overridden per-query (e.g. for a secondary net whose declared featurization differs).
   Hash128 hash = BoardHistory::getSituationRulesAndKoHash(
     board, hist, nextPlayer, nnInputParams.drawEquivalentWinsForWhite,
-    nnInputParams.getAlwaysComputePassAliveUnderSuicideRules(hist)
+    nnInputParams.getModes(hist)
   );
 
   //Fold in whether a pass ends this phase.
@@ -1030,7 +1030,20 @@ Hash128 NNInputs::getHash(
 bool MiscNNInputParams::getAlwaysComputePassAliveUnderSuicideRules(const BoardHistory& hist) const {
   if(passAliveSuicideRulesOverride >= 0)
     return passAliveSuicideRulesOverride != 0;
-  return hist.alwaysComputePassAliveUnderSuicideRules;
+  return hist.modes.alwaysComputePassAliveUnderSuicideRules;
+}
+
+bool MiscNNInputParams::getExcludeTerritoryAdjacentToAtari(const BoardHistory& hist) const {
+  if(excludeTerritoryAdjAtariOverride >= 0)
+    return excludeTerritoryAdjAtariOverride != 0;
+  return hist.modes.excludeTerritoryAdjacentToAtari;
+}
+
+BoardHistoryModes MiscNNInputParams::getModes(const BoardHistory& hist) const {
+  return BoardHistoryModes(
+    getAlwaysComputePassAliveUnderSuicideRules(hist),
+    getExcludeTerritoryAdjacentToAtari(hist)
+  );
 }
 
 bool MiscNNInputParams::getSuicideLegalForPassAlive(const BoardHistory& hist) const {
@@ -1111,8 +1124,8 @@ void NNInputs::fillRowV3(
   const MiscNNInputParams& nnInputParams,
   int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
 ) {
-  assert(nnXLen <= NNPos::MAX_BOARD_LEN);
-  assert(nnYLen <= NNPos::MAX_BOARD_LEN);
+  assert(nnXLen <= NNPos::MAX_BOARD_LEN_X);
+  assert(nnYLen <= NNPos::MAX_BOARD_LEN_Y);
   assert(board.x_size <= nnXLen);
   assert(board.y_size <= nnYLen);
   std::fill(rowBin,rowBin+NUM_FEATURES_SPATIAL_V3*nnXLen*nnYLen,false);
@@ -1461,8 +1474,8 @@ void NNInputs::fillRowV4(
   const MiscNNInputParams& nnInputParams,
   int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
 ) {
-  assert(nnXLen <= NNPos::MAX_BOARD_LEN);
-  assert(nnYLen <= NNPos::MAX_BOARD_LEN);
+  assert(nnXLen <= NNPos::MAX_BOARD_LEN_X);
+  assert(nnYLen <= NNPos::MAX_BOARD_LEN_Y);
   assert(board.x_size <= nnXLen);
   assert(board.y_size <= nnYLen);
   std::fill(rowBin,rowBin+NUM_FEATURES_SPATIAL_V4*nnXLen*nnYLen,false);
@@ -1801,8 +1814,8 @@ void NNInputs::fillRowV5(
   const MiscNNInputParams& nnInputParams,
   int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
 ) {
-  assert(nnXLen <= NNPos::MAX_BOARD_LEN);
-  assert(nnYLen <= NNPos::MAX_BOARD_LEN);
+  assert(nnXLen <= NNPos::MAX_BOARD_LEN_X);
+  assert(nnYLen <= NNPos::MAX_BOARD_LEN_Y);
   assert(board.x_size <= nnXLen);
   assert(board.y_size <= nnYLen);
   std::fill(rowBin,rowBin+NUM_FEATURES_SPATIAL_V5*nnXLen*nnYLen,false);
@@ -2003,8 +2016,8 @@ void NNInputs::fillRowV6(
   const MiscNNInputParams& nnInputParams,
   int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
 ) {
-  assert(nnXLen <= NNPos::MAX_BOARD_LEN);
-  assert(nnYLen <= NNPos::MAX_BOARD_LEN);
+  assert(nnXLen <= NNPos::MAX_BOARD_LEN_X);
+  assert(nnYLen <= NNPos::MAX_BOARD_LEN_Y);
   assert(board.x_size <= nnXLen);
   assert(board.y_size <= nnYLen);
   std::fill(rowBin,rowBin+NUM_FEATURES_SPATIAL_V6*nnXLen*nnYLen,false);
@@ -2127,6 +2140,7 @@ void NNInputs::fillRowV6(
         area,whiteMinusBlackIndependentLifeRegionCount,
         keepTerritories,
         keepStones,
+        nnInputParams.getExcludeTerritoryAdjacentToAtari(hist),
         nnInputParams.getSuicideLegalForPassAlive(hist)
       );
       if(hist.rules.taxRule == Rules::TAX_ALL)
@@ -2440,8 +2454,8 @@ void NNInputs::fillRowV7(
   const MiscNNInputParams& nnInputParams,
   int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
 ) {
-  assert(nnXLen <= NNPos::MAX_BOARD_LEN);
-  assert(nnYLen <= NNPos::MAX_BOARD_LEN);
+  assert(nnXLen <= NNPos::MAX_BOARD_LEN_X);
+  assert(nnYLen <= NNPos::MAX_BOARD_LEN_Y);
   assert(board.x_size <= nnXLen);
   assert(board.y_size <= nnYLen);
   std::fill(rowBin,rowBin+NUM_FEATURES_SPATIAL_V7*nnXLen*nnYLen,false);
@@ -2566,6 +2580,7 @@ void NNInputs::fillRowV7(
         whiteMinusBlackIndependentLifeRegionCount,
         keepTerritories,
         keepStones,
+        nnInputParams.getExcludeTerritoryAdjacentToAtari(hist),
         nnInputParams.getSuicideLegalForPassAlive(hist)
       );
       if(hist.rules.taxRule == Rules::TAX_ALL)

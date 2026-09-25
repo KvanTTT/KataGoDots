@@ -200,9 +200,11 @@ Loc PlayUtils::getGameInitializationMove(
   MiscNNInputParams nnInputParams;
   nnInputParams.drawEquivalentWinsForWhite = searcher->searchParams.drawEquivalentWinsForWhite;
   //Featurize for this bot's net the way that bot's own searches would, even if the game-level history
-  //carries a different pass-alive computation mode.
+  //carries different BoardHistoryModes.
   nnInputParams.passAliveSuicideRulesOverride =
     Search::resolveAlwaysComputePassAliveUnderSuicideRules(searcher->searchParams, nnEval) ? 1 : 0;
+  nnInputParams.excludeTerritoryAdjAtariOverride =
+    Search::resolveExcludeTerritoryAdjacentToAtari(searcher->searchParams, nnEval) ? 1 : 0;
   nnEval->evaluate(board,hist,pla,nnInputParams,buf,false,false);
   std::shared_ptr<NNOutput> nnOutput = std::move(buf.result);
 
@@ -295,11 +297,13 @@ vector<Loc> PlayUtils::playExtraBlack(
   if(!hist.isGameFinished) {
     NNResultBuf buf;
     bool botPassAliveMode = Search::resolveAlwaysComputePassAliveUnderSuicideRules(bot->searchParams, bot->nnEvaluator);
+    bool botExcludeTerritoryAdjAtari = Search::resolveExcludeTerritoryAdjacentToAtari(bot->searchParams, bot->nnEvaluator);
     for(int i = 0; i<numExtraBlack; i++) {
       MiscNNInputParams nnInputParams;
       nnInputParams.drawEquivalentWinsForWhite = bot->searchParams.drawEquivalentWinsForWhite;
       //Featurize the way this bot's own searches would, even if the passed history differs.
       nnInputParams.passAliveSuicideRulesOverride = botPassAliveMode ? 1 : 0;
+      nnInputParams.excludeTerritoryAdjAtariOverride = botExcludeTerritoryAdjAtari ? 1 : 0;
       bot->nnEvaluator->evaluate(board,hist,pla,nnInputParams,buf,false,false);
       std::shared_ptr<NNOutput> nnOutput = std::move(buf.result);
 
@@ -990,7 +994,7 @@ PlayUtils::BenchmarkResults PlayUtils::benchmarkSearchOnPositionsAndPrint(
   initialRules.komi = sgf.getRulesOrFailAllowUnspecified(initialRules).komi;
 
   Player nextPla;
-  BoardHistory hist = sgf.setupInitialBoardAndHist(initialRules, nextPla, Search::resolveAlwaysComputePassAliveUnderSuicideRules(params, nnEval));
+  BoardHistory hist = sgf.setupInitialBoardAndHist(initialRules, nextPla, Search::resolveHistoryModes(params, nnEval));
   Board board = hist.initialBoard;
 
   int moveNum = 0;
