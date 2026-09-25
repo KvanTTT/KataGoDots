@@ -1,5 +1,6 @@
 #include "../tests/tinymodel.h"
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 
@@ -44,6 +45,10 @@ static void decodeBase64(const string& input, string& output) {
     throw StringError("decodeBase64 got leftover bits");
 }
 
+//The buffer of the net has to be square: the symmetries the tests pin transpose the board, which is
+//only done on a square buffer, and the expected values were recorded with a 19x19 one.
+static constexpr int TINY_NN_LEN = std::min(NNPos::MAX_BOARD_LEN_X, NNPos::MAX_BOARD_LEN_Y);
+
 static void requireApproxEqual(double x, double expected, double scale, const NNResultBuf& buf, const Board& board, const char *file, int line) {
   if(!std::isfinite(x) || !std::isfinite(expected) || std::fabs(x-expected) > scale) {
     buf.result->debugPrint(cout,board);
@@ -86,7 +91,7 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
     const string expectedSha256 = "";
     NNEvaluator* nnEval = Setup::initializeNNEvaluator(
       "tinyModel",tmpModelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),requireExactNNLen,disableFP16,
+      TINY_NN_LEN,TINY_NN_LEN,Setup::MaxBatchSizeRequest::fromConcurrency(),requireExactNNLen,disableFP16,
       Setup::SETUP_FOR_DISTRIBUTED
     );
     nnEval->setDoRandomize(false);
@@ -108,7 +113,7 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
 ...................
 .....o.......o.x...
 ...o.x.............
-. xo.........o.x...
+..xo.........o.x...
 ..xxooo......ox....
 ....xx.............
 ...................
@@ -162,10 +167,11 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
         0,    1,    0,    4,   -1,   -1,  465,  195,   13,    1,    2,   17,   11,  287,  435,   33,    4,    0,    0,
         0,    0,    0,    0,    0,    0,    1,    1,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
       };
-      for(int pos = 0; pos<361; pos++) {
+      for(int idx = 0; idx<361; idx++) {
+        int pos = NNPos::xyToPos(idx % 19, idx / 19, nnOutput.nnXLen);
         double prob = nnOutput.policyProbs[pos];
-        if(expectedPolicy[pos] >= 0) {
-          EQ(prob*10000, expectedPolicy[pos], std::min(60.0, expectedPolicy[pos] * 0.1 + 2.0) + std::min(10.0, expectedPolicy[pos] * 0.1));
+        if(expectedPolicy[idx] >= 0) {
+          EQ(prob*10000, expectedPolicy[idx], std::min(60.0, expectedPolicy[idx] * 0.1 + 2.0) + std::min(10.0, expectedPolicy[idx] * 0.1));
         }
       }
 
@@ -190,9 +196,10 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
         -6308, -7702, -7512, -6025, -8292, -7443,  1230,  2138,  1193,  1305,  1825,  2393,  3537,  3323,     0, -2771, -3212, -4068, -3169,
         -6356, -6400, -7044, -6989, -6758, -5093, -1935,  1007,  1367,  1482,  2366,  3039,  3606,  1452,  -952, -3103, -3532, -3474, -3515,
       };
-      for(int pos = 0; pos<361; pos++) {
+      for(int idx = 0; idx<361; idx++) {
+        int pos = NNPos::xyToPos(idx % 19, idx / 19, nnOutput.nnXLen);
         double ownership = nnOutput.whiteOwnerMap[pos];
-        EQ(ownership*10000, expectedOwnership[pos], 300.0);
+        EQ(ownership*10000, expectedOwnership[idx], 300.0);
       }
     };
 
@@ -246,7 +253,7 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
     const string expectedSha256 = "";
     NNEvaluator* nnEval = Setup::initializeNNEvaluator(
       "tinyModel",tmpModelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),requireExactNNLen,disableFP16,
+      TINY_NN_LEN,TINY_NN_LEN,Setup::MaxBatchSizeRequest::fromConcurrency(),requireExactNNLen,disableFP16,
       Setup::SETUP_FOR_DISTRIBUTED
     );
     nnEval->setDoRandomize(false);
@@ -268,7 +275,7 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
 ...................
 .....o.......o.x...
 ...o.x.............
-. xo.........o.x...
+..xo.........o.x...
 ..xxooo......ox....
 ....xx.............
 ...................
@@ -322,10 +329,11 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
         8,   22,    7,   19,   -1,   -1,  183,   76,   31,   19,   18,   24,   45,  201,  141,   41,   25,   17,    6,
         1,    8,    8,   11,    3,    4,    9,    7,    4,    4,    4,    4,    5,    6,    9,    6,    5,    6,    1,
       };
-      for(int pos = 0; pos<361; pos++) {
+      for(int idx = 0; idx<361; idx++) {
+        int pos = NNPos::xyToPos(idx % 19, idx / 19, nnOutput.nnXLen);
         double prob = nnOutput.policyProbs[pos];
-        if(expectedPolicy[pos] >= 0) {
-          EQ(prob*10000, expectedPolicy[pos], std::min(60.0, expectedPolicy[pos] * 0.15 + 2.0) + std::min(10.0, expectedPolicy[pos] * 0.15));
+        if(expectedPolicy[idx] >= 0) {
+          EQ(prob*10000, expectedPolicy[idx], std::min(60.0, expectedPolicy[idx] * 0.15 + 2.0) + std::min(10.0, expectedPolicy[idx] * 0.15));
         }
       }
 
@@ -350,9 +358,10 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
         -3128, -4756, -5981, -5522, -7401, -5402,  2900,  3696,  3684,  4064,  4450,  4777,  4878,  2896,   903, -2068, -2982, -2291,   538,
         -1021, -3489, -4131, -3075, -2723,  -201,  3282,  4290,  4230,  4198,  4363,  4613,  4028,  3213,  1057,  -188, -1137,   457,  2373,
       };
-      for(int pos = 0; pos<361; pos++) {
+      for(int idx = 0; idx<361; idx++) {
+        int pos = NNPos::xyToPos(idx % 19, idx / 19, nnOutput.nnXLen);
         double ownership = nnOutput.whiteOwnerMap[pos];
-        EQ(ownership*10000, expectedOwnership[pos], 600.0);
+        EQ(ownership*10000, expectedOwnership[idx], 600.0);
       }
     };
 
@@ -406,7 +415,7 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
     const string expectedSha256 = "";
     NNEvaluator* nnEval = Setup::initializeNNEvaluator(
       "tinyModel",tmpModelFile,expectedSha256,cfg,logger,rand,expectedConcurrentEvals,
-      NNPos::MAX_BOARD_LEN_X,NNPos::MAX_BOARD_LEN_Y,Setup::MaxBatchSizeRequest::fromConcurrency(),requireExactNNLen,disableFP16,
+      TINY_NN_LEN,TINY_NN_LEN,Setup::MaxBatchSizeRequest::fromConcurrency(),requireExactNNLen,disableFP16,
       Setup::SETUP_FOR_DISTRIBUTED
     );
     nnEval->setDoRandomize(false);
@@ -457,7 +466,7 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
         2,   20,   52,  163,  241,   27,   38,  210,   -1,    7,   15,   23,   10,
       };
       for(int idx = 0; idx<78; idx++) {
-        int pos = (idx % 13) + idx / 13 * NNPos::MAX_BOARD_LEN;
+        int pos = NNPos::xyToPos(idx % 13, idx / 13, nnOutput.nnXLen);
         double prob = nnOutput.policyProbs[pos];
         if(expectedPolicy[idx] >= 0) {
           EQ(prob*10000, expectedPolicy[idx], std::min(120.0, expectedPolicy[idx] * 0.15 + 2.0) + std::min(10.0, expectedPolicy[idx] * 0.15));
@@ -473,7 +482,7 @@ NNEvaluator* TinyModelTest::runTinyModelTest(const string& baseDir, Logger& logg
         -983, -3626, -3655, -1982,  3086,  3018,  1692, -4079, -9009, -6395, -5868, -6171, -3983,
       };
       for(int idx = 0; idx<78; idx++) {
-        int pos = (idx % 13) + idx / 13 * NNPos::MAX_BOARD_LEN;
+        int pos = NNPos::xyToPos(idx % 13, idx / 13, nnOutput.nnXLen);
         double ownership = nnOutput.whiteOwnerMap[pos];
         EQ(ownership*10000, expectedOwnership[idx], 600.0);
       }
