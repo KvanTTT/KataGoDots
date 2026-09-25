@@ -88,7 +88,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
     return attackerResultsCache.emplace(cacheKey, zero()).first->second;
   }
 
-  if (isRelevantCapturing(moveRecordForLoc)) {
+  if (getOrSetRelevantCapturing(moveRecordForLoc)) {
     const auto result = LadderLocInfo::create(loc, attacker, moveRecordForLoc, getWhiteScoreDiff());
     undo(moveRecordForLoc, LADDER_SUCCEEDED_STOP, &result);
     return attackerResultsCache.emplace(cacheKey, result).first->second;
@@ -97,10 +97,23 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
   createAndPushChainInfo(loc, attacker);
   const auto captureLocs = extractCaptureLocs(attacker);
 
+  const bool firstMove = getCurrentDepth() == 1;
+  if (firstMove) {
+    // Drop unrelated maybe capture locs after first move (they may form only unrelated surroundings), but handle captureLoc later.
+    // Real capture locs are always adjacent to the most recent moves except the first one (that's captureLoc).
+    for (int i = attackerMaybeCaptureLocs.size() - 1; i >= 0; i--) {
+      const Loc maybeCaptureLoc = attackerMaybeCaptureLocs[i];
+      assert(board.getColor(maybeCaptureLoc) == C_EMPTY);
+      unsetMaybeCapturePlayer(maybeCaptureLoc, attacker);
+    }
+    attackerMaybeCaptureLocs.clear();
+    attackerChainInfos.back().newMaybeCaptureLocsCount = 0;
+  }
+
   LadderLocInfo finalLadderLocInfo = zero();
 
   for (const Loc captureLoc : captureLocs) {
-    if (const auto maybeCapturingMoveRecord = play(captureLoc, attacker); isRelevantCapturing(maybeCapturingMoveRecord)) {
+    if (const auto maybeCapturingMoveRecord = play(captureLoc, attacker); getOrSetRelevantCapturing(maybeCapturingMoveRecord)) {
       const int whiteScoreDiff = getWhiteScoreDiff();
 
       unique_ptr<LadderLocInfo> captureLocInfo;
@@ -112,9 +125,11 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
 
       undo(maybeCapturingMoveRecord, CAPTURE_FOUND, captureLocInfo.get());
 
-      const bool initDefenderChain = getCurrentDepth() == 1;
+      if (firstMove) {
+        setMaybeCapturePlayer(captureLoc, attacker);
+        attackerMaybeCaptureLocs.push_back(captureLoc);
+        attackerChainInfos.back().newMaybeCaptureLocsCount = 1;
 
-      if (initDefenderChain) {
         initializeDefenderChain(maybeCapturingMoveRecord);
       }
 
@@ -135,13 +150,19 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
         }
       }
 
-      if (initDefenderChain) {
+      if (firstMove) {
+        unsetMaybeCapturePlayer(captureLoc, attacker);
+
+        attackerMaybeCaptureLocs.pop_back();
+        assert(attackerMaybeCaptureLocs.empty());
+        attackerChainInfos.back().newMaybeCaptureLocsCount = 0;
+
         popChainInfo(defender);
         resetInitTerritory();
       }
 
       if (!ladderLocInfo.isZero()) {
-        if (initDefenderChain) {
+        if (firstMove) {
           if (finalLadderLocInfo.isZero()) {
             finalLadderLocInfo = std::move(ladderLocInfo);
           } else {
@@ -349,7 +370,7 @@ bool DotsLaddersSolver::isDefendCapture(const Board::MoveRecord& potentialDefend
   return false;
 }
 
-bool DotsLaddersSolver::isRelevantCapturing(const Board::MoveRecord& moveRecord) {
+bool DotsLaddersSolver::getOrSetRelevantCapturing(const Board::MoveRecord& moveRecord) {
   const int depth = getCurrentDepth();
   if (depth <= 1) {
     return false;

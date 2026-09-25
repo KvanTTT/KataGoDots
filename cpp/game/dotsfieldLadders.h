@@ -145,7 +145,7 @@ public:
   [[nodiscard]] std::string toSgf() const;
 
 private:
-  bool isRelevantCapturing(const Board::MoveRecord& moveRecord);
+  bool getOrSetRelevantCapturing(const Board::MoveRecord& moveRecord);
 
   void startLadder(Loc newInitLoc, Player pla);
 
