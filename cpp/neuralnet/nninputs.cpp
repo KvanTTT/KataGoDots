@@ -1074,7 +1074,8 @@ void NNInputs::fillRowVN(
   const bool useNHWC,
   float* rowBin,
   float* rowGlobal,
-  const bool selfplay
+  const bool selfplay,
+  std::vector<Loc>* dotsReasonableMoves
 ) {
   switch(version) {
     case 3:
@@ -1093,7 +1094,7 @@ void NNInputs::fillRowVN(
       if (!hist.rules.isDots) {
         fillRowV7(board, hist, nextPlayer, nnInputParams, nnXLen, nnYLen, useNHWC, rowBin, rowGlobal);
       } else {
-        fillRowV7Dots(board, hist, nextPlayer, nnInputParams, nnXLen, nnYLen, useNHWC,rowBin,rowGlobal,selfplay);
+        fillRowV7Dots(board, hist, nextPlayer, nnInputParams, nnXLen, nnYLen, useNHWC,rowBin,rowGlobal,selfplay,dotsReasonableMoves);
       }
       break;
     default:

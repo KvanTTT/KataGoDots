@@ -54,6 +54,7 @@ struct NNResultBuf {
   std::vector<float> rowSpatialBuf;
   std::vector<float> rowGlobalBuf;
   std::vector<float> rowMetaBuf;
+  std::vector<Loc> dotsReasonableMoves;
   bool hasRowMeta;
   std::shared_ptr<NNOutput> result;
   bool errorLogLockout; // error flag to restrict log to 1 error to prevent spam
@@ -251,6 +252,7 @@ class NNEvaluator {
   std::atomic<uint64_t> m_numRowsProcessed;
   std::atomic<uint64_t> m_numBatchesProcessed;
   std::atomic<uint64_t> m_numCacheHits;
+  std::atomic<int> m_numPreparingEvals;
 
   mutable std::mutex bufferMutex;
 

@@ -108,6 +108,62 @@ static Hash128 fillRowAndGetHash(
   return hash;
 }
 
+void Tests::runDotsNNInputsTests() {
+  cout << "Running Dots NN input preparation tests" << endl;
+  Board board(9, 9, Rules::DEFAULT_DOTS);
+  BoardHistory hist(board);
+  const Loc blackMove = Location::getLoc(4, 4, board.x_size);
+  const Loc whiteMove = Location::getLoc(5, 4, board.x_size);
+  hist.makeBoardMoveAssumeLegal(board, blackMove, P_BLACK, nullptr);
+  hist.makeBoardMoveAssumeLegal(board, whiteMove, P_WHITE, nullptr);
+
+  const int area = board.x_size * board.y_size;
+  const int numSpatial = NNInputs::getNumberOfSpatialFeatures(7, true);
+  const int numGlobal = NNInputs::getNumberOfGlobalFeatures(7, true);
+  auto fill = [&](int maxHistory, std::vector<float>& spatial, std::vector<Loc>& reasonableMoves) {
+    MiscNNInputParams params;
+    params.maxHistory = maxHistory;
+    std::vector<float> global(numGlobal);
+    spatial.resize(numSpatial * area);
+    NNInputs::fillRowVN(7, board, hist, P_BLACK, params, board.x_size, board.y_size,
+                        false, spatial.data(), global.data(), false, &reasonableMoves);
+  };
+
+  std::vector<float> noHistory;
+  std::vector<float> oneMove;
+  std::vector<float> fullHistory;
+  std::vector<Loc> reasonableMoves;
+  fill(0, noHistory, reasonableMoves);
+  testAssert(reasonableMoves == hist.getReasonableMoves(board, P_BLACK, Board::NULL_LOC));
+  for(int channel = 9; channel <= 13; channel++) {
+    for(int pos = 0; pos < area; pos++)
+      testAssert(noHistory[channel * area + pos] == 0.0f);
+  }
+  for(int channel = 15; channel <= 16; channel++) {
+    for(int pos = 0; pos < area; pos++)
+      testAssert(noHistory[channel * area + pos] == 0.0f);
+  }
+
+  fill(1, oneMove, reasonableMoves);
+  fill(5, fullHistory, reasonableMoves);
+  const int blackPos = NNPos::locToPos(blackMove, board.x_size, board.x_size, board.y_size);
+  const int whitePos = NNPos::locToPos(whiteMove, board.x_size, board.x_size, board.y_size);
+  testAssert(oneMove[9 * area + whitePos] == 1.0f);
+  testAssert(oneMove[10 * area + blackPos] == 0.0f);
+  testAssert(fullHistory[9 * area + whitePos] == 1.0f);
+  testAssert(fullHistory[10 * area + blackPos] == 1.0f);
+
+  Board groundOnlyBoard(1, 1, Rules::DEFAULT_DOTS);
+  BoardHistory groundOnlyHist(groundOnlyBoard);
+  std::vector<float> groundSpatial(numSpatial);
+  std::vector<float> groundGlobal(numGlobal);
+  std::vector<Loc> groundMoves;
+  MiscNNInputParams params;
+  NNInputs::fillRowVN(7, groundOnlyBoard, groundOnlyHist, P_BLACK, params, 1, 1,
+                      false, groundSpatial.data(), groundGlobal.data(), false, &groundMoves);
+  testAssert(groundMoves == std::vector<Loc>({Board::PASS_LOC}));
+}
+
 void Tests::runNNInputsV3V4Tests() {
   cout << "Running NN inputs V3V4V5V6 tests" << endl;
   ostringstream out;

@@ -1,6 +1,7 @@
 #include "../neuralnet/nneval.h"
 #include "../neuralnet/modelversion.h"
 #include "../core/test.h"
+#include <chrono>
 
 using namespace std;
 
@@ -16,6 +17,7 @@ NNResultBuf::NNResultBuf()
     rowSpatialBuf(),
     rowGlobalBuf(),
     rowMetaBuf(),
+    dotsReasonableMoves(),
     hasRowMeta(false),
     result(nullptr),
     errorLogLockout(false),
@@ -97,6 +99,7 @@ NNEvaluator::NNEvaluator(
    m_numRowsProcessed(0),
    m_numBatchesProcessed(0),
    m_numCacheHits(0),
+   m_numPreparingEvals(0),
    bufferMutex(),
    isKilled(false),
    numServerThreadsStartingUp(0),
@@ -458,7 +461,7 @@ void NNEvaluator::fillRowBufs(
 
   static_assert(NNModelVersion::latestInputsVersionImplemented == 7);
   // TODO: it makes sense to pass correct `selfplay` value here
-  NNInputs::fillRowVN(inputsVersion, board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data(), false);
+  NNInputs::fillRowVN(inputsVersion, board, history, nextPlayer, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data(), false, board.isDots() ? &buf.dotsReasonableMoves : nullptr);
 
   if(rowMetaLen > 0) {
     if(sgfMeta == NULL)
@@ -600,6 +603,10 @@ void NNEvaluator::serve(
     // Queue being closed is a signal that we're done.
     if(!gotAnything)
       break;
+    if(dotsGame && resultBufs.size() < desiredBatchSize &&
+       m_numPreparingEvals.load(std::memory_order_acquire) > 0) {
+      queryQueue.waitPopMoreUpToNFor(resultBufs, desiredBatchSize, std::chrono::milliseconds(2));
+    }
 
     int numRows = (int)resultBufs.size();
     testAssert(numRows > 0);
@@ -868,6 +875,7 @@ void NNEvaluator::evaluate(
 ) {
   testAssert(!isKilled);
   buf.hasResult = false;
+  buf.dotsReasonableMoves.clear();
 
   if(board.x_size > nnXLen || board.y_size > nnYLen)
     throw StringError("NNEvaluator was configured with nnXLen = " + Global::intToString(nnXLen) +
@@ -915,6 +923,10 @@ void NNEvaluator::evaluate(
   buf.boardYSizeForServer = board.y_size;
 
   if(!debugSkipNeuralNet) {
+    m_numPreparingEvals.fetch_add(1, std::memory_order_acq_rel);
+    const Global::CustomScopeGuard preparingDone([this]() {
+      m_numPreparingEvals.fetch_sub(1, std::memory_order_acq_rel);
+    });
     fillRowBufs(board, history, nextPlayer, sgfMeta, nnInputParams, buf);
   }
 
@@ -966,8 +978,13 @@ void NNEvaluator::evaluate(
     bool isLegal[NNPos::MAX_NN_POLICY_SIZE] = {};
     testAssert(nextPlayer == history.presumedNextMovePla);
 
-    vector<Loc> reasonableMoves = history.getReasonableMoves(board, nextPlayer, Board::NULL_LOC);
-    for (const auto& reasonableMove : reasonableMoves) {
+    vector<Loc> fallbackReasonableMoves;
+    const vector<Loc>* reasonableMoves = &buf.dotsReasonableMoves;
+    if(!board.isDots() || debugSkipNeuralNet) {
+      fallbackReasonableMoves = history.getReasonableMoves(board, nextPlayer, Board::NULL_LOC);
+      reasonableMoves = &fallbackReasonableMoves;
+    }
+    for (const auto& reasonableMove : *reasonableMoves) {
       isLegal[NNPos::locToPos(reasonableMove, xSize, nnXLen, nnYLen)] = true;
     }
 
