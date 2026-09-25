@@ -1227,7 +1227,7 @@ string Sgf::PositionSample::toJsonLine(const Sgf::PositionSample& sample) {
   json data;
   const Board& board = sample.board;
   if (board.rules.isDots) {
-    data[DOTS_KEY] = "true";
+    data[DOTS_KEY] = true;
   }
   data["xSize"] = board.x_size;
   data["ySize"] = board.y_size;
