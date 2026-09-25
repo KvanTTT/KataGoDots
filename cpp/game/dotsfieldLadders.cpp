@@ -61,6 +61,7 @@ void DotsLaddersSolver::startLadder(const Loc newInitLoc, const Player pla) {
     assert(getCapturedColor(initLoc) != attacker);
     setWorkingLocPlayer(initLoc, attacker);
   }
+  maxCacheSize = std::max(maxCacheSize, static_cast<uint32_t>(attackerResultsCache.size()));
   attackerResultsCache.clear();
   initLoc = Board::NULL_LOC;
   attacker = C_EMPTY;

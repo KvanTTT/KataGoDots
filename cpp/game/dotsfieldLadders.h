@@ -137,10 +137,14 @@ public:
   [[nodiscard]] uint32_t getMovesCount() const { return movesCounter; }
   [[nodiscard]] uint32_t getCacheHitsCount() const { return cacheHitsCounter; }
   [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
-  [[nodiscard]] uint32_t getCacheSize() const { return attackerResultsCache.size(); }
+  // The cache is cleared after each ladder, so report the largest size it reached for a single ladder.
+  [[nodiscard]] uint32_t getMaxCacheSize() const { return maxCacheSize; }
   [[nodiscard]] uint16_t getCurrentDepth() const { return movesSequence.size(); }
   [[nodiscard]] short getWhiteScoreDiff() const { return board.numBlackCaptures - board.numWhiteCaptures - initialWhiteScore; }
-  void clearMaxDepth() { maxDepth = 0; }
+  void clearMaxStats() {
+    maxDepth = 0;
+    maxCacheSize = 0;
+  }
   [[nodiscard]] bool getStoreMovesTree() const { return storeMovesTree; }
   [[nodiscard]] std::string toSgf() const;
 
@@ -338,6 +342,7 @@ private:
   uint16_t maxDepth = 0;
   uint32_t movesCounter = 0;
   uint32_t cacheHitsCounter = 0;
+  uint32_t maxCacheSize = 0;
   uint16_t maxMovesCount;
   short initialWhiteScore = 0;
 
