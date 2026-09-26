@@ -1086,6 +1086,26 @@ X  .' .  X  .
 )", true);
 }
 
+// The ladder of the working move 4-4 ends up with the base that encloses the working move itself,
+// that violates the assertion `getCapturedColor(initLoc) != attacker` in `DotsLaddersSolver::startLadder`.
+// The expected output assumes the working move is ignored as it hits the capture locations.
+TEST(LadderTests, DISABLED_WorkingMoveInsideOwnLadderedTerritory) {
+    checkLadders(
+        R"(
+.  .  X  X  .  .  .  .  .
+.  X  .' .' X  .  .  .  .
+X  .' .' X' .' X  .  .  .
+X  .' X' .' .' .  .  .  .
+X  .' .' .' .' X  .  .  .
+.  X  O' .' .' .' X  .  .
+.  .  X  .  .  X  O  .  .
+.  .  O  .  O  O  X  O  .
+.  .  .  O  .  .  X  X  O
+.  .  .  .  O  .  .  .  .
+.  .  .  .  .  O  O  .  .
+)");
+}
+
 TEST(LadderTests, RealGameWorkingLadder) {
     checkLadders(
         R"(
