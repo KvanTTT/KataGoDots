@@ -654,9 +654,9 @@ std::string DotsLaddersSolver::debugResultData() const {
   return result.str();
 }
 
-// Same letter-coordinate convention as WriteSgf's SGF writer (dataio/sgf.cpp), reimplemented here to
-// avoid pulling that file's heavy transitive dependencies (program/search) into the lightweight
-// katago_tests target that dotsfieldLadders.cpp is built into.
+// Same letter-coordinate convention as WriteSgf's SGF writer (dataio/sgf.cpp), reimplemented here
+// because the game layer shouldn't depend on dataio (it depends on the game layer itself).
+// The written SGF is validated by the ladder tests using the common SGF parser.
 void DotsLaddersSolver::writeSgfCoord(std::ostream& out, const Loc loc, const int xSize) {
   static constexpr char chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   out << chars[Location::getX(loc, xSize)] << chars[Location::getY(loc, xSize)];

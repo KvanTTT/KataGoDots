@@ -1073,6 +1073,7 @@ add_executable(katago
   program/gtpconfig.cpp
   program/setup.cpp
   program/playutils.cpp
+  program/playutilshandicap.cpp
   program/playsettings.cpp
   program/play.cpp
   program/selfplaymanager.cpp
@@ -2173,6 +2174,10 @@ core/sha2.cpp
 core/mainargs.cpp
 core/timer.cpp
 core/datetime.cpp
+core/config_parser.cpp
+core/fileutils.cpp
+core/logger.cpp
+core/makedir.cpp
 
 game/board.cpp
 game/boardhistory.cpp
@@ -2181,16 +2186,86 @@ game/dotsfield.cpp
 game/dotsfieldCapturesAndTerritories.cpp
 game/dotsfieldLadders.cpp
 game/dotsboardhistory.cpp
+
+# SGF reading and writing
+dataio/sgf.cpp
+dataio/files.cpp
+neuralnet/nninputs.cpp
+neuralnet/nninputsdots.cpp
+program/playutilshandicap.cpp
 )
 
 target_include_directories(katago_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(katago_tests PRIVATE GTest::gtest_main)
+if(ZLIB_FOUND)
+  target_link_libraries(katago_tests PRIVATE ${ZLIB_LIBRARIES}) # Required by core/fileutils.cpp
+endif()
 
 if (WIN32)
 target_link_libraries(katago_tests PRIVATE ws2_32)
 if (MINGW)
 target_link_libraries(katago_tests PRIVATE shlwapi)
 endif()
+endif()
+
+#--------------------------- TEST DATA ----------------------------------------------------------------------------------
+# Dots tournament games used by `LaddersPerformanceTests.TournamentGames`.
+# The archive is downloaded once and cached per user (shared by all build dirs), so the download doesn't happen
+# on every configure or test run. The cache is keyed by the archive hash: an updated release is downloaded as a new entry.
+# Set DOTS_TOURNAMENT_SGFS_PATH to use a local file instead (e.g. while refining it), then nothing is downloaded.
+# If the file isn't available (e.g. offline), the test is skipped.
+set(DOTS_TOURNAMENT_SGFS_PATH "" CACHE FILEPATH "Local Dots tournament games (one SGF per line), downloaded if empty")
+option(KATAGO_DOWNLOAD_TEST_DATA "Download test data that is missing in the cache" ON)
+
+if(DEFINED ENV{HOME} AND NOT "$ENV{HOME}" STREQUAL "")
+  set(_katago_default_test_data_cache_dir "$ENV{HOME}/.cache/katagodots")
+elseif(DEFINED ENV{USERPROFILE} AND NOT "$ENV{USERPROFILE}" STREQUAL "")
+  file(TO_CMAKE_PATH "$ENV{USERPROFILE}/.cache/katagodots" _katago_default_test_data_cache_dir)
+else()
+  set(_katago_default_test_data_cache_dir "${CMAKE_CURRENT_BINARY_DIR}/test-data")
+endif()
+set(KATAGO_TEST_DATA_CACHE_DIR "${_katago_default_test_data_cache_dir}" CACHE PATH "Directory for downloaded test data")
+
+set(_dots_sgfs_name "dots-game-tournaments-2015-2024.sgfs")
+set(_dots_sgfs_url "https://github.com/KvanTTT/KataGoDots/releases/download/dots-tournaments.sgfs/${_dots_sgfs_name}.zip")
+set(_dots_sgfs_zip_sha256 "a81141707703c65d38ec7911f1d1cabe33e7ecf1b49cd19a3f999fb1b4b4d848")
+
+if(NOT DOTS_TOURNAMENT_SGFS_PATH STREQUAL "")
+  set(_dots_sgfs_file "${DOTS_TOURNAMENT_SGFS_PATH}")
+else()
+  string(SUBSTRING "${_dots_sgfs_zip_sha256}" 0 12 _dots_sgfs_hash_prefix)
+  set(_dots_sgfs_dir "${KATAGO_TEST_DATA_CACHE_DIR}/dots-tournaments-${_dots_sgfs_hash_prefix}")
+  set(_dots_sgfs_file "${_dots_sgfs_dir}/${_dots_sgfs_name}")
+
+  if(NOT EXISTS "${_dots_sgfs_file}" AND KATAGO_DOWNLOAD_TEST_DATA)
+    # Unique temporary names prevent clashes between build dirs configured in parallel (e.g. by an IDE)
+    string(RANDOM LENGTH 8 _dots_sgfs_tmp_suffix)
+    set(_dots_sgfs_zip "${_dots_sgfs_dir}/${_dots_sgfs_name}-${_dots_sgfs_tmp_suffix}.zip")
+    message(STATUS "Downloading ${_dots_sgfs_url}")
+    file(DOWNLOAD "${_dots_sgfs_url}" "${_dots_sgfs_zip}"
+      EXPECTED_HASH SHA256=${_dots_sgfs_zip_sha256}
+      TIMEOUT 120
+      INACTIVITY_TIMEOUT 20
+      STATUS _dots_sgfs_status)
+    list(GET _dots_sgfs_status 0 _dots_sgfs_status_code)
+    if(_dots_sgfs_status_code EQUAL 0)
+      # Extract into a temporary dir first to never leave a partially extracted file in the cache
+      set(_dots_sgfs_tmp_dir "${_dots_sgfs_dir}/tmp-${_dots_sgfs_tmp_suffix}")
+      file(ARCHIVE_EXTRACT INPUT "${_dots_sgfs_zip}" DESTINATION "${_dots_sgfs_tmp_dir}" PATTERNS "${_dots_sgfs_name}")
+      if(NOT EXISTS "${_dots_sgfs_file}")
+        file(RENAME "${_dots_sgfs_tmp_dir}/${_dots_sgfs_name}" "${_dots_sgfs_file}")
+      endif()
+      file(REMOVE_RECURSE "${_dots_sgfs_tmp_dir}")
+    else()
+      list(GET _dots_sgfs_status 1 _dots_sgfs_status_message)
+      message(WARNING "Failed to download ${_dots_sgfs_url} (${_dots_sgfs_status_message}), LaddersPerformanceTests.TournamentGames will be skipped")
+    endif()
+    file(REMOVE "${_dots_sgfs_zip}")
+  endif()
+endif()
+
+if(EXISTS "${_dots_sgfs_file}")
+  target_compile_definitions(katago_tests PRIVATE DOTS_LADDERS_TOURNAMENT_SGFS_PATH="${_dots_sgfs_file}")
 endif()
 
 include(GoogleTest)

@@ -1,11 +1,14 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <chrono>
 
 #include "testdotsutils.h"
 #include "tests.h"
 #include "game/board.h"
 #include "game/dotsfieldLadders.h"
+#include "core/fileutils.h"
+#include "dataio/sgf.h"
 
 using namespace std;
 
@@ -1310,4 +1313,66 @@ TEST(LaddersPerformanceTests, RandomGames) {
       Tests::LADDERS_ON_EACH_MOVE,
       0
     );
+}
+
+// The games collection (one SGF per line) used by `LaddersPerformanceTests.TournamentGames`.
+// CMake downloads and caches it (see DOTS_TOURNAMENT_SGFS_PATH in CMakeLists.txt for using a local file).
+// The test is skipped if the file isn't available.
+#ifndef DOTS_LADDERS_TOURNAMENT_SGFS_PATH
+#define DOTS_LADDERS_TOURNAMENT_SGFS_PATH ""
+#endif
+
+// The number of games (from the beginning of the collection) checked by `LaddersPerformanceTests.TournamentGames`.
+// Override it with `-DDOTS_LADDERS_TOURNAMENT_GAMES_COUNT=...`, 0 means all games.
+#ifndef DOTS_LADDERS_TOURNAMENT_GAMES_COUNT
+#define DOTS_LADDERS_TOURNAMENT_GAMES_COUNT 128
+#endif
+
+// Replays every game and solves ladders after each move, the same way the engine does.
+TEST(LaddersPerformanceTests, TournamentGames) {
+    const string sgfsPath = DOTS_LADDERS_TOURNAMENT_SGFS_PATH;
+    if (sgfsPath.empty() || !FileUtils::exists(sgfsPath)) {
+        GTEST_SKIP() << (sgfsPath.empty() ? "The games collection is not available (it's not downloaded)" : "The games collection is not found: " + sgfsPath);
+    }
+
+    const vector<unique_ptr<Sgf>> sgfs = Sgf::loadSgfsFile(sgfsPath);
+    constexpr int maxGamesCount = DOTS_LADDERS_TOURNAMENT_GAMES_COUNT;
+
+    int gamesCount = 0;
+    int positionsCount = 0;
+    uint64_t laddersMovesCount = 0;
+    std::chrono::nanoseconds laddersDuration{0};
+
+    for (const auto& sgf : sgfs) {
+        if (maxGamesCount > 0 && gamesCount >= maxGamesCount) break;
+
+        const CompactSgf compactSgf(*sgf);
+        if (!compactSgf.isDots) continue;
+
+        const Rules rules = compactSgf.getRulesOrWarn(Rules::DEFAULT_DOTS, [](const string&) {});
+        Player nextPla;
+        BoardHistory hist = compactSgf.setupInitialBoardAndHist(rules, nextPla, BoardHistoryModes(false, false));
+        Board board = hist.initialBoard;
+
+        for (const Move& move : compactSgf.moves) {
+            // Real games may contain moves that are illegal under the rules used (just skip them)
+            if (!hist.makeBoardMoveTolerant(board, move.loc, move.pla, false)) continue;
+
+            const auto capturesAndTerritoriesInfos = board.calculateCapturesAndTerritoriesColorsForDots();
+            const Board boardCopy = board;
+            DotsLaddersSolver solver(board);
+            const auto start = std::chrono::high_resolution_clock::now();
+            solver.solve(capturesAndTerritoriesInfos);
+            laddersDuration += std::chrono::high_resolution_clock::now() - start;
+            testAssert(boardCopy.isEqualForTesting(board));
+
+            positionsCount++;
+            laddersMovesCount += solver.getMovesCount();
+        }
+        gamesCount++;
+    }
+
+    cout << "Games: " << gamesCount << ", positions: " << positionsCount
+         << ", ladders moves count: " << laddersMovesCount
+         << ", ladders solving time: " << std::chrono::duration_cast<std::chrono::milliseconds>(laddersDuration).count() << " ms" << endl;
 }
