@@ -169,7 +169,7 @@ private:
   // Captures that don't require the move are one-move captures on the initial board:
   // the move is either inside their territory (such moves are filtered out by `isReasonableMove`),
   // or it doesn't affect them.
-  [[nodiscard]] Color getColorsOfPotentialLadder(Loc loc) const;
+  [[nodiscard]] Color getColorsOfPotentialLadder(Loc loc, std::vector<uint16_t>& blackAdjGroups, std::vector<uint16_t>& whiteAdjGroups) const;
 
   bool getOrSetRelevantCapturing(const Board::MoveRecord& moveRecord);
 
@@ -389,6 +389,9 @@ private:
   static constexpr int MAX_NUMBER_OF_ADJACENT_GROUPS = 6;
   // Groups adjacent to every empty loc (padded by NO_GROUP_ID).
   std::vector<std::array<uint16_t, MAX_NUMBER_OF_ADJACENT_GROUPS>> fieldLocToAdjacentGroupIds;
+
+  std::vector<uint16_t> blackInitialAdjGroups;
+  std::vector<uint16_t> whiteInitialAdjGroups;
 
   std::vector<char> chainsData;
   std::vector<char> resultData;

@@ -22,7 +22,7 @@ void DotsLaddersSolver::solve(const Board::CapturesAndTerritoriesInfos& captures
       // The most frequent case is the case when the location is empty.
       if (const Color activeColor = getActiveColor(state); activeColor != C_EMPTY) continue;
       const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
-      const Color colorsOfPotentialLadder = getColorsOfPotentialLadder(loc);
+      const Color colorsOfPotentialLadder = getColorsOfPotentialLadder(loc, blackInitialAdjGroups, whiteInitialAdjGroups);
 
       const auto addLadderMoveInfo = [&](const Player pla) -> void {
         // Skip placing into own empty territory. The reasonability of placing into opp empty territory is being checked
@@ -108,7 +108,7 @@ void DotsLaddersSolver::addAdjacentGroupId(const Loc emptyLoc, const uint16_t gr
   }
 }
 
-Color DotsLaddersSolver::getColorsOfPotentialLadder(const Loc loc) const {
+Color DotsLaddersSolver::getColorsOfPotentialLadder(const Loc loc, vector<uint16_t>& blackAdjGroups, vector<uint16_t>& whiteAdjGroups) const {
   assert(board.getColor(loc) == C_EMPTY);
 
   const int x_size = board.x_size;
@@ -142,17 +142,24 @@ Color DotsLaddersSolver::getColorsOfPotentialLadder(const Loc loc) const {
 
   Color result = C_EMPTY;
 
+  blackAdjGroups.clear();
+  whiteAdjGroups.clear();
+
   for (const Player pla : {P_BLACK, P_WHITE}) {
     uint16_t singleGroupId = NO_GROUP_ID;
-    bool multipleGroups = false;
+
+    vector<uint16_t>& startAdjGroups = pla == P_BLACK ? blackAdjGroups : whiteAdjGroups;
+
     for (const AdjLocInfo& adjLocInfo : adjLocInfos) {
       const uint16_t groupId = fieldLocToGroupId[adjLocInfo.loc];
       if (groupId == NO_GROUP_ID || groupIdToPlayer[groupId] != pla) continue;
+
       if (singleGroupId == NO_GROUP_ID) {
         singleGroupId = groupId;
-      } else if (singleGroupId != groupId) {
-        multipleGroups = true;
-        break;
+      }
+
+      if (!contains(startAdjGroups, groupId)) {
+        startAdjGroups.push_back(groupId);
       }
     }
 
@@ -160,7 +167,7 @@ Color DotsLaddersSolver::getColorsOfPotentialLadder(const Loc loc) const {
       continue; // The move doesn't extend any group
     }
 
-    if (multipleGroups) {
+    if (startAdjGroups.size() > 1) {
       // The heuristic doesn't work in case of multiple groups (because capture might be located on other side)
       result |= pla;
       continue;
@@ -601,15 +608,25 @@ void DotsLaddersSolver::createAndPushChainInfo(const vector<Loc>& locs, const Pl
     }
   }
 
-  for (const Loc newChainLoc : newChainLocs) {
+  // Optimization: if the first move extends a single group, a relevant first capture is always adjacent to initLoc
+  // (see `getColorsOfPotentialLadder`), so there is no need to consider capture locs of the whole chain.
+  // `blackInitialAdjGroups` and `whiteInitialAdjGroups` are calculated for initLoc in `solve`.
+  const vector<uint16_t>& initialAdjGroups = pla == P_BLACK ? blackInitialAdjGroups : whiteInitialAdjGroups;
+  const bool considerOnlyInitLoc = getCurrentDepth() == 1 && pla == attacker && initialAdjGroups.size() == 1;
+  const array<Loc, 1> initLocs = {initLoc};
+  const Loc* newChainLocsToConsider = considerOnlyInitLoc ? initLocs.data() : newChainLocs.data();
+  const size_t newChainLocsToConsiderSize = considerOnlyInitLoc ? initLocs.size() : newChainLocs.size();
+
+  for (size_t i = 0; i < newChainLocsToConsiderSize; i++) {
+    const Loc newChainLoc = newChainLocsToConsider[i];
     for (const short adj_offset : board.adj_offsets) {
-      const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset);
-      if (!isVisited(adjLocForChainLoc)) {
+      if (const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset); !isVisited(adjLocForChainLoc)) {
         if (!alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla, false)) {
           setMaybeCapturePlayer(adjLocForChainLoc, pla);
           maybeCaptureLocs.push_back(adjLocForChainLoc);
           newMaybeCaptureLocsCount++;
         }
+
         setVisited(adjLocForChainLoc);
         walkStack.push_back(adjLocForChainLoc);
       }
