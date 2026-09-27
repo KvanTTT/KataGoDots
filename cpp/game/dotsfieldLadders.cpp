@@ -11,6 +11,8 @@ void DotsLaddersSolver::solve(const Board::CapturesAndTerritoriesInfos& captures
     return; // Ladders are not relevant when the game is finished (by grounding or resignation)
   }
 
+  calculateInitialInfo();
+
   for (int y = 0; y < board.y_size; y++) {
     for (int x = 0; x < board.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, board.x_size);
@@ -20,12 +22,12 @@ void DotsLaddersSolver::solve(const Board::CapturesAndTerritoriesInfos& captures
       // The most frequent case is the case when the location is empty.
       if (const Color activeColor = getActiveColor(state); activeColor != C_EMPTY) continue;
       const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
-      const Color colorsOfPotentialCapturing = board.getColorsOfPotentialCapturing(loc, 1);
+      const Color colorsOfPotentialLadder = getColorsOfPotentialLadder(loc);
 
-      const auto addLadderMoveInfo = [&](const Player pla) {
+      const auto addLadderMoveInfo = [&](const Player pla) -> void {
         // Skip placing into own empty territory. The reasonability of placing into opp empty territory is being checked
         // using `capturesAndTerritoriesInfos` (sometimes it can be a capture).
-        if (!(colorsOfPotentialCapturing & pla) || emptyTerritoryColor == pla) {
+        if (!(colorsOfPotentialLadder & pla) || emptyTerritoryColor == pla) {
           return;
         }
 
@@ -47,6 +49,253 @@ void DotsLaddersSolver::solve(const Board::CapturesAndTerritoriesInfos& captures
       addLadderMoveInfo(P_WHITE);
     }
   }
+}
+
+void DotsLaddersSolver::calculateInitialInfo() {
+  for (int y = 0; y < board.y_size; y++) {
+    for (int x = 0; x < board.x_size; x++) {
+      const Loc loc = Location::getLoc(x, y, board.x_size);
+
+      const Color colorAtLoc = board.getColor(loc);
+      if (colorAtLoc != C_BLACK && colorAtLoc != C_WHITE) {
+        continue;
+      }
+
+      if (fieldLocToGroupId[loc] != 0) {
+        continue; // Skip already calculated groups
+      }
+
+      const uint16_t newGroupId = groupIdToGroup.size();
+      groupIdToGroup.emplace_back(colorAtLoc, std::vector<Loc>());
+      vector<Loc>& newGroupLocs = groupIdToGroup.back().locs;
+
+      assert(walkStack.empty());
+      walkStack.push_back(loc);
+      while (!walkStack.empty()) {
+        const Loc currentLoc = walkStack.back();
+        walkStack.pop_back();
+
+        if (fieldLocToGroupId[currentLoc] != 0) {
+          continue;
+        }
+
+        newGroupLocs.push_back(currentLoc);
+        fieldLocToGroupId[currentLoc] = newGroupId;
+
+        for (const short adj_offset : board.adj_offsets) {
+          const Loc adjLoc = static_cast<Loc>(currentLoc + adj_offset);
+          if (const Color adjLocColor = board.getColor(adjLoc); adjLocColor == colorAtLoc) {
+            walkStack.push_back(adjLoc);
+          } else if (adjLocColor == C_EMPTY) {
+            auto& currentAdjGroupIdentifiers = fieldLocToAdjacentGroupIds[adjLoc];
+
+            int adjGroupIndex = -1;
+            for (int i = 0; i < MAX_NUMBER_OF_ADJACENT_GROUPS; ++i) {
+              if (const auto identifier = currentAdjGroupIdentifiers[i]; identifier == newGroupId || identifier == 0) {
+                // Ignore already stored adj group and consider 0 as an end of array
+                adjGroupIndex = i;
+                break;
+              }
+            }
+            assert(adjGroupIndex != -1 && "Expected count of adj groups is 6");
+            currentAdjGroupIdentifiers[adjGroupIndex] = newGroupId;
+          }
+        }
+      }
+    }
+  }
+}
+
+Color DotsLaddersSolver::getColorsOfPotentialLadder( Loc loc) {
+  assert(board.getColor(loc) == C_EMPTY);
+
+  const int x_size = board.x_size;
+
+  const Loc xm1ym1Loc = Location::xm1ym1(loc, x_size);
+  const Loc xym1Loc = Location::xym1(loc, x_size);
+  const Loc xp1ym1Loc = Location::xp1ym1(loc, x_size);
+
+  const Loc xp1yLoc = Location::xp1y(loc);
+
+  const Loc xp1yp1Loc = Location::xp1yp1(loc, x_size);
+  const Loc xyp1Loc = Location::xyp1(loc, x_size);
+  const Loc xm1yp1Loc = Location::xm1yp1(loc, x_size);
+
+  const Loc xm1yLoc = Location::xm1y(loc);
+
+  array<u_int16_t, MAX_NUMBER_OF_ADJACENT_GROUPS> adjacentGroupIds{};
+  int adjacentGroupCount = 0;
+
+  const auto addGroupId = [&](const Loc adjLoc) -> void {
+    const uint16_t groupId = fieldLocToGroupId[adjLoc];
+    if (groupId == 0) {
+      return;
+    }
+
+    for (int i = 0; i < MAX_NUMBER_OF_ADJACENT_GROUPS; ++i) {
+      const uint16_t adjacentGroupId = adjacentGroupIds[i];
+      if (adjacentGroupId == groupId) {
+        return;
+      }
+
+      if (adjacentGroupId == 0) {
+        adjacentGroupCount++;
+        break;
+      }
+    }
+    adjacentGroupIds[adjacentGroupCount - 1] = groupId;
+  };
+
+  addGroupId(xm1ym1Loc);
+  addGroupId(xym1Loc);
+  addGroupId(xp1ym1Loc);
+
+  addGroupId(xp1yLoc);
+
+  addGroupId(xp1yp1Loc);
+  addGroupId(xyp1Loc);
+  addGroupId(xm1yp1Loc);
+
+  addGroupId(xm1yLoc);
+
+  assert(adjacentGroupCount <= MAX_NUMBER_OF_ADJACENT_GROUPS);
+
+  Color result = C_EMPTY;
+
+  if (adjacentGroupCount == 0) {
+    return result;
+  }
+
+  uint16_t singleBlackGroupId = 0;
+  uint16_t singleWhiteGroupId = 0;
+
+  for (int i = 0; i < adjacentGroupCount; i++) {
+     const uint16_t groupId = adjacentGroupIds[i];
+     if (const Player player = groupIdToGroup[groupId].player; player == P_BLACK) {
+       if (singleBlackGroupId == 0) {
+         singleBlackGroupId = groupId;
+       } else if (singleBlackGroupId != groupId) {
+         result |= C_BLACK; // The heuristic doesn't work in case of multiple groups (because capture might be located on other side)
+       }
+     } else {
+       assert(player == P_WHITE);
+       if (singleWhiteGroupId == 0) {
+         singleWhiteGroupId = groupId;
+       } else if (singleWhiteGroupId != groupId) {
+         result |= C_WHITE; // The heuristic doesn't work in case of multiple groups (because capture might be located on other side)
+       }
+     }
+  }
+
+  const Color xm1ym1Color = board.getColor(xm1ym1Loc);
+  const Color xym1Color = board.getColor(xym1Loc);
+  const Color xp1ym1Color = board.getColor(xp1ym1Loc);
+
+  const Color xp1yColor = board.getColor(xp1yLoc);
+  const Color xm1yColor = board.getColor(xm1yLoc);
+
+  const Color xp1yp1Color = board.getColor(xp1yp1Loc);
+  const Color xyp1Color = board.getColor(xyp1Loc);
+  const Color xm1yp1Color = board.getColor(xm1yp1Loc);
+
+  const auto checkMaybeCapturingAdjLoc = [&](const Loc adjLoc, const Color maybeCapturingAdjLocColor) -> void {
+    const auto& adjacentGroupIdsAtAdjLoc = fieldLocToAdjacentGroupIds[adjLoc];
+    for (int i = 0; i < MAX_NUMBER_OF_ADJACENT_GROUPS; i++) {
+      const uint16_t adjacentGroupIdAtAdjLoc = adjacentGroupIdsAtAdjLoc[i];
+
+      if (adjacentGroupIdAtAdjLoc == 0) {
+        break; // End of array, exit
+      }
+
+      if ((maybeCapturingAdjLocColor & C_BLACK) && adjacentGroupIdAtAdjLoc == singleBlackGroupId) {
+        result |= C_BLACK;
+      }
+
+      if ((maybeCapturingAdjLocColor & C_WHITE) && adjacentGroupIdAtAdjLoc == singleWhiteGroupId) {
+        result |= C_WHITE;
+      }
+    }
+  };
+
+  const auto getMaybeCapturingAdjLocColor2 = [&](const Color color1, const Color color2) {
+    Color result = C_EMPTY;
+    if (!(color1 & C_BLACK) && !(color2 & C_BLACK)) {
+      result |= C_BLACK;
+    }
+    if (!(color1 & C_WHITE) && !(color2 & C_WHITE)) {
+      result |= C_WHITE;
+    }
+    return result;
+  };
+
+  const auto getMaybeCapturingAdjLocColor4 = [&](const Color color1, const Color color2, Color color3, Color color4) {
+    Color result = C_EMPTY;
+    if (!(color1 & C_BLACK) && !(color2 & C_BLACK) && !(color3 & C_BLACK) && !(color4 & C_BLACK)) {
+      result |= C_BLACK;
+    }
+    if (!(color1 & C_WHITE) && !(color2 & C_WHITE) && !(color3 & C_WHITE) && !(color4 & C_WHITE)) {
+      result |= C_WHITE;
+    }
+    return result;
+  };
+
+  if (xm1ym1Color == C_EMPTY) {
+    checkMaybeCapturingAdjLoc(
+      xm1ym1Loc,
+      getMaybeCapturingAdjLocColor2(xm1yColor, xym1Color)
+    );
+  }
+
+  if (xym1Color == C_EMPTY) {
+    checkMaybeCapturingAdjLoc(
+      xym1Loc,
+      getMaybeCapturingAdjLocColor4(xm1yColor, xm1ym1Color, xp1ym1Color, xp1yColor)
+    );
+  }
+
+  if (xp1ym1Color == C_EMPTY) {
+    checkMaybeCapturingAdjLoc(
+      xp1ym1Loc,
+      getMaybeCapturingAdjLocColor2(xym1Color, xp1yColor)
+    );
+  }
+
+  if (xp1yColor == C_EMPTY) {
+    checkMaybeCapturingAdjLoc(
+      xp1yLoc,
+      getMaybeCapturingAdjLocColor4(xym1Color, xp1ym1Color, xp1yp1Color, xyp1Color)
+    );
+  }
+
+  if (xp1yp1Color == C_EMPTY) {
+    checkMaybeCapturingAdjLoc(
+      xp1yp1Loc,
+      getMaybeCapturingAdjLocColor2(xp1yColor, xyp1Color)
+    );
+  }
+
+  if (xyp1Color == C_EMPTY) {
+    checkMaybeCapturingAdjLoc(
+      xyp1Loc,
+      getMaybeCapturingAdjLocColor4(xp1yColor, xp1yp1Color, xm1yp1Color, xm1yColor)
+    );
+  }
+
+  if (xm1yp1Color == C_EMPTY) {
+    checkMaybeCapturingAdjLoc(
+      xm1yp1Loc,
+      getMaybeCapturingAdjLocColor2(xyp1Color, xm1yColor)
+    );
+  }
+
+  if (xm1yColor == C_EMPTY) {
+    checkMaybeCapturingAdjLoc(
+      xm1yLoc,
+      getMaybeCapturingAdjLocColor4(xyp1Color, xm1yp1Color, xm1ym1Color, xym1Color)
+    );
+  }
+
+  return result;
 }
 
 void DotsLaddersSolver::startLadder(const Loc newInitLoc, const Player pla) {

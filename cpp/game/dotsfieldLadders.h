@@ -110,6 +110,11 @@ public:
     const uint16_t newMaxMovesCount = 65535U) :
       maxMovesCount(newMaxMovesCount), board(newBoard), storeMovesTree(newStoreMovesTree), initialMoves(newInitialMoves), extraMoves(newExtraMoves) {
     const int maxArraySize = getMaxArrSize(newBoard.x_size, newBoard.y_size);
+
+    fieldLocToGroupId.resize(maxArraySize);
+    fieldLocToAdjacentGroupIds.resize(maxArraySize);
+    groupIdToGroup.emplace_back(C_EMPTY, std::vector<Loc>()); // Add fake group to align ids
+
     chainsData.resize(maxArraySize);
     resultData.resize(maxArraySize);
     initialWhiteScore = static_cast<short>(newBoard.numBlackCaptures - newBoard.numWhiteCaptures);
@@ -121,6 +126,10 @@ public:
   }
 
   void solve(const Board::CapturesAndTerritoriesInfos& capturesAndTerritoriesInfos);
+
+  void calculateInitialInfo();
+
+  Color getColorsOfPotentialLadder(Loc loc);
 
   Color getCapturedColor(const Loc loc) const {
     return static_cast<Color>(resultData[loc] & 0b11);
@@ -357,6 +366,18 @@ private:
   bool storeMovesTree;
   std::vector<Move> initialMoves;
   std::vector<Move> extraMoves;
+
+  struct Group {
+    Player player;
+    std::vector<Loc> locs;
+
+    Group(const Player player, const std::vector<Loc>& locs) : player(player), locs(locs) {}
+  };
+
+  std::vector<Group> groupIdToGroup;
+  std::vector<uint16_t> fieldLocToGroupId;
+  static constexpr int MAX_NUMBER_OF_ADJACENT_GROUPS = 6; // 4 corners dots of pla and 2 side dots of opp
+  std::vector<std::array<uint16_t, MAX_NUMBER_OF_ADJACENT_GROUPS>> fieldLocToAdjacentGroupIds;
 
   std::vector<char> chainsData;
   std::vector<char> resultData;
