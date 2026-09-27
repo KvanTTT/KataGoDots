@@ -52,22 +52,26 @@ void DotsLaddersSolver::solve(const Board::CapturesAndTerritoriesInfos& captures
 }
 
 void DotsLaddersSolver::calculateInitialInfo() {
+  // Reset the data calculated by a previous `solve` call
+  groupIdToPlayer.assign(1, C_EMPTY); // The fake group for NO_GROUP_ID
+  std::fill(fieldLocToGroupId.begin(), fieldLocToGroupId.end(), NO_GROUP_ID);
+  std::fill(fieldLocToAdjacentGroupIds.begin(), fieldLocToAdjacentGroupIds.end(), std::array<uint16_t, MAX_NUMBER_OF_ADJACENT_GROUPS>{});
+
   for (int y = 0; y < board.y_size; y++) {
     for (int x = 0; x < board.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, board.x_size);
 
-      const Color colorAtLoc = board.getColor(loc);
-      if (colorAtLoc != C_BLACK && colorAtLoc != C_WHITE) {
-        continue;
-      }
-
-      if (fieldLocToGroupId[loc] != 0) {
+      if (fieldLocToGroupId[loc] != NO_GROUP_ID) {
         continue; // Skip already calculated groups
       }
 
-      const uint16_t newGroupId = groupIdToGroup.size();
-      groupIdToGroup.emplace_back(colorAtLoc, std::vector<Loc>());
-      vector<Loc>& newGroupLocs = groupIdToGroup.back().locs;
+      const Player pla = board.getColor(loc);
+      if (board.getColor(loc) == C_EMPTY) {
+        continue;
+      }
+
+      const auto newGroupId = static_cast<uint16_t>(groupIdToPlayer.size());
+      groupIdToPlayer.push_back(pla);
 
       assert(walkStack.empty());
       walkStack.push_back(loc);
@@ -75,30 +79,17 @@ void DotsLaddersSolver::calculateInitialInfo() {
         const Loc currentLoc = walkStack.back();
         walkStack.pop_back();
 
-        if (fieldLocToGroupId[currentLoc] != 0) {
+        if (fieldLocToGroupId[currentLoc] != NO_GROUP_ID) {
           continue;
         }
-
-        newGroupLocs.push_back(currentLoc);
         fieldLocToGroupId[currentLoc] = newGroupId;
 
-        for (const short adj_offset : board.adj_offsets) {
-          const Loc adjLoc = static_cast<Loc>(currentLoc + adj_offset);
-          if (const Color adjLocColor = board.getColor(adjLoc); adjLocColor == colorAtLoc) {
+        for (const short adjOffset : board.adj_offsets) {
+          const Loc adjLoc = static_cast<Loc>(currentLoc + adjOffset);
+          if (board.getColor(adjLoc) == pla) {
             walkStack.push_back(adjLoc);
-          } else if (adjLocColor == C_EMPTY) {
-            auto& currentAdjGroupIdentifiers = fieldLocToAdjacentGroupIds[adjLoc];
-
-            int adjGroupIndex = -1;
-            for (int i = 0; i < MAX_NUMBER_OF_ADJACENT_GROUPS; ++i) {
-              if (const auto identifier = currentAdjGroupIdentifiers[i]; identifier == newGroupId || identifier == 0) {
-                // Ignore already stored adj group and consider 0 as an end of array
-                adjGroupIndex = i;
-                break;
-              }
-            }
-            assert(adjGroupIndex != -1 && "Expected count of adj groups is 6");
-            currentAdjGroupIdentifiers[adjGroupIndex] = newGroupId;
+          } else if (board.getColor(adjLoc) == C_EMPTY) {
+            addAdjacentGroupId(adjLoc, newGroupId);
           }
         }
       }
@@ -106,7 +97,18 @@ void DotsLaddersSolver::calculateInitialInfo() {
   }
 }
 
-Color DotsLaddersSolver::getColorsOfPotentialLadder( Loc loc) {
+void DotsLaddersSolver::addAdjacentGroupId(const Loc emptyLoc, const uint16_t groupId) {
+  auto& adjacentGroupIds = fieldLocToAdjacentGroupIds[emptyLoc];
+  auto *const it = std::find_if(adjacentGroupIds.begin(), adjacentGroupIds.end(), [&](const uint16_t adjacentGroupId) -> bool {
+    return adjacentGroupId == groupId || adjacentGroupId == NO_GROUP_ID;
+  });
+  assert(it != adjacentGroupIds.end() && "The number of adjacent groups can't exceed MAX_NUMBER_OF_ADJACENT_GROUPS");
+  if (it != adjacentGroupIds.end()) {
+    *it = groupId;
+  }
+}
+
+Color DotsLaddersSolver::getColorsOfPotentialLadder(const Loc loc) const {
   assert(board.getColor(loc) == C_EMPTY);
 
   const int x_size = board.x_size;
@@ -114,185 +116,72 @@ Color DotsLaddersSolver::getColorsOfPotentialLadder( Loc loc) {
   const Loc xm1ym1Loc = Location::xm1ym1(loc, x_size);
   const Loc xym1Loc = Location::xym1(loc, x_size);
   const Loc xp1ym1Loc = Location::xp1ym1(loc, x_size);
-
   const Loc xp1yLoc = Location::xp1y(loc);
-
   const Loc xp1yp1Loc = Location::xp1yp1(loc, x_size);
   const Loc xyp1Loc = Location::xyp1(loc, x_size);
   const Loc xm1yp1Loc = Location::xm1yp1(loc, x_size);
-
   const Loc xm1yLoc = Location::xm1y(loc);
 
-  array<u_int16_t, MAX_NUMBER_OF_ADJACENT_GROUPS> adjacentGroupIds{};
-  int adjacentGroupCount = 0;
-
-  const auto addGroupId = [&](const Loc adjLoc) -> void {
-    const uint16_t groupId = fieldLocToGroupId[adjLoc];
-    if (groupId == 0) {
-      return;
-    }
-
-    for (int i = 0; i < MAX_NUMBER_OF_ADJACENT_GROUPS; ++i) {
-      const uint16_t adjacentGroupId = adjacentGroupIds[i];
-      if (adjacentGroupId == groupId) {
-        return;
-      }
-
-      if (adjacentGroupId == 0) {
-        adjacentGroupCount++;
-        break;
-      }
-    }
-    adjacentGroupIds[adjacentGroupCount - 1] = groupId;
+  // Every adjacent loc with the locs between it and the `loc`.
+  // They should not be occupied by the player to make a separate unconnected location for the `loc` from the adjacent loc.
+  struct AdjLocInfo {
+    Loc loc;
+    std::array<Loc, 4> separatingLocs;
+    int separatingLocsCount;
   };
-
-  addGroupId(xm1ym1Loc);
-  addGroupId(xym1Loc);
-  addGroupId(xp1ym1Loc);
-
-  addGroupId(xp1yLoc);
-
-  addGroupId(xp1yp1Loc);
-  addGroupId(xyp1Loc);
-  addGroupId(xm1yp1Loc);
-
-  addGroupId(xm1yLoc);
-
-  assert(adjacentGroupCount <= MAX_NUMBER_OF_ADJACENT_GROUPS);
+  const std::array<AdjLocInfo, 8> adjLocInfos = {{
+    {xm1ym1Loc, {xm1yLoc, xym1Loc}, 2},
+    {xym1Loc, {xm1yLoc, xm1ym1Loc, xp1ym1Loc, xp1yLoc}, 4},
+    {xp1ym1Loc, {xym1Loc, xp1yLoc}, 2},
+    {xp1yLoc, {xym1Loc, xp1ym1Loc, xp1yp1Loc, xyp1Loc}, 4},
+    {xp1yp1Loc, {xp1yLoc, xyp1Loc}, 2},
+    {xyp1Loc, {xp1yLoc, xp1yp1Loc, xm1yp1Loc, xm1yLoc}, 4},
+    {xm1yp1Loc, {xyp1Loc, xm1yLoc}, 2},
+    {xm1yLoc, {xyp1Loc, xm1yp1Loc, xm1ym1Loc, xym1Loc}, 4},
+  }};
 
   Color result = C_EMPTY;
 
-  if (adjacentGroupCount == 0) {
-    return result;
-  }
-
-  uint16_t singleBlackGroupId = 0;
-  uint16_t singleWhiteGroupId = 0;
-
-  for (int i = 0; i < adjacentGroupCount; i++) {
-     const uint16_t groupId = adjacentGroupIds[i];
-     if (const Player player = groupIdToGroup[groupId].player; player == P_BLACK) {
-       if (singleBlackGroupId == 0) {
-         singleBlackGroupId = groupId;
-       } else if (singleBlackGroupId != groupId) {
-         result |= C_BLACK; // The heuristic doesn't work in case of multiple groups (because capture might be located on other side)
-       }
-     } else {
-       assert(player == P_WHITE);
-       if (singleWhiteGroupId == 0) {
-         singleWhiteGroupId = groupId;
-       } else if (singleWhiteGroupId != groupId) {
-         result |= C_WHITE; // The heuristic doesn't work in case of multiple groups (because capture might be located on other side)
-       }
-     }
-  }
-
-  const Color xm1ym1Color = board.getColor(xm1ym1Loc);
-  const Color xym1Color = board.getColor(xym1Loc);
-  const Color xp1ym1Color = board.getColor(xp1ym1Loc);
-
-  const Color xp1yColor = board.getColor(xp1yLoc);
-  const Color xm1yColor = board.getColor(xm1yLoc);
-
-  const Color xp1yp1Color = board.getColor(xp1yp1Loc);
-  const Color xyp1Color = board.getColor(xyp1Loc);
-  const Color xm1yp1Color = board.getColor(xm1yp1Loc);
-
-  const auto checkMaybeCapturingAdjLoc = [&](const Loc adjLoc, const Color maybeCapturingAdjLocColor) -> void {
-    const auto& adjacentGroupIdsAtAdjLoc = fieldLocToAdjacentGroupIds[adjLoc];
-    for (int i = 0; i < MAX_NUMBER_OF_ADJACENT_GROUPS; i++) {
-      const uint16_t adjacentGroupIdAtAdjLoc = adjacentGroupIdsAtAdjLoc[i];
-
-      if (adjacentGroupIdAtAdjLoc == 0) {
-        break; // End of array, exit
-      }
-
-      if ((maybeCapturingAdjLocColor & C_BLACK) && adjacentGroupIdAtAdjLoc == singleBlackGroupId) {
-        result |= C_BLACK;
-      }
-
-      if ((maybeCapturingAdjLocColor & C_WHITE) && adjacentGroupIdAtAdjLoc == singleWhiteGroupId) {
-        result |= C_WHITE;
+  for (const Player pla : {P_BLACK, P_WHITE}) {
+    uint16_t singleGroupId = NO_GROUP_ID;
+    bool multipleGroups = false;
+    for (const AdjLocInfo& adjLocInfo : adjLocInfos) {
+      const uint16_t groupId = fieldLocToGroupId[adjLocInfo.loc];
+      if (groupId == NO_GROUP_ID || groupIdToPlayer[groupId] != pla) continue;
+      if (singleGroupId == NO_GROUP_ID) {
+        singleGroupId = groupId;
+      } else if (singleGroupId != groupId) {
+        multipleGroups = true;
+        break;
       }
     }
-  };
 
-  const auto getMaybeCapturingAdjLocColor2 = [&](const Color color1, const Color color2) {
-    Color result = C_EMPTY;
-    if (!(color1 & C_BLACK) && !(color2 & C_BLACK)) {
-      result |= C_BLACK;
+    if (singleGroupId == NO_GROUP_ID) {
+      continue; // The move doesn't extend any group
     }
-    if (!(color1 & C_WHITE) && !(color2 & C_WHITE)) {
-      result |= C_WHITE;
+
+    if (multipleGroups) {
+      // The heuristic doesn't work in case of multiple groups (because capture might be located on other side)
+      result |= pla;
+      continue;
     }
-    return result;
-  };
 
-  const auto getMaybeCapturingAdjLocColor4 = [&](const Color color1, const Color color2, Color color3, Color color4) {
-    Color result = C_EMPTY;
-    if (!(color1 & C_BLACK) && !(color2 & C_BLACK) && !(color3 & C_BLACK) && !(color4 & C_BLACK)) {
-      result |= C_BLACK;
+    for (const AdjLocInfo& adjLocInfo : adjLocInfos) {
+      if (board.getColor(adjLocInfo.loc) != C_EMPTY) continue;
+
+      // Unlike own dots, walls don't join unconnected locations (the same as in `Board::getUnconnectedLocations`)
+      if (std::any_of(adjLocInfo.separatingLocs.begin(), adjLocInfo.separatingLocs.begin() + adjLocInfo.separatingLocsCount, [&](const Loc separatingLoc) {
+        return board.getColor(separatingLoc) == pla;
+      })) {
+        continue;
+      }
+
+      const auto& adjacentGroupIds = fieldLocToAdjacentGroupIds[adjLocInfo.loc];
+      if (std::find(adjacentGroupIds.begin(), adjacentGroupIds.end(), singleGroupId) != adjacentGroupIds.end()) {
+        result |= pla;
+        break;
+      }
     }
-    if (!(color1 & C_WHITE) && !(color2 & C_WHITE) && !(color3 & C_WHITE) && !(color4 & C_WHITE)) {
-      result |= C_WHITE;
-    }
-    return result;
-  };
-
-  if (xm1ym1Color == C_EMPTY) {
-    checkMaybeCapturingAdjLoc(
-      xm1ym1Loc,
-      getMaybeCapturingAdjLocColor2(xm1yColor, xym1Color)
-    );
-  }
-
-  if (xym1Color == C_EMPTY) {
-    checkMaybeCapturingAdjLoc(
-      xym1Loc,
-      getMaybeCapturingAdjLocColor4(xm1yColor, xm1ym1Color, xp1ym1Color, xp1yColor)
-    );
-  }
-
-  if (xp1ym1Color == C_EMPTY) {
-    checkMaybeCapturingAdjLoc(
-      xp1ym1Loc,
-      getMaybeCapturingAdjLocColor2(xym1Color, xp1yColor)
-    );
-  }
-
-  if (xp1yColor == C_EMPTY) {
-    checkMaybeCapturingAdjLoc(
-      xp1yLoc,
-      getMaybeCapturingAdjLocColor4(xym1Color, xp1ym1Color, xp1yp1Color, xyp1Color)
-    );
-  }
-
-  if (xp1yp1Color == C_EMPTY) {
-    checkMaybeCapturingAdjLoc(
-      xp1yp1Loc,
-      getMaybeCapturingAdjLocColor2(xp1yColor, xyp1Color)
-    );
-  }
-
-  if (xyp1Color == C_EMPTY) {
-    checkMaybeCapturingAdjLoc(
-      xyp1Loc,
-      getMaybeCapturingAdjLocColor4(xp1yColor, xp1yp1Color, xm1yp1Color, xm1yColor)
-    );
-  }
-
-  if (xm1yp1Color == C_EMPTY) {
-    checkMaybeCapturingAdjLoc(
-      xm1yp1Loc,
-      getMaybeCapturingAdjLocColor2(xyp1Color, xm1yColor)
-    );
-  }
-
-  if (xm1yColor == C_EMPTY) {
-    checkMaybeCapturingAdjLoc(
-      xm1yLoc,
-      getMaybeCapturingAdjLocColor4(xyp1Color, xm1yp1Color, xm1ym1Color, xym1Color)
-    );
   }
 
   return result;

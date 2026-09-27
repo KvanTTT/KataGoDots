@@ -113,7 +113,6 @@ public:
 
     fieldLocToGroupId.resize(maxArraySize);
     fieldLocToAdjacentGroupIds.resize(maxArraySize);
-    groupIdToGroup.emplace_back(C_EMPTY, std::vector<Loc>()); // Add fake group to align ids
 
     chainsData.resize(maxArraySize);
     resultData.resize(maxArraySize);
@@ -126,10 +125,6 @@ public:
   }
 
   void solve(const Board::CapturesAndTerritoriesInfos& capturesAndTerritoriesInfos);
-
-  void calculateInitialInfo();
-
-  Color getColorsOfPotentialLadder(Loc loc);
 
   Color getCapturedColor(const Loc loc) const {
     return static_cast<Color>(resultData[loc] & 0b11);
@@ -158,6 +153,24 @@ public:
   [[nodiscard]] std::string toSgf() const;
 
 private:
+  // Calculates groups of dots and their adjacent empty locations on the initial board (before solving).
+  void calculateInitialInfo();
+
+  void addAdjacentGroupId(Loc emptyLoc, uint16_t groupId);
+
+  // Returns the players for whom a move at the empty `loc` can start a ladder (a superset of them).
+  //
+  // A move adjacent to two or more groups of the player can connect them, and a capture might be located anywhere,
+  // so such a move is always considered.
+  // Otherwise, the move only extends a single group.
+  // A relevant first capture requires the move to close the enclosure,
+  // so it's located at an empty loc that is adjacent both to the move and to the group,
+  // and the move should make a separate unconnected location for it (the dots between them are not of the player).
+  // Captures that don't require the move are one-move captures on the initial board:
+  // the move is either inside their territory (such moves are filtered out by `isReasonableMove`),
+  // or it doesn't affect them.
+  [[nodiscard]] Color getColorsOfPotentialLadder(Loc loc) const;
+
   bool getOrSetRelevantCapturing(const Board::MoveRecord& moveRecord);
 
   void startLadder(Loc newInitLoc, Player pla);
@@ -367,16 +380,14 @@ private:
   std::vector<Move> initialMoves;
   std::vector<Move> extraMoves;
 
-  struct Group {
-    Player player;
-    std::vector<Loc> locs;
-
-    Group(const Player player, const std::vector<Loc>& locs) : player(player), locs(locs) {}
-  };
-
-  std::vector<Group> groupIdToGroup;
+  // 8-connected groups of dots on the initial board (the same as chains calculated by `createAndPushChainInfo`).
+  // The id 0 means no group.
+  static constexpr uint16_t NO_GROUP_ID = 0;
+  std::vector<Player> groupIdToPlayer;
   std::vector<uint16_t> fieldLocToGroupId;
-  static constexpr int MAX_NUMBER_OF_ADJACENT_GROUPS = 6; // 4 corners dots of pla and 2 side dots of opp
+  // At most 4 corner groups of one player and 2 opposite side groups of another player can be adjacent to an empty loc.
+  static constexpr int MAX_NUMBER_OF_ADJACENT_GROUPS = 6;
+  // Groups adjacent to every empty loc (padded by NO_GROUP_ID).
   std::vector<std::array<uint16_t, MAX_NUMBER_OF_ADJACENT_GROUPS>> fieldLocToAdjacentGroupIds;
 
   std::vector<char> chainsData;
