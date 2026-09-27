@@ -2208,6 +2208,15 @@ target_link_libraries(katago_tests PRIVATE shlwapi)
 endif()
 endif()
 
+# The tests also need the zlib DLL to run (`gtest_discover_tests` runs them right after building), the same as for katago
+if(KATAGO_ZLIB_IS_VCPKG_DLL)
+  foreach(_katago_zlib_dll IN LISTS _katago_zlib_dlls)
+    add_custom_command(TARGET katago_tests POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_katago_zlib_dll}" "$<TARGET_FILE_DIR:katago_tests>"
+      VERBATIM)
+  endforeach()
+endif()
+
 #--------------------------- TEST DATA ----------------------------------------------------------------------------------
 # Dots tournament games used by `LaddersPerformanceTests.TournamentGames`.
 # The archive is downloaded once and cached per user (shared by all build dirs), so the download doesn't happen
@@ -2215,6 +2224,7 @@ endif()
 # Set DOTS_TOURNAMENT_SGFS_PATH to use a local file instead (e.g. while refining it), then nothing is downloaded.
 # If the file isn't available (e.g. offline), the test is skipped.
 set(DOTS_TOURNAMENT_SGFS_PATH "" CACHE FILEPATH "Local Dots tournament games (one SGF per line), downloaded if empty")
+set(DOTS_LADDERS_TOURNAMENT_GAMES_COUNT "" CACHE STRING "The number of tournament games checked by the ladders performance test (0 means all, the test's default if empty)")
 option(KATAGO_DOWNLOAD_TEST_DATA "Download test data that is missing in the cache" ON)
 
 if(DEFINED ENV{HOME} AND NOT "$ENV{HOME}" STREQUAL "")
@@ -2266,6 +2276,9 @@ endif()
 
 if(EXISTS "${_dots_sgfs_file}")
   target_compile_definitions(katago_tests PRIVATE DOTS_LADDERS_TOURNAMENT_SGFS_PATH="${_dots_sgfs_file}")
+endif()
+if(NOT DOTS_LADDERS_TOURNAMENT_GAMES_COUNT STREQUAL "")
+  target_compile_definitions(katago_tests PRIVATE DOTS_LADDERS_TOURNAMENT_GAMES_COUNT=${DOTS_LADDERS_TOURNAMENT_GAMES_COUNT})
 endif()
 
 include(GoogleTest)

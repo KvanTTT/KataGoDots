@@ -100,7 +100,7 @@ void DotsLaddersSolver::calculateInitialInfo() {
 
 void DotsLaddersSolver::addAdjacentGroupId(const Loc emptyLoc, const uint16_t groupId) {
   auto& adjacentGroupIds = fieldLocToAdjacentGroupIds[emptyLoc];
-  auto *const it = std::find_if(adjacentGroupIds.begin(), adjacentGroupIds.end(), [&](const uint16_t adjacentGroupId) -> bool {
+  const auto it = std::find_if(adjacentGroupIds.begin(), adjacentGroupIds.end(), [&](const uint16_t adjacentGroupId) -> bool {
     return adjacentGroupId == groupId || adjacentGroupId == NO_GROUP_ID;
   });
   assert(it != adjacentGroupIds.end() && "The number of adjacent groups can't exceed MAX_NUMBER_OF_ADJACENT_GROUPS");

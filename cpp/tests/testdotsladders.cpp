@@ -1343,7 +1343,7 @@ TEST(LaddersPerformanceTests, RandomGames) {
 #endif
 
 // The number of games (from the beginning of the collection) checked by `LaddersPerformanceTests.TournamentGames`.
-// Override it with `-DDOTS_LADDERS_TOURNAMENT_GAMES_COUNT=...`, 0 means all games.
+// Override it with the CMake variable `DOTS_LADDERS_TOURNAMENT_GAMES_COUNT` (or the same preprocessor define), 0 means all games.
 #ifndef DOTS_LADDERS_TOURNAMENT_GAMES_COUNT
 #define DOTS_LADDERS_TOURNAMENT_GAMES_COUNT 128
 #endif
