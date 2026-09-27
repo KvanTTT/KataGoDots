@@ -609,23 +609,51 @@ void DotsLaddersSolver::createAndPushChainInfo(const Loc* locs, const size_t loc
     }
   }
 
-  // Optimization: if the first move extends a single group, a relevant first capture is always adjacent to initLoc
-  // (see `getColorsOfPotentialLadder`), so there is no need to consider capture locs of the whole chain.
+  // Optimization: a relevant first capture that isn't adjacent to initLoc should connect at least two groups
+  // joined by initLoc (see `getColorsOfPotentialLadder`). Otherwise, it forms a surrounding without initLoc.
+  // So if the first move extends a single group, there is no need to consider capture locs of the whole chain.
   // `blackInitialAdjGroups` and `whiteInitialAdjGroups` are calculated for initLoc in `solve`.
   const vector<uint16_t>& initialAdjGroups = pla == P_BLACK ? blackInitialAdjGroups : whiteInitialAdjGroups;
-  const bool considerOnlyInitLoc = getCurrentDepth() == 1 && pla == attacker && initialAdjGroups.size() == 1;
+  const bool attackerFirstMovePruning = getCurrentDepth() == 1 && pla == attacker;
+  const bool considerOnlyInitLoc = attackerFirstMovePruning && initialAdjGroups.size() == 1;
   const array<Loc, 1> initLocs = {initLoc};
   const Loc* newChainLocsToConsider = considerOnlyInitLoc ? initLocs.data() : newChainLocs.data();
   const size_t newChainLocsToConsiderSize = considerOnlyInitLoc ? initLocs.size() : newChainLocs.size();
+  // initLoc goes first, so its adjacent locs are always visited from it (and they aren't checked for the connection to the groups).
+  assert(!attackerFirstMovePruning || newChainLocsToConsider[0] == initLoc);
 
   for (size_t i = 0; i < newChainLocsToConsiderSize; i++) {
     const Loc newChainLoc = newChainLocsToConsider[i];
     for (const short adj_offset : board.adj_offsets) {
       if (const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset); !isVisited(adjLocForChainLoc)) {
         if (!alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla, false)) {
-          setMaybeCapturePlayer(adjLocForChainLoc, pla);
-          maybeCaptureLocs.push_back(adjLocForChainLoc);
-          newMaybeCaptureLocsCount++;
+          bool shouldConsiderMaybeCaptureLoc = true;
+
+          if (attackerFirstMovePruning && newChainLoc != initLoc) {
+            // Count the initial groups (adjacent to initLoc) that are also adjacent to the maybe capture loc (at least two are required).
+            // Both sets are tiny (at most 4 groups of a player and 8 adjacent locs), so a direct comparison is the fastest,
+            // and it doesn't require deduplication because every initial group is counted at most once.
+            int commonAdjGroupsCount = 0;
+            for (const uint16_t initialAdjGroupId : initialAdjGroups) {
+              for (const short adjOffset : board.adj_offsets) {
+                if (fieldLocToGroupId[adjLocForChainLoc + adjOffset] == initialAdjGroupId) {
+                  commonAdjGroupsCount++;
+                  break;
+                }
+              }
+              if (commonAdjGroupsCount >= 2) {
+                break;
+              }
+            }
+
+            shouldConsiderMaybeCaptureLoc = commonAdjGroupsCount >= 2;
+          }
+
+          if (shouldConsiderMaybeCaptureLoc) {
+            setMaybeCapturePlayer(adjLocForChainLoc, pla);
+            maybeCaptureLocs.push_back(adjLocForChainLoc);
+            newMaybeCaptureLocsCount++;
+          }
         }
 
         setVisited(adjLocForChainLoc);
