@@ -1,5 +1,6 @@
 #include "dotsfieldLadders.h"
 
+#include <array>
 #include <iomanip>
 
 #include "board.h"
@@ -11,6 +12,8 @@ void DotsLaddersSolver::solve(const Board::CapturesAndTerritoriesInfos& captures
     return; // Ladders are not relevant when the game is finished (by grounding or resignation)
   }
 
+  calculateInitialInfo();
+
   for (int y = 0; y < board.y_size; y++) {
     for (int x = 0; x < board.x_size; x++) {
       const Loc loc = Location::getLoc(x, y, board.x_size);
@@ -20,12 +23,12 @@ void DotsLaddersSolver::solve(const Board::CapturesAndTerritoriesInfos& captures
       // The most frequent case is the case when the location is empty.
       if (const Color activeColor = getActiveColor(state); activeColor != C_EMPTY) continue;
       const Color emptyTerritoryColor = getEmptyTerritoryColor(state);
-      const Color colorsOfPotentialCapturing = board.getColorsOfPotentialCapturing(loc, 1);
+      const Color colorsOfPotentialLadder = getColorsOfPotentialLadder(loc, blackInitialAdjGroups, whiteInitialAdjGroups);
 
-      const auto addLadderMoveInfo = [&](const Player pla) {
+      const auto addLadderMoveInfo = [&](const Player pla) -> void {
         // Skip placing into own empty territory. The reasonability of placing into opp empty territory is being checked
         // using `capturesAndTerritoriesInfos` (sometimes it can be a capture).
-        if (!(colorsOfPotentialCapturing & pla) || emptyTerritoryColor == pla) {
+        if (!(colorsOfPotentialLadder & pla) || emptyTerritoryColor == pla) {
           return;
         }
 
@@ -49,6 +52,149 @@ void DotsLaddersSolver::solve(const Board::CapturesAndTerritoriesInfos& captures
   }
 }
 
+void DotsLaddersSolver::calculateInitialInfo() {
+  // Reset the data calculated by a previous `solve` call
+  groupIdToPlayer.assign(1, C_EMPTY); // The fake group for NO_GROUP_ID
+  std::fill(fieldLocToGroupId.begin(), fieldLocToGroupId.end(), NO_GROUP_ID);
+  std::fill(fieldLocToAdjacentGroupIds.begin(), fieldLocToAdjacentGroupIds.end(), std::array<uint16_t, MAX_NUMBER_OF_ADJACENT_GROUPS>{});
+
+  for (int y = 0; y < board.y_size; y++) {
+    for (int x = 0; x < board.x_size; x++) {
+      const Loc loc = Location::getLoc(x, y, board.x_size);
+
+      if (fieldLocToGroupId[loc] != NO_GROUP_ID) {
+        continue; // Skip already calculated groups
+      }
+
+      const Player pla = board.getColor(loc);
+      if (board.getColor(loc) == C_EMPTY) {
+        continue;
+      }
+
+      const auto newGroupId = static_cast<uint16_t>(groupIdToPlayer.size());
+      groupIdToPlayer.push_back(pla);
+
+      assert(walkStack.empty());
+      walkStack.push_back(loc);
+      while (!walkStack.empty()) {
+        const Loc currentLoc = walkStack.back();
+        walkStack.pop_back();
+
+        if (fieldLocToGroupId[currentLoc] != NO_GROUP_ID) {
+          continue;
+        }
+        fieldLocToGroupId[currentLoc] = newGroupId;
+
+        for (const short adjOffset : board.adj_offsets) {
+          const Loc adjLoc = static_cast<Loc>(currentLoc + adjOffset);
+          if (board.getColor(adjLoc) == pla) {
+            walkStack.push_back(adjLoc);
+          } else if (board.getColor(adjLoc) == C_EMPTY) {
+            addAdjacentGroupId(adjLoc, newGroupId);
+          }
+        }
+      }
+    }
+  }
+}
+
+void DotsLaddersSolver::addAdjacentGroupId(const Loc emptyLoc, const uint16_t groupId) {
+  auto& adjacentGroupIds = fieldLocToAdjacentGroupIds[emptyLoc];
+  const auto it = std::find_if(adjacentGroupIds.begin(), adjacentGroupIds.end(), [&](const uint16_t adjacentGroupId) -> bool {
+    return adjacentGroupId == groupId || adjacentGroupId == NO_GROUP_ID;
+  });
+  assert(it != adjacentGroupIds.end() && "The number of adjacent groups can't exceed MAX_NUMBER_OF_ADJACENT_GROUPS");
+  if (it != adjacentGroupIds.end()) {
+    *it = groupId;
+  }
+}
+
+Color DotsLaddersSolver::getColorsOfPotentialLadder(const Loc loc, vector<uint16_t>& blackAdjGroups, vector<uint16_t>& whiteAdjGroups) const {
+  assert(board.getColor(loc) == C_EMPTY);
+
+  const int x_size = board.x_size;
+
+  const Loc xm1ym1Loc = Location::xm1ym1(loc, x_size);
+  const Loc xym1Loc = Location::xym1(loc, x_size);
+  const Loc xp1ym1Loc = Location::xp1ym1(loc, x_size);
+  const Loc xp1yLoc = Location::xp1y(loc);
+  const Loc xp1yp1Loc = Location::xp1yp1(loc, x_size);
+  const Loc xyp1Loc = Location::xyp1(loc, x_size);
+  const Loc xm1yp1Loc = Location::xm1yp1(loc, x_size);
+  const Loc xm1yLoc = Location::xm1y(loc);
+
+  // Every adjacent loc with the locs between it and the `loc`.
+  // They should not be occupied by the player to make a separate unconnected location for the `loc` from the adjacent loc.
+  struct AdjLocInfo {
+    Loc loc;
+    std::array<Loc, 4> separatingLocs;
+    int separatingLocsCount;
+  };
+  const std::array<AdjLocInfo, 8> adjLocInfos = {{
+    {xm1ym1Loc, {xm1yLoc, xym1Loc}, 2},
+    {xym1Loc, {xm1yLoc, xm1ym1Loc, xp1ym1Loc, xp1yLoc}, 4},
+    {xp1ym1Loc, {xym1Loc, xp1yLoc}, 2},
+    {xp1yLoc, {xym1Loc, xp1ym1Loc, xp1yp1Loc, xyp1Loc}, 4},
+    {xp1yp1Loc, {xp1yLoc, xyp1Loc}, 2},
+    {xyp1Loc, {xp1yLoc, xp1yp1Loc, xm1yp1Loc, xm1yLoc}, 4},
+    {xm1yp1Loc, {xyp1Loc, xm1yLoc}, 2},
+    {xm1yLoc, {xyp1Loc, xm1yp1Loc, xm1ym1Loc, xym1Loc}, 4},
+  }};
+
+  Color result = C_EMPTY;
+
+  blackAdjGroups.clear();
+  whiteAdjGroups.clear();
+
+  for (const Player pla : {P_BLACK, P_WHITE}) {
+    uint16_t singleGroupId = NO_GROUP_ID;
+
+    vector<uint16_t>& startAdjGroups = pla == P_BLACK ? blackAdjGroups : whiteAdjGroups;
+
+    for (const AdjLocInfo& adjLocInfo : adjLocInfos) {
+      const uint16_t groupId = fieldLocToGroupId[adjLocInfo.loc];
+      if (groupId == NO_GROUP_ID || groupIdToPlayer[groupId] != pla) continue;
+
+      if (singleGroupId == NO_GROUP_ID) {
+        singleGroupId = groupId;
+      }
+
+      if (!contains(startAdjGroups, groupId)) {
+        startAdjGroups.push_back(groupId);
+      }
+    }
+
+    if (singleGroupId == NO_GROUP_ID) {
+      continue; // The move doesn't extend any group
+    }
+
+    if (startAdjGroups.size() > 1) {
+      // The heuristic doesn't work in case of multiple groups (because capture might be located on other side)
+      result |= pla;
+      continue;
+    }
+
+    for (const AdjLocInfo& adjLocInfo : adjLocInfos) {
+      if (board.getColor(adjLocInfo.loc) != C_EMPTY) continue;
+
+      // Unlike own dots, walls don't join unconnected locations (the same as in `Board::getUnconnectedLocations`)
+      if (std::any_of(adjLocInfo.separatingLocs.begin(), adjLocInfo.separatingLocs.begin() + adjLocInfo.separatingLocsCount, [&](const Loc separatingLoc) {
+        return board.getColor(separatingLoc) == pla;
+      })) {
+        continue;
+      }
+
+      const auto& adjacentGroupIds = fieldLocToAdjacentGroupIds[adjLocInfo.loc];
+      if (std::find(adjacentGroupIds.begin(), adjacentGroupIds.end(), singleGroupId) != adjacentGroupIds.end()) {
+        result |= pla;
+        break;
+      }
+    }
+  }
+
+  return result;
+}
+
 void DotsLaddersSolver::startLadder(const Loc newInitLoc, const Player pla) {
   initLoc = newInitLoc;
   attacker = pla;
@@ -61,6 +207,7 @@ void DotsLaddersSolver::startLadder(const Loc newInitLoc, const Player pla) {
     assert(getCapturedColor(initLoc) != attacker);
     setWorkingLocPlayer(initLoc, attacker);
   }
+  maxCacheSize = std::max(maxCacheSize, static_cast<uint32_t>(attackerResultsCache.size()));
   attackerResultsCache.clear();
   initLoc = Board::NULL_LOC;
   attacker = C_EMPTY;
@@ -88,7 +235,7 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
     return attackerResultsCache.emplace(cacheKey, zero()).first->second;
   }
 
-  if (isRelevantCapturing(moveRecordForLoc)) {
+  if (getOrSetRelevantCapturing(moveRecordForLoc)) {
     const auto result = LadderLocInfo::create(loc, attacker, moveRecordForLoc, getWhiteScoreDiff());
     undo(moveRecordForLoc, LADDER_SUCCEEDED_STOP, &result);
     return attackerResultsCache.emplace(cacheKey, result).first->second;
@@ -97,10 +244,23 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
   createAndPushChainInfo(loc, attacker);
   const auto captureLocs = extractCaptureLocs(attacker);
 
+  const bool firstMove = getCurrentDepth() == 1;
+  if (firstMove) {
+    // Drop unrelated maybe capture locs after first move (they may form only unrelated surroundings), but handle captureLoc later.
+    // Real capture locs are always adjacent to the most recent moves except the first one (that's captureLoc).
+    for (int i = attackerMaybeCaptureLocs.size() - 1; i >= 0; i--) {
+      const Loc maybeCaptureLoc = attackerMaybeCaptureLocs[i];
+      assert(board.getColor(maybeCaptureLoc) == C_EMPTY);
+      unsetMaybeCapturePlayer(maybeCaptureLoc, attacker);
+    }
+    attackerMaybeCaptureLocs.clear();
+    attackerChainInfos.back().newMaybeCaptureLocsCount = 0;
+  }
+
   LadderLocInfo finalLadderLocInfo = zero();
 
   for (const Loc captureLoc : captureLocs) {
-    if (const auto maybeCapturingMoveRecord = play(captureLoc, attacker); isRelevantCapturing(maybeCapturingMoveRecord)) {
+    if (const auto maybeCapturingMoveRecord = play(captureLoc, attacker); getOrSetRelevantCapturing(maybeCapturingMoveRecord)) {
       const int whiteScoreDiff = getWhiteScoreDiff();
 
       unique_ptr<LadderLocInfo> captureLocInfo;
@@ -112,9 +272,11 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
 
       undo(maybeCapturingMoveRecord, CAPTURE_FOUND, captureLocInfo.get());
 
-      const bool initDefenderChain = getCurrentDepth() == 1;
+      if (firstMove) {
+        setMaybeCapturePlayer(captureLoc, attacker);
+        attackerMaybeCaptureLocs.push_back(captureLoc);
+        attackerChainInfos.back().newMaybeCaptureLocsCount = 1;
 
-      if (initDefenderChain) {
         initializeDefenderChain(maybeCapturingMoveRecord);
       }
 
@@ -135,13 +297,19 @@ DotsLaddersSolver::LadderLocInfo DotsLaddersSolver::iterateForAttacker(const Loc
         }
       }
 
-      if (initDefenderChain) {
+      if (firstMove) {
+        unsetMaybeCapturePlayer(captureLoc, attacker);
+
+        attackerMaybeCaptureLocs.pop_back();
+        assert(attackerMaybeCaptureLocs.empty());
+        attackerChainInfos.back().newMaybeCaptureLocsCount = 0;
+
         popChainInfo(defender);
         resetInitTerritory();
       }
 
       if (!ladderLocInfo.isZero()) {
-        if (initDefenderChain) {
+        if (firstMove) {
           if (finalLadderLocInfo.isZero()) {
             finalLadderLocInfo = std::move(ladderLocInfo);
           } else {
@@ -349,7 +517,7 @@ bool DotsLaddersSolver::isDefendCapture(const Board::MoveRecord& potentialDefend
   return false;
 }
 
-bool DotsLaddersSolver::isRelevantCapturing(const Board::MoveRecord& moveRecord) {
+bool DotsLaddersSolver::getOrSetRelevantCapturing(const Board::MoveRecord& moveRecord) {
   const int depth = getCurrentDepth();
   if (depth <= 1) {
     return false;
@@ -399,16 +567,15 @@ void DotsLaddersSolver::initializeDefenderChain(const Board::MoveRecord& capturi
       });
     }
   }
-  createAndPushChainInfo(defenderInitChainLocs, defender);
+  createAndPushChainInfo(defenderInitChainLocs.data(), defenderInitChainLocs.size(), defender);
 }
 
 void DotsLaddersSolver::createAndPushChainInfo(const Loc loc, const Player pla) {
-  vector<Loc> locs(1);
-  locs[0] = loc;
-  createAndPushChainInfo(locs, pla);
+  const array<Loc, 1> locs = { loc };
+  createAndPushChainInfo(locs.data(), locs.size(), pla);
 }
 
-void DotsLaddersSolver::createAndPushChainInfo(const vector<Loc>& locs, const Player pla) {
+void DotsLaddersSolver::createAndPushChainInfo(const Loc* locs, const size_t locsSize, const Player pla) {
   vector<ChainsInfo>& chainInfos = pla == attacker ? attackerChainInfos : defenderChainInfos;
   vector<Loc>& chainLocs = pla == attacker ? attackerChainLocs : defenderChainLocs;
   vector<Loc>& maybeCaptureLocs = pla == attacker ? attackerMaybeCaptureLocs : defenderMaybeCaptureLocs;
@@ -420,7 +587,8 @@ void DotsLaddersSolver::createAndPushChainInfo(const vector<Loc>& locs, const Pl
   assert(C_WALL != pla);
   assert(walkStack.empty());
 
-  for (const Loc loc : locs) {
+  for (size_t i = 0; i < locsSize; i++) {
+    const Loc loc = locs[i];
     assert(board.getColor(loc) == pla);
     walkStack.push_back(loc);
   }
@@ -441,15 +609,53 @@ void DotsLaddersSolver::createAndPushChainInfo(const vector<Loc>& locs, const Pl
     }
   }
 
-  for (const Loc newChainLoc : newChainLocs) {
+  // Optimization: a relevant first capture that isn't adjacent to initLoc should connect at least two groups
+  // joined by initLoc (see `getColorsOfPotentialLadder`). Otherwise, it forms a surrounding without initLoc.
+  // So if the first move extends a single group, there is no need to consider capture locs of the whole chain.
+  // `blackInitialAdjGroups` and `whiteInitialAdjGroups` are calculated for initLoc in `solve`.
+  const vector<uint16_t>& initialAdjGroups = pla == P_BLACK ? blackInitialAdjGroups : whiteInitialAdjGroups;
+  const bool attackerFirstMovePruning = getCurrentDepth() == 1 && pla == attacker;
+  const bool considerOnlyInitLoc = attackerFirstMovePruning && initialAdjGroups.size() == 1;
+  const array<Loc, 1> initLocs = {initLoc};
+  const Loc* newChainLocsToConsider = considerOnlyInitLoc ? initLocs.data() : newChainLocs.data();
+  const size_t newChainLocsToConsiderSize = considerOnlyInitLoc ? initLocs.size() : newChainLocs.size();
+  // initLoc goes first, so its adjacent locs are always visited from it (and they aren't checked for the connection to the groups).
+  assert(!attackerFirstMovePruning || newChainLocsToConsider[0] == initLoc);
+
+  for (size_t i = 0; i < newChainLocsToConsiderSize; i++) {
+    const Loc newChainLoc = newChainLocsToConsider[i];
     for (const short adj_offset : board.adj_offsets) {
-      const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset);
-      if (!isVisited(adjLocForChainLoc)) {
+      if (const Loc adjLocForChainLoc = static_cast<Loc>(newChainLoc + adj_offset); !isVisited(adjLocForChainLoc)) {
         if (!alreadyMaybeCapture(adjLocForChainLoc, pla) && maybeChainCaptureLoc(adjLocForChainLoc, pla, false)) {
-          setMaybeCapturePlayer(adjLocForChainLoc, pla);
-          maybeCaptureLocs.push_back(adjLocForChainLoc);
-          newMaybeCaptureLocsCount++;
+          bool shouldConsiderMaybeCaptureLoc = true;
+
+          if (attackerFirstMovePruning && newChainLoc != initLoc) {
+            // Count the initial groups (adjacent to initLoc) that are also adjacent to the maybe capture loc (at least two are required).
+            // Both sets are tiny (at most 4 groups of a player and 8 adjacent locs), so a direct comparison is the fastest,
+            // and it doesn't require deduplication because every initial group is counted at most once.
+            int commonAdjGroupsCount = 0;
+            for (const uint16_t initialAdjGroupId : initialAdjGroups) {
+              for (const short adjOffset : board.adj_offsets) {
+                if (fieldLocToGroupId[adjLocForChainLoc + adjOffset] == initialAdjGroupId) {
+                  commonAdjGroupsCount++;
+                  break;
+                }
+              }
+              if (commonAdjGroupsCount >= 2) {
+                break;
+              }
+            }
+
+            shouldConsiderMaybeCaptureLoc = commonAdjGroupsCount >= 2;
+          }
+
+          if (shouldConsiderMaybeCaptureLoc) {
+            setMaybeCapturePlayer(adjLocForChainLoc, pla);
+            maybeCaptureLocs.push_back(adjLocForChainLoc);
+            newMaybeCaptureLocsCount++;
+          }
         }
+
         setVisited(adjLocForChainLoc);
         walkStack.push_back(adjLocForChainLoc);
       }
@@ -654,9 +860,9 @@ std::string DotsLaddersSolver::debugResultData() const {
   return result.str();
 }
 
-// Same letter-coordinate convention as WriteSgf's SGF writer (dataio/sgf.cpp), reimplemented here to
-// avoid pulling that file's heavy transitive dependencies (program/search) into the lightweight
-// katago_tests target that dotsfieldLadders.cpp is built into.
+// Same letter-coordinate convention as WriteSgf's SGF writer (dataio/sgf.cpp), reimplemented here
+// because the game layer shouldn't depend on dataio (it depends on the game layer itself).
+// The written SGF is validated by the ladder tests using the common SGF parser.
 void DotsLaddersSolver::writeSgfCoord(std::ostream& out, const Loc loc, const int xSize) {
   static constexpr char chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   out << chars[Location::getX(loc, xSize)] << chars[Location::getY(loc, xSize)];

@@ -110,6 +110,10 @@ public:
     const uint16_t newMaxMovesCount = 65535U) :
       maxMovesCount(newMaxMovesCount), board(newBoard), storeMovesTree(newStoreMovesTree), initialMoves(newInitialMoves), extraMoves(newExtraMoves) {
     const int maxArraySize = getMaxArrSize(newBoard.x_size, newBoard.y_size);
+
+    fieldLocToGroupId.resize(maxArraySize);
+    fieldLocToAdjacentGroupIds.resize(maxArraySize);
+
     chainsData.resize(maxArraySize);
     resultData.resize(maxArraySize);
     initialWhiteScore = static_cast<short>(newBoard.numBlackCaptures - newBoard.numWhiteCaptures);
@@ -137,15 +141,37 @@ public:
   [[nodiscard]] uint32_t getMovesCount() const { return movesCounter; }
   [[nodiscard]] uint32_t getCacheHitsCount() const { return cacheHitsCounter; }
   [[nodiscard]] uint16_t getMaxDepth() const { return maxDepth; }
-  [[nodiscard]] uint32_t getCacheSize() const { return attackerResultsCache.size(); }
+  // The cache is cleared after each ladder, so report the largest size it reached for a single ladder.
+  [[nodiscard]] uint32_t getMaxCacheSize() const { return maxCacheSize; }
   [[nodiscard]] uint16_t getCurrentDepth() const { return movesSequence.size(); }
   [[nodiscard]] short getWhiteScoreDiff() const { return board.numBlackCaptures - board.numWhiteCaptures - initialWhiteScore; }
-  void clearMaxDepth() { maxDepth = 0; }
+  void clearMaxStats() {
+    maxDepth = 0;
+    maxCacheSize = 0;
+  }
   [[nodiscard]] bool getStoreMovesTree() const { return storeMovesTree; }
   [[nodiscard]] std::string toSgf() const;
 
 private:
-  bool isRelevantCapturing(const Board::MoveRecord& moveRecord);
+  // Calculates groups of dots and their adjacent empty locations on the initial board (before solving).
+  void calculateInitialInfo();
+
+  void addAdjacentGroupId(Loc emptyLoc, uint16_t groupId);
+
+  // Returns the players for whom a move at the empty `loc` can start a ladder (a superset of them).
+  //
+  // A move adjacent to two or more groups of the player can connect them, and a capture might be located anywhere,
+  // so such a move is always considered.
+  // Otherwise, the move only extends a single group.
+  // A relevant first capture requires the move to close the enclosure,
+  // so it's located at an empty loc that is adjacent both to the move and to the group,
+  // and the move should make a separate unconnected location for it (the dots between them are not of the player).
+  // Captures that don't require the move are one-move captures on the initial board:
+  // the move is either inside their territory (such moves are filtered out by `isReasonableMove`),
+  // or it doesn't affect them.
+  [[nodiscard]] Color getColorsOfPotentialLadder(Loc loc, std::vector<uint16_t>& blackAdjGroups, std::vector<uint16_t>& whiteAdjGroups) const;
+
+  bool getOrSetRelevantCapturing(const Board::MoveRecord& moveRecord);
 
   void startLadder(Loc newInitLoc, Player pla);
 
@@ -224,7 +250,7 @@ private:
 
   void createAndPushChainInfo(Loc loc, Player pla);
 
-  void createAndPushChainInfo(const std::vector<Loc>& locs, Player pla);
+  void createAndPushChainInfo(const Loc* locs, size_t locsSize, Player pla);
 
   void popChainInfo(Player pla);
 
@@ -338,6 +364,7 @@ private:
   uint16_t maxDepth = 0;
   uint32_t movesCounter = 0;
   uint32_t cacheHitsCounter = 0;
+  uint32_t maxCacheSize = 0;
   uint16_t maxMovesCount;
   short initialWhiteScore = 0;
 
@@ -352,6 +379,19 @@ private:
   bool storeMovesTree;
   std::vector<Move> initialMoves;
   std::vector<Move> extraMoves;
+
+  // 8-connected groups of dots on the initial board (the same as chains calculated by `createAndPushChainInfo`).
+  // The id 0 means no group.
+  static constexpr uint16_t NO_GROUP_ID = 0;
+  std::vector<Player> groupIdToPlayer;
+  std::vector<uint16_t> fieldLocToGroupId;
+  // At most 4 corner groups of one player and 2 opposite side groups of another player can be adjacent to an empty loc.
+  static constexpr int MAX_NUMBER_OF_ADJACENT_GROUPS = 6;
+  // Groups adjacent to every empty loc (padded by NO_GROUP_ID).
+  std::vector<std::array<uint16_t, MAX_NUMBER_OF_ADJACENT_GROUPS>> fieldLocToAdjacentGroupIds;
+
+  std::vector<uint16_t> blackInitialAdjGroups;
+  std::vector<uint16_t> whiteInitialAdjGroups;
 
   std::vector<char> chainsData;
   std::vector<char> resultData;
