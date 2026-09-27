@@ -220,7 +220,7 @@ Board::MoveRecord::MoveRecord(
   const Loc newLoc,
   const Player newPla,
   const State newPreviousState,
-  const vector<Base>& newBases,
+  vector<Base>&& newBases,
   const vector<Loc>& newEmptyBaseInvalidateLocations,
   const vector<Loc>& newGroundingLocations
 ) {
@@ -228,7 +228,7 @@ Board::MoveRecord::MoveRecord(
 
   loc = newLoc;
   pla = newPla;
-  bases = newBases;
+  bases = std::move(newBases);
   ko_loc_or_ground_locs_offset = newEmptyBaseInvalidateLocations.size();
   internalLocs.reserve(ko_loc_or_ground_locs_offset + newGroundingLocations.size());
   internalLocs.insert(internalLocs.end(), newEmptyBaseInvalidateLocations.begin(), newEmptyBaseInvalidateLocations.end());
@@ -386,7 +386,7 @@ Board::MoveRecord Board::tryPlayMoveRecordedDots(Loc loc, Player pla, const bool
     pos_hash ^= ZOBRIST_BOARD_HASH[loc][pla];
   }
 
-  return {loc, pla, originalState, bases, initEmptyBaseInvalidateLocations, newGroundingLocations};
+  return {loc, pla, originalState, std::move(bases), initEmptyBaseInvalidateLocations, newGroundingLocations};
 }
 
 void Board::undoDots(const MoveRecord& moveRecord) {
@@ -610,14 +610,14 @@ void Board::tryCapture(
 
       for (auto it = currentClosures.begin(); it != currentClosures.end(); ++it) {
         if (closureOrInvalidateLocsBuffer.size() < it->size()) {
-          currentClosures.insert(it, newClosure);
+          currentClosures.insert(it, std::move(newClosure));
           added = true;
           break;
         }
       }
 
       if (!added) {
-        currentClosures.emplace_back(newClosure);
+        currentClosures.emplace_back(std::move(newClosure));
       }
     }
   }
@@ -1016,7 +1016,7 @@ void Board::updateStatesAndAppendBase(
     setState(territoryLoc, newState);
   }
 
-  bases.emplace_back(basePla, baseType, blackCapturesDiff, whiteCapturesDiff, locStateAndCapturesDiffs, surround_locs);
+  bases.emplace_back(basePla, baseType, blackCapturesDiff, whiteCapturesDiff, std::move(locStateAndCapturesDiffs), surround_locs);
 }
 
 void Board::invalidateAdjacentEmptyTerritoryIfNeeded(const Loc loc) {
@@ -1074,13 +1074,13 @@ Board::Base::Base(
   const Type newType,
   const short newBlackCapturesDiff,
   const short newWhiteCapturesDiff,
-  const std::vector<LocStateAndCapturesDiff>& newRollbackLocStateCapturesDiff,
-  const std::vector<Loc>& newSurroundingLocs) :
+  std::vector<LocStateAndCapturesDiff> newRollbackLocStateCapturesDiff,
+  std::vector<Loc> newSurroundingLocs) :
 pla(newPla),
 type(newType),
 black_captures_diff(newBlackCapturesDiff),
 white_captures_diff(newWhiteCapturesDiff),
-rollback_locs_states_captures(newRollbackLocStateCapturesDiff),
-surrounding_locs(newSurroundingLocs) {
+rollback_locs_states_captures(std::move(newRollbackLocStateCapturesDiff)),
+surrounding_locs(std::move(newSurroundingLocs)) {
 }
 

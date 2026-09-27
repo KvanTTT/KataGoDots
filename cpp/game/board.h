@@ -258,8 +258,8 @@ struct Board
       Type newType,
       short newBlackCapturesDiff,
       short newWhiteCapturesDiff,
-      const std::vector<LocStateAndCapturesDiff>& newRollbackLocStateCapturesDiff,
-      const std::vector<Loc>& newSurroundingLocs);
+      std::vector<LocStateAndCapturesDiff> newRollbackLocStateCapturesDiff,
+      std::vector<Loc> newSurroundingLocs);
   };
 
   //Move data passed back when moves are made to allow for undos
@@ -292,7 +292,7 @@ struct Board
       Loc newLoc,
       Player newPla,
       State newPreviousState,
-      const std::vector<Base>& newBases,
+      std::vector<Base>&& newBases,
       const std::vector<Loc>& newEmptyBaseInvalidateLocations,
       const std::vector<Loc>& newGroundingLocations
     );
